@@ -1,0 +1,18 @@
+import type { KeyObject } from "node:crypto";
+export function chaveDaMaquina(credencial: string, computadorId: string): string;
+export function senhaSafeStorage(chaveMaquina: string): string;
+export function chaveDaLoja(chaveMaquina: string): Buffer;
+export function chaveDoStorage(chaveMaquina: string): Buffer;
+export function chaveDasSenhas(chaveMaquina: string): Buffer;
+export function chavesDeAssinatura(credencial: string, computadorId: string): { privada: KeyObject; publica: string };
+export function canonico(valor: unknown): string;
+export function assinarComando<T extends object>(comando: T, privada: KeyObject): T & { assinatura: string };
+export const VALIDADE_COMANDO_MS: number;
+export const FOLGA_RELOGIO_MS: number;
+export function conferirComando(comando: unknown, publicaB64: string, vistos: Map<string, number>, agora?: number): string | null;
+export function novoParX25519(): { privadaPem: string; publica: string };
+export function publicaX25519(privada: KeyObject | string): string;
+export function selar(publicaB64: string, texto: string): string;
+export function abrirSelo(privada: KeyObject | string, selado: string): string;
+export function cifrar(chave: Buffer, texto: string): Buffer;
+export function decifrar(chave: Buffer, b: Buffer): string;

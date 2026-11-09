@@ -1,0 +1,980 @@
+/* NOD-429 (definido em 2026-10-30): o quadro-agente, portado da base da v3 do protótipo (gamefik/nod-prototipos,
+   _nod/quadro/base.css, PR #16). Par de web/telas/quadro.ts; classes qd-. Só tokens do nod (ADR-070), sem cor nova.
+   - Colunas sem borda num cinza leve, card branco de 4 linhas; a cor fica só nos ícones de estado.
+   - Camadas (issue 225 dos protótipos): fundo cinza leve, colunas cinza, card branco; no escuro, os mesmos três níveis.
+   - Quem executa ganha um anel girando no avatar (issue 223 dos protótipos); com menos movimento, o anel para e fica tracejado.
+   Os dois comentários finais do Marlon (2026-10-30):
+   - j4-5: a recusa da trava ("Feito só aceita vindo de Em revisão · Mandar para Em revisão") quebra linha DENTRO do card;
+     no protótipo a linha 1 era `nowrap` e o texto vazava. O texto inteiro vai no `title` (web/telas/quadro.ts, `aviso`).
+   - j7-1: a troca Conversa ↔ Quadro desliza nos dois sentidos: o indicador do segmento anda na pílula e o conteúdo anda
+     de lado (web/lib/quadro-na-tela.ts), 220 ms com a curva de saída. Com menos movimento, fade curto sem deslocamento. */
+
+:root {
+  --qd-col-min: 192px; --qd-tira: 44px; --qd-raio: 10px;
+  --qd-troca: 220ms; --qd-curva: cubic-bezier(.2, .8, .2, 1);
+  --qd-fundo: color-mix(in srgb, var(--surface-side) 50%, var(--surface-raised));
+  --qd-col-fundo: var(--surface-selected);
+  --qd-card: var(--surface);
+}
+:root[data-theme="dark"] { --qd-fundo: var(--surface); --qd-col-fundo: var(--surface-side); --qd-card: var(--surface-raised); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --qd-fundo: var(--surface); --qd-col-fundo: var(--surface-side); --qd-card: var(--surface-raised); }
+}
+
+.qd-ic { flex: none; }
+.qd-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.qd-link:focus-visible, .qd-seg-bt:focus-visible, .qd-col-tira:focus-visible, .qd-col-bt:focus-visible, .qd-filtro-bt:focus-visible, .qd-q-mais:focus-visible,
+.qd-l-bt:focus-visible, .qd-lg-bt:focus-visible, .qd-lg-mais:focus-visible {
+  outline: 2px solid var(--focus-ring, var(--signal)); outline-offset: 2px; }
+/* O título é o botão, mas o clique vale no card inteiro: o contorno é desenhado no card. */
+.qd-card-bt:focus-visible { outline: 0; }
+.qd-card:has(.qd-card-bt:focus-visible) { outline: 2px solid var(--focus-ring, var(--signal)); outline-offset: 2px; }
+
+.qd-link { padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: inherit; font-weight: 500; text-decoration: underline;
+  text-decoration-color: var(--line-strong); text-underline-offset: 3px; cursor: pointer; }
+.qd-link:hover { color: var(--ink); text-decoration-color: var(--ink); }
+
+/* ---------- Conversa | Quadro dentro da pílula (alternativa A) ---------- */
+/* Uma cápsula só: a pílula de sempre e o par colado nela. O botão da pílula perde a borda; a cápsula a desenha. */
+.qd-pil { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; padding: 2px 3px 2px 2px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--surface); box-shadow: var(--shadow-pop); pointer-events: auto; }
+.cabecalho.cabecalho-pilula .qd-pil > .pilula-bot { min-width: 0; border: 0; box-shadow: none; background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.qd-pil:has(> .pilula-bot:hover, > .pilula-bot:focus-visible) { border-color: var(--ink); }
+/* Com a busca aberta, a cápsula vai para o miolo dela: só o nome do bot fica, sem o segmento nem a borda da cápsula. */
+.bnc-pilula .qd-pil { display: contents; }
+.bnc-pilula .qd-pil > .qd-seg { display: none; }
+.qd-pil:has(> .pilula-bot:hover) + .pilula-sub, .qd-pil:has(> .pilula-bot:focus-visible) + .pilula-sub { display: block; }
+
+/* Duas abas de largura igual: o indicador é metade da faixa e anda 100% da própria largura. Sem medir nada em JS. */
+.qd-seg { position: relative; display: inline-grid; grid-template-columns: 1fr 1fr; align-items: center; flex: none; padding: 2px; border-radius: 999px;
+  background: var(--surface-raised); isolation: isolate; }
+.qd-seg-ind { position: absolute; z-index: -1; top: 2px; bottom: 2px; left: 2px; width: calc(50% - 2px); border-radius: 999px; background: var(--surface);
+  box-shadow: 0 0 0 1px var(--line), 0 1px 2px color-mix(in srgb, var(--ink) 6%, transparent); transform: translateX(0); transition: transform var(--qd-troca) var(--qd-curva); }
+.qd-seg[data-atual="quadro"] .qd-seg-ind { transform: translateX(100%); }
+.qd-seg-bt { display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 28px; padding: 0 10px; border: 0; border-radius: 999px;
+  background: transparent; color: var(--ink-3); font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer; transition: color var(--qd-troca) var(--qd-curva); }
+.qd-seg-bt:hover { color: var(--ink); }
+/* A aba escolhida muda só a cor: negrito mudaria a largura da cápsula no meio do deslize. */
+.qd-seg-bt[aria-selected="true"] { color: var(--ink); }
+.qd-seg-compacto .qd-seg-bt { width: 32px; padding: 0; }
+.qd-seg-compacto .qd-seg-bt span { display: none; }
+
+/* ---------- A vista do quadro: por cima da conversa, sem regravá-la ---------- */
+/* A conversa (timeline e campo) fica no lugar, por baixo; o quadro cobre o palco abaixo da pílula. O main troca o
+   `hidden` e o quadro-na-tela anima quem sai e quem entra. */
+.qd-vista { position: absolute; inset: 0; z-index: 3; display: flex; flex-direction: column; gap: 12px; min-width: 0; overflow: auto;
+  padding: 72px clamp(12px, 3vw, 24px) calc(env(safe-area-inset-bottom) + 24px); background: var(--qd-fundo); container-type: inline-size;
+  /* ADA-7: a rolagem do quadro não escapa para a página (o puxar-para-atualizar e o quique do iOS). */
+  overscroll-behavior: contain; }
+.qd-vista[hidden] { display: none; }
+.qd-vista > * { width: 100%; max-width: 1240px; margin-left: auto; margin-right: auto; }
+/* NOD-418: o anúncio do trabalho (#qd-trab-anuncio) é filho da vista; sem isto a regra acima o esticava a 100% e ele vazava pela direita. */
+.qd-vista > .qd-sr { width: 1px; margin: 0; }
+.stage.qd-no-quadro .cabecalho.cabecalho-pilula::before {
+  background: linear-gradient(180deg, var(--qd-fundo) 0%, color-mix(in srgb, var(--qd-fundo) 94%, transparent) 34%, transparent 100%); }
+/* Fora da tela durante e depois da troca: não recebe clique nem foco (o main também põe `inert`). */
+.qd-saiu { visibility: hidden; pointer-events: none; }
+/* Os avisos de erro (envio, conexão) ficam por cima da vista no modo Quadro: não somem enquanto a pessoa está nele. */
+.stage.qd-no-quadro #erro:not(:empty) { position: relative; z-index: 5; }
+.qd-so-estreito { display: none; }
+.qd-vista .qd-barra-q .qd-flag { margin-left: 8px; }
+
+/* ---------- Meta e o selo do teste ---------- */
+.qd-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 0; font-size: 12.5px; line-height: 20px; color: var(--ink-3); }
+.qd-meta > * + *::before { content: "·"; margin: 0 8px; color: var(--line-strong); }
+.qd-meta > .qd-barra::before, .qd-meta > .qd-barra + *::before, .qd-meta > .qd-flag::before { content: none; }
+.qd-meta-obj { color: var(--ink-2); font-weight: 600; }
+.qd-barra { position: relative; display: inline-block; width: 72px; height: 4px; margin: 0 8px 0 12px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.qd-barra > i { position: absolute; inset: 0 auto 0 0; border-radius: 2px; background: var(--ink-2); }
+.qd-meta-n { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+/* NOD-415 (ADR-141): meta e prazo editáveis no topo; sem meta (fluxo contínuo), só "+ Meta" e o prazo, sem número. */
+.qd-editavel { padding: 0 2px; margin: 0 -2px; border: 0; border-radius: 4px; background: none; font: inherit; font-weight: 600; color: var(--ink-2); cursor: text; text-align: left; }
+.qd-editavel:hover { background: var(--line); }
+.qd-meta-mais { color: var(--ink-3); text-decoration: none; }
+.qd-remover { margin-left: auto; color: var(--ink-3); font-size: 12px; text-decoration: none; }
+.qd-remover:hover { color: var(--ink-2); }
+/* NOD-422: "Trazer do Linear…", a linha de progresso da importação e o painel com a prévia (direção A do protótipo). */
+.qd-trazer { margin-left: auto; color: var(--ink-3); font-size: 12px; text-decoration: none; }
+.qd-trazer:hover { color: var(--ink-2); }
+.qd-trazer + .qd-remover { margin-left: 0; }
+.qd-imp { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.qd-imp-erro { color: var(--danger); }
+.ci-painel { max-width: 560px; margin: 8px 0 4px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; line-height: 20px; color: var(--ink-2); }
+.ci-painel .ci-tit { margin: 0 0 4px; color: var(--ink); font-weight: 600; }
+.ci-painel .ci-linha { margin: 0 0 4px; }
+.ci-painel .ci-erro { color: var(--danger); }
+.ci-time, .ci-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0 0; }
+.ci-time .qd-meta-in { min-width: 96px; width: 96px; text-transform: uppercase; }
+.ci-det summary { cursor: pointer; color: var(--ink-3); }
+.ci-colunas { margin: 4px 0 0; padding-left: 18px; }
+.ci-quem { color: var(--ink); }
+.qd-meta-mais:hover { color: var(--ink-2); }
+.qd-meta-form { display: inline-flex; }
+.qd-meta-in { min-width: 220px; max-width: 100%; height: 28px; padding: 0 8px; border: 1px solid var(--line-strong); border-radius: 6px; background: transparent; color: var(--ink); font: inherit; font-size: 13px; }
+.qd-prazo { display: inline-flex; align-items: center; gap: 6px; }
+.qd-prazo-sel { height: 24px; padding: 0 4px; border: 0; border-radius: 4px; background: none; color: inherit; font: inherit; cursor: pointer; }
+.qd-prazo-sel:hover { background: var(--line); }
+.qd-prazo-data { height: 24px; border: 1px solid var(--line-strong); border-radius: 4px; background: transparent; color: var(--ink); font: inherit; }
+.qd-criar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: 100%; }
+.qd-criar .qd-meta-in { flex: 1 1 240px; height: 36px; }
+.qd-criar .qd-prazo-sel { height: 36px; padding: 0 8px; border: 1px solid var(--line-strong); }
+.qd-risco { display: inline-flex; align-items: center; color: var(--ink); font-weight: 500; }
+.qd-risco::after { content: ""; width: 6px; height: 6px; margin-left: 6px; border-radius: 50%; background: var(--warning); }
+.qd-flag { margin-left: auto; padding: 0 9px; border: 1px dashed var(--line-strong); border-radius: 999px; font-size: 11.5px; line-height: 20px; color: var(--ink-3); white-space: nowrap; }
+
+/* ---------- A barra do quadro ---------- */
+.qd-barra-q { position: relative; display: flex; align-items: center; gap: 12px; min-height: 32px; }
+.qd-filtros { display: inline-flex; align-items: center; gap: 2px; }
+.qd-filtro-bt { height: 28px; padding: 0 11px; border: 0; border-radius: 999px; background: transparent; color: var(--ink-3); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
+.qd-filtro-bt:hover { color: var(--ink); }
+.qd-filtro-bt[aria-pressed="true"] { background: var(--surface-raised); color: var(--ink); font-weight: 600; }
+.qd-barra-dir { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+.qd-trabalhando { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ink-2); white-space: nowrap; }
+.qd-q-mais { display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: var(--ink-2); cursor: pointer; }
+.qd-q-mais:hover, .qd-q-mais[aria-expanded="true"] { background: var(--surface-raised); color: var(--ink); }
+
+/* ---------- O quadro: colunas sem borda ---------- */
+.qd-quadro { position: relative; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.qd-grade { display: grid; column-gap: 8px; align-items: stretch; overflow-x: auto; overscroll-behavior-x: contain; padding-bottom: 6px; scrollbar-width: thin; }
+.qd-col { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 6px 6px 8px; border-radius: 12px; background: var(--qd-col-fundo); }
+.qd-col-cab { display: flex; align-items: center; gap: 7px; min-width: 0; min-height: 28px; margin: 0; padding: 0 4px; font: inherit; font-size: 13px; font-weight: 600; color: var(--ink); }
+.qd-col-nome { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qd-n { flex: none; font-size: 12px; font-weight: 500; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.qd-col-trava { display: inline-flex; flex: none; color: var(--ink-3); }
+/* NOD-420: o Responder no card e na linha; fica acima do ::after que torna o card inteiro clicável. */
+.qd-card-resp { position: relative; z-index: 1; display: flex; align-items: flex-end; gap: 6px; margin-top: 6px; }
+.qd-card-resp-in { min-height: 32px; padding: 6px 8px; font-size: 13px; resize: vertical; }
+.qd-card-resp-bt { flex: none; }
+.qd-l:has(.qd-card-resp) { flex-wrap: wrap; padding-bottom: 8px; }
+.qd-l .qd-card-resp { flex-basis: 100%; margin-top: 0; }
+.qd-quando.qd-atrasada { display: inline-flex; align-items: center; gap: 3px; color: var(--warning); font-weight: 600; }
+.qd-prz-campos { display: flex; gap: 6px; }
+.qd-prz-valor { width: 6em; }
+/* QA do PR 624: o prazo é um chip que não quebra nem espreme o nome (ver .qd-col-cab > .qd-col-bt). */
+.qd-col-prazo { flex: none; padding: 1px 6px; border-radius: 999px; background: color-mix(in srgb, var(--qd-col-fundo) 60%, var(--line)); font-size: 11px;
+  font-weight: 500; line-height: 16px; color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.qd-col-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; min-height: 40px; }
+.qd-col-vazio { padding: 12px 6px; font-size: 12px; color: var(--ink-3); text-align: center; }
+.qd-col-mais { padding: 2px 6px; font-size: 12.5px; }
+/* A cor só no ícone: a forma diz o grupo. */
+.qd-st-backlog, .qd-st-afazer, .qd-st-cancelado { color: var(--ink-3); }
+.qd-st-fazendo { color: var(--warning); }
+.qd-st-voce { color: var(--signal); }
+.qd-st-revisao { color: var(--success); }
+.qd-st-bloqueado { color: var(--danger); }
+.qd-st-feito { color: var(--ink-2); }
+/* Recolhida: uma tira estreita com o ícone, o nome e a contagem. */
+.qd-col-recolhida { padding: 0; background: transparent; }
+.qd-col-bt { display: flex; align-items: center; gap: 7px; min-width: 0; min-height: 28px; margin: 0 -4px; padding: 0 4px; border: 0; border-radius: 8px;
+  background: transparent; font: inherit; color: inherit; cursor: pointer; }
+.qd-col-bt:hover { background: color-mix(in srgb, var(--qd-col-fundo) 70%, var(--line)); }
+.qd-col-tira { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; height: 100%; min-height: 180px; padding: 10px 0; border: 0;
+  border-radius: 12px; background: var(--qd-col-fundo); color: var(--ink-2); font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer; }
+.qd-col-tira:hover { color: var(--ink); background: color-mix(in srgb, var(--qd-col-fundo) 70%, var(--line)); }
+.qd-col-tira .qd-col-nome { writing-mode: vertical-rl; transform: rotate(180deg); }
+
+/* ---------- NOD-448: editar as colunas (protótipo aprovado; só tokens do nod) ---------- */
+/* Decisão 8: a coluna da pessoa usa a forma do grupo, em cinza. */
+.qd-st.qd-st-pessoa { color: var(--ink-3); }
+.qd-st.qd-st-pessoa.qd-st-feito { color: var(--ink-2); }
+.qd-col-cab { position: relative; }
+/* QA do PR 624, medido em 2026-11-02 (Chrome headless, coluna de 232 px com prazo, "Passar para…" e ⋯): sem piso o nome
+   ficava com 17 px ("Fazendo"). O botão do nome guarda ~6 caracteres; quem encolhe antes é o "Passar para…". */
+.qd-col-cab > .qd-col-bt { flex: 1 1 auto; min-width: min(6.5em, 50%); }
+/* ADA-7 (revisão 4): só com ponteiro fino. No toque (iPad, tablet, celular deitado com a grade larga) o dedo que começava
+   no cabeçalho, com 44 px de altura e a largura da coluna, não rolava o quadro em direção nenhuma; lá a coluna se move
+   pelo ⋯ e por Alt+setas. */
+@media (pointer: fine) { .qd-col-bt[data-arrasta] { touch-action: none; } }
+/* Decisão 6: o ⋯ só no hover ou no foco (no toque, sempre). */
+.qd-col-mais { flex: none; display: grid; place-items: center; width: 24px; height: 24px; margin-left: auto; padding: 0; border: 0; border-radius: 6px;
+  background: transparent; color: var(--ink-2); cursor: pointer; opacity: 0; transition: opacity .12s ease-out, background-color .12s; }
+.qd-col-cab:hover .qd-col-mais, .qd-col-cab:focus-within .qd-col-mais, .qd-col-mais[aria-expanded="true"] { opacity: 1; }
+.qd-col-mais:hover, .qd-col-mais[aria-expanded="true"] { background: color-mix(in srgb, var(--qd-col-fundo) 70%, var(--line)); color: var(--ink); }
+.qd-col-mais:focus-visible, .qd-col-novo-bt:focus-visible, .qd-menu-it:focus-visible, .qd-chip-g:focus-within, .qd-fo-bt:focus-visible, .qd-fo-nome:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+@media (hover: none) { .qd-col-mais { opacity: 1; } }
+/* ADR-142: a passagem da coluna. O nome do responsável fica à vista, em cinza; o "Passar para…" só no hover ou no foco. */
+.qd-col-passa { flex: 0 1000 auto; min-width: 2.5em; margin-left: auto; max-width: 9em; padding: 2px 6px; border: 0; border-radius: 6px; background: none; color: var(--ink-3);
+  font: inherit; font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; opacity: 0; transition: opacity .12s; }
+.qd-col-passa-com, .qd-col-cab:hover .qd-col-passa, .qd-col-cab:focus-within .qd-col-passa, .qd-col-passa[aria-expanded="true"] { opacity: 1; }
+.qd-col-passa:hover, .qd-col-passa[aria-expanded="true"] { color: var(--ink); }
+.qd-col-passa:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.qd-col-passa + .qd-col-mais { margin-left: 2px; }
+@media (hover: none) { .qd-col-passa { opacity: 1; } }
+.qd-pas-modos { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; border: 0; }
+.qd-pas-op { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+.qd-pas-op small { display: block; color: var(--ink-3); font-size: 12px; }
+.qd-pas-inst { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: none; color: var(--ink); font: inherit; font-size: 13px; resize: vertical; }
+.qd-pas-inst:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.qd-pop-passa:not(:has(input[value="agente"]:checked)) #qd-pas-agente { display: none; }
+/* Revisão do PR 622 (decisão da PM): o card solto vira uma linha discreta no topo da lista de destino, sem popover. */
+.qd-soltar { padding: 7px 10px; border: 1px dashed color-mix(in srgb, var(--signal) 45%, var(--line)); border-radius: var(--qd-raio);
+  background: color-mix(in srgb, var(--signal) 5%, transparent); font-size: 12.5px; color: var(--ink-2); }
+.qd-soltar-tit { margin: 0; line-height: 1.35; overflow-wrap: anywhere; }
+.qd-soltar-tit b { color: var(--ink); font-weight: 500; }
+.qd-soltar .qd-pas-bts { margin-top: 3px; }
+.qd-lg-lista .qd-soltar { margin: 4px 0; }
+/* Revisão 7 do PR 623: a mesma linha sob o Status da tarefa aberta. */
+.qd-t-soltar { list-style: none; margin: 6px 0 0; padding: 0; }
+.qd-saindo { opacity: .45; }
+/* O "Mover para…" do card: aparece no hover e no foco (sempre no toque), acima do clique do card inteiro. */
+.qd-card-mover { position: relative; z-index: 1; align-self: flex-start; display: inline-flex; align-items: center; min-height: 24px; min-width: 24px; padding: 0 2px;
+  border: 0; background: none; color: var(--ink-3); font: inherit; font-size: 11.5px; cursor: pointer; opacity: 0; transition: opacity .12s; }
+.qd-card:hover .qd-card-mover, .qd-card:focus-within .qd-card-mover, .qd-card-mover[aria-expanded="true"] { opacity: 1; }
+.qd-card-mover:hover { color: var(--ink); text-decoration: underline; }
+.qd-card-mover:focus-visible { outline: 2px solid var(--focus-ring, var(--signal)); outline-offset: 2px; opacity: 1; }
+.qd-l .qd-card-mover { opacity: 1; min-height: 44px; flex: none; }
+@media (hover: none) { .qd-card-mover { opacity: 1; min-height: 44px; } }
+.qd-com-menu { z-index: 6; }
+.qd-menu-mover { left: 0; right: auto; }
+.qd-l .qd-menu-mover { left: auto; right: 0; }
+.qd-menu-mover .qd-menu-it .qd-st { color: var(--ink-3); }
+.qd-pas-bts { display: flex; gap: 6px; align-items: center; margin: 6px 0 0; color: var(--ink-3); }
+.qd-link-pri { color: var(--ink); font-weight: 600; }
+li.qd-card[draggable="true"] { cursor: grab; }
+/* Renomear no lugar e a coluna nova. */
+.qd-col-ren { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; flex: 1; min-width: 0; margin: 0; }
+.qd-col-in { flex: 1; min-width: 0; height: 28px; padding: 0 7px; border: 1px solid var(--signal); border-radius: 7px; background: var(--surface); color: var(--ink);
+  font: inherit; font-size: 13px; font-weight: 600; outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal) 18%, transparent); }
+.qd-col-in::placeholder { color: var(--ink-3); font-weight: 500; }
+.qd-col-erro { flex-basis: 100%; margin: 0; font-size: 11.5px; font-weight: 500; color: var(--danger); }
+.qd-col-nova { animation: qd-entra .22s cubic-bezier(.2, .8, .2, 1) both; }
+.qd-col-nova-f { display: flex; flex-direction: column; gap: 8px; margin: 0; }
+.qd-chips-g { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; border: 0; }
+.qd-chips-g > legend { padding: 0 0 4px; }
+.qd-chip-g { position: relative; display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 8px 0 6px; border: 1px solid var(--line); border-radius: 999px;
+  color: var(--ink-2); font-size: 12px; cursor: pointer; }
+.qd-chip-g > input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.qd-chip-g:has(input:checked) { border-color: var(--line-strong); background: var(--surface); color: var(--ink); }
+.qd-chip-g .qd-st { color: var(--ink-3); }
+.qd-dica { margin: 0; font-size: 11.5px; color: var(--ink-3); }
+.qd-pop-bts { display: flex; justify-content: flex-end; gap: 6px; }
+.qd-bt-perigo { border-color: transparent; background: var(--danger); color: var(--on-action); }
+.qd-bt-perigo:hover { background: var(--danger); opacity: .9; }
+/* O + do fim, do tamanho de uma tira. */
+.qd-col-novo { display: flex; justify-content: center; padding-top: 6px; background: var(--qd-fundo); }
+.qd-col-novo-bt { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--ink-3); cursor: pointer; }
+.qd-col-novo-bt:hover { background: var(--qd-col-fundo); color: var(--ink); }
+.qd-col-novo-bt[aria-disabled="true"] { opacity: .45; cursor: default; }
+/* NOD-429 na NOD-448: as tiras de Feito e Fechado do fim e o + ficam presas à direita; o resto rola por baixo. */
+.qd-grade > .qd-fixa { position: sticky; z-index: 2; box-shadow: -8px 0 0 var(--qd-fundo); }
+.qd-grade > .qd-col-recolhida.qd-fixa { background: var(--qd-fundo); }
+/* O menu e o popover de remover, presos ao cabeçalho. */
+.qd-menu, .qd-pop { position: absolute; z-index: 20; top: calc(100% + 4px); right: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--surface);
+  box-shadow: var(--shadow-pop); color: var(--ink); font-size: 13px; font-weight: 400; animation: qd-entra .14s ease-out both; }
+@keyframes qd-entra { from { opacity: 0; transform: translateY(-3px); } }
+.qd-menu { width: 252px; padding: 4px; }
+.qd-menu-grupo { display: flex; flex-wrap: wrap; align-items: center; column-gap: 6px; margin: 0; padding: 6px 8px 5px; font-size: 11.5px; color: var(--ink-2); }
+.qd-menu-grupo .qd-st { color: var(--ink-3); }
+.qd-menu-grupo small { flex-basis: 100%; font-size: 11.5px; color: var(--ink-3); }
+.qd-menu-it { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; width: 100%; min-height: 30px; padding: 0 8px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--ink); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.qd-menu-it > span { flex: 1; }
+.qd-menu-it kbd { font: inherit; font-size: 11.5px; color: var(--ink-3); }
+.qd-menu-it:hover, .qd-menu-it:focus-visible { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.qd-menu-it[aria-disabled="true"] { color: var(--ink-3); cursor: default; }
+.qd-menu-it[aria-disabled="true"]:hover { background: transparent; }
+.qd-menu-perigo:not([aria-disabled="true"]) { color: var(--danger); }
+.qd-menu-porque { flex-basis: 100%; padding: 0 0 6px; font-size: 11.5px; line-height: 1.35; color: var(--ink-3); }
+.qd-menu-sep { margin: 4px 0; border: 0; border-top: 1px solid var(--line); }
+.qd-pop { width: 272px; padding: 12px; }
+.qd-pop form { display: flex; flex-direction: column; gap: 10px; margin: 0; }
+.qd-pop-tit { margin: 0; line-height: 1.4; }
+.qd-sel { height: 32px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; }
+/* Arrastar. */
+.qd-col { transition: box-shadow .15s, transform .15s; }
+.qd-arrastando { position: relative; z-index: 3; box-shadow: var(--shadow-pop); transform: translateY(-3px); cursor: grabbing; }
+.qd-alvo { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--signal) 45%, transparent); }
+/* Celular: o link da folha e a folha "Ordem das colunas" (decisão 7). */
+.qd-lg-ordem { align-self: flex-end; margin: 0 4px 4px auto; font-size: 13px; }
+.qd-folha-fundo { position: fixed; inset: 0; z-index: 40; background: color-mix(in srgb, var(--ink) 30%, transparent); }
+.qd-folha { position: fixed; left: 0; right: 0; bottom: 0; z-index: 41; display: flex; flex-direction: column; gap: 10px; max-height: 85vh; overflow-y: auto;
+  padding: 14px 14px calc(env(safe-area-inset-bottom) + 16px); border-radius: 16px 16px 0 0; background: var(--surface); box-shadow: var(--shadow-pop); animation: qd-sobe .22s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes qd-sobe { from { transform: translateY(24px); opacity: 0; } }
+.qd-folha-cab { display: flex; align-items: center; justify-content: space-between; }
+/* foco-ok: o título só recebe o foco por script (tabindex=-1) para o leitor de tela anunciar a folha; não é parada do Tab. */
+.qd-folha-tit { margin: 0; font-size: 16px; font-weight: 600; outline: none; }
+.qd-fo-g { display: flex; flex-direction: column; gap: 4px; }
+.qd-fo-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.qd-fo-l { display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 4px; border-radius: 10px; background: var(--qd-col-fundo); }
+.qd-fo-edit { padding: 6px; }
+.qd-fo-edit .qd-pop { position: static; width: auto; box-shadow: none; animation: none; }
+.qd-alca { display: grid; place-items: center; width: 32px; height: 44px; color: var(--ink-3); touch-action: none; cursor: grab; }
+.qd-alca-fixa { cursor: default; }
+.qd-fo-nome { flex: 1; min-width: 0; min-height: 44px; padding: 0 4px; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 14px; text-align: left;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: text; }
+.qd-fo-bt { display: grid; place-items: center; width: 40px; height: 44px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--ink-2); cursor: pointer; }
+.qd-fo-bt[aria-disabled="true"] { opacity: .35; cursor: default; }
+.qd-fo-prazo { min-height: 44px; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; color: var(--ink-2); font: inherit; font-size: 12px; white-space: nowrap; cursor: pointer; }
+.qd-fo-prazo:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.qd-fo-nova { align-self: flex-start; gap: 6px; min-height: 44px; }
+
+/* ---------- O card: branco, 4 linhas. O título é o botão; o clique vale no card inteiro. ---------- */
+.qd-card { position: relative; display: flex; flex-direction: column; gap: 5px; min-width: 0; padding: 9px 10px 10px; border: 1px solid var(--line); border-radius: var(--qd-raio);
+  background: var(--qd-card); box-shadow: 0 1px 1px color-mix(in srgb, var(--ink) 3%, transparent); }
+.qd-card:hover { border-color: var(--line-strong); }
+.qd-card-l1 { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; row-gap: 2px; min-height: 18px; min-width: 0; }
+.qd-card-bt { display: block; width: 100%; padding: 0; border: 0; background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.qd-card-bt::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+.qd-id { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); letter-spacing: -.01em; white-space: nowrap; }
+.qd-card-tit { font-size: 13px; font-weight: 500; line-height: 1.35; color: var(--ink); overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.qd-tags { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.qd-tag { display: inline-flex; align-items: center; max-width: 100%; height: 20px; padding: 0 7px; border: 1px solid var(--line); border-radius: 6px; font-size: 11.5px;
+  color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qd-card-pe { display: flex; align-items: center; gap: 8px; min-width: 0; margin-top: 1px; }
+.qd-quem { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; color: var(--ink-2); }
+.qd-quem > span:not(.qd-avs) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qd-quem .icon.mascote, .qd-quem nod-mascote { width: 18px !important; height: 18px !important; min-width: 18px; border-radius: 6px; }
+.qd-quem .icon.mascote svg { width: 15px; height: 15px; }
+.qd-quem .qd-anel { width: 18px; height: 18px; font-size: 8.5px; border-width: 1.5px; }
+.qd-quando { margin-left: auto; flex: none; font-size: 11.5px; color: var(--ink-3); white-space: nowrap; }
+/* Linha 1: o estado do trabalho, em tinta 3; o ícone carrega a cor. Texto longo quebra dentro do card. */
+.qd-estado { display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: 100%; font-size: 11.5px; line-height: 1.35; color: var(--ink-3); overflow-wrap: anywhere; }
+.qd-estado > span { min-width: 0; }
+.qd-ic-fila { color: var(--ink-3); }
+.qd-ic-falhou, .qd-ic-bloq { color: var(--danger); }
+.qd-ic-ok { color: var(--success); }
+.qd-e-falhou { color: var(--ink-2); }
+.qd-e-esperando { color: var(--ink-2); } /* ADA-232: o bot marcou a volta */
+.qd-e-bloqueado { color: var(--ink-2); align-items: flex-start; }
+.qd-e-bloqueado .qd-ic { margin-top: 1px; }
+.qd-voce-frase { font-size: 12px; line-height: 1.35; color: var(--signal); font-weight: 500; overflow-wrap: anywhere; }
+
+/* O aviso de alguns segundos na linha 1 ("Movido por você · Desfazer") e a recusa da trava. O Desfazer fica acima do
+   botão esticado do card. Comentário do Marlon na j4-5: quebra linha, nunca passa da largura do card. */
+.qd-aviso { position: relative; z-index: 1; display: inline-flex; flex-wrap: wrap; align-items: baseline; column-gap: 6px; min-width: 0; max-width: 100%;
+  font-size: 11.5px; line-height: 1.35; color: var(--ink); font-weight: 500; overflow-wrap: anywhere; animation: qd-aviso-in .35s ease-out both; }
+.qd-aviso-txt { min-width: 0; }
+.qd-aviso > span + .qd-link::before { content: "·"; margin-right: 6px; color: var(--ink-3); text-decoration: none; display: inline-block; }
+/* ADR-070: link é neutro (o azul fica para quem precisa da pessoa). */
+.qd-aviso .qd-link { color: var(--ink); text-decoration: none; font-weight: 600; text-align: left; overflow-wrap: anywhere; }
+.qd-aviso .qd-link:hover { text-decoration: underline; }
+/* Durante o aviso a linha 1 é só o aviso (o id volta junto com o estado). */
+.qd-card-l1:has(.qd-aviso) .qd-id { display: none; }
+.qd-card-l1 .qd-aviso { flex: 1 1 100%; }
+.qd-aviso-recusa .qd-aviso-txt { color: var(--ink-2); font-weight: 500; }
+@keyframes qd-aviso-in { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+/* O brilho: o card que acabou de chegar (some em 3 s). */
+.qd-brilho { box-shadow: 0 0 0 1.5px var(--signal); animation: qd-brilho 3s ease-out 1 both; }
+@keyframes qd-brilho { 0% { background-color: var(--signal-soft); } 100% { background-color: var(--qd-card); } }
+
+/* ---------- Quem executa: o anel em volta do avatar (issue 223 dos protótipos) ---------- */
+.qd-avs { position: relative; z-index: 1; display: inline-flex; align-items: center; flex: none; }
+.qd-av { position: relative; display: inline-grid; place-items: center; flex: none; border-radius: 7px; }
+.qd-av > :first-child { position: relative; }
+.qd-av-rodando { margin: 0 3px; }
+.qd-av-rodando::before, .qd-av-rodando::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; pointer-events: none; }
+.qd-av-rodando::before { border: 1.5px solid color-mix(in srgb, var(--success) 22%, transparent); }
+.qd-av-rodando::after { background: conic-gradient(from 0deg, transparent 0 58%, color-mix(in srgb, var(--success) 35%, transparent) 72%, var(--success) 100%);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 1.75px), #000 calc(100% - 1.5px)); /* cor-fixa: canal alfa da máscara, não é cor visível */
+  mask: radial-gradient(farthest-side, transparent calc(100% - 1.75px), #000 calc(100% - 1.5px)); /* cor-fixa: canal alfa da máscara, não é cor visível */
+  animation: qd-giro 1.2s linear infinite; }
+@keyframes qd-giro { to { transform: rotate(1turn); } }
+.qd-av-sobre { margin-left: -6px; }
+.qd-av-sobre > :first-child { box-shadow: 0 0 0 2px var(--qd-card); }
+.qd-av-rodando + .qd-av-rodando { margin-left: 4px; }
+.qd-av:not(.qd-av-rodando) + .qd-av-sobre.qd-av-rodando { margin-left: -4px; }
+.qd-av-sel { position: absolute; right: -4px; bottom: -4px; display: grid; width: 11px; height: 11px; border-radius: 50%; box-shadow: 0 0 0 1.5px var(--qd-card); line-height: 0; }
+.qd-av-sel svg { display: block; }
+.qd-avs-pilha .icon.mascote, .qd-avs-pilha nod-mascote { width: 16px !important; height: 16px !important; min-width: 16px; border-radius: 5px; }
+.qd-avs-pilha .icon.mascote svg { width: 13px; height: 13px; }
+.qd-avs-pilha .qd-av-rodando::before, .qd-avs-pilha .qd-av-rodando::after { inset: -3.5px; }
+.qd-avs-pilha .qd-av-rodando + .qd-av-rodando { margin-left: 3px; }
+
+.qd-anel { display: inline-grid; place-items: center; width: 24px; height: 24px; border: 1.5px solid var(--signal); border-radius: 50%; background: var(--surface);
+  color: var(--signal); font-size: 10px; font-weight: 700; line-height: 1; box-sizing: border-box; flex: none; }
+.qd-anel-voce { background: var(--signal); color: var(--on-signal); }
+
+/* ---------- Celular: o quadro vira lista agrupada por estado ---------- */
+.qd-lista { display: flex; flex-direction: column; gap: 4px; }
+.qd-lg-cab { display: flex; align-items: center; gap: 0; margin: 0; border-radius: 10px; background: var(--qd-col-fundo); font: inherit; }
+.qd-lg-bt { flex: 1; display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 8px; border: 0; border-radius: 10px; background: transparent;
+  color: var(--ink); font: inherit; font-size: 14px; font-weight: 600; text-align: left; cursor: pointer; }
+.qd-lg-bt .qd-ic-chev { margin-left: auto; color: var(--ink-3); }
+.qd-lg-mais { width: 44px; height: 44px; border: 0; border-radius: 10px; background: transparent; color: var(--ink-2); font: inherit; font-size: 20px; line-height: 1; cursor: pointer; }
+.qd-lg-lista { list-style: none; margin: 2px 0 8px; padding: 0 4px; border: 1px solid var(--line); border-radius: 12px; background: var(--qd-card); }
+.qd-lg-recolhido .qd-lg-bt { font-weight: 500; color: var(--ink-2); }
+.qd-l { position: relative; display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 48px; padding: 0 8px; border-bottom: 1px solid var(--line); }
+.qd-l:last-child { border-bottom: 0; }
+.qd-l-bt { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 0; border: 0; background: transparent; color: var(--ink);
+  font: inherit; font-size: 15px; text-align: left; cursor: pointer; }
+.qd-l-bt::after { content: ""; position: absolute; inset: 0; }
+.qd-l-tit { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qd-l-fim { position: relative; z-index: 1; flex: 0 1 auto; min-width: 0; max-width: 55%; display: inline-flex; align-items: center; gap: 8px; pointer-events: none; }
+.qd-l-fim .qd-aviso { pointer-events: auto; font-size: 13px; }
+.qd-l-fim .qd-aviso .qd-link { min-height: 44px; display: inline-flex; align-items: center; }
+.qd-l-est { display: inline-flex; }
+.qd-l .qd-id { font-size: 12px; }
+.qd-l .icon.mascote, .qd-l nod-mascote { width: 22px !important; height: 22px !important; min-width: 22px; border-radius: 7px; }
+.qd-l .icon.mascote svg { width: 18px; height: 18px; }
+.qd-l .qd-anel { width: 22px; height: 22px; font-size: 9px; }
+
+/* ---------- NOD-442 (definido em 2026-10-31): o quadro de verdade, a tarefa aberta e a conversa no quadro ----------
+   Portado de gamefik/nod-prototipos (nod-442/proposta.css, passo 9, e _nod/quadro/base.css @ fbfc5ec, issue 247). A vista rola
+   por inteiro; a pílula fica presa no pé (sticky), com a faixa da resposta por cima dela. Só tokens do nod (ADR-070). */
+.qd-vista:has(> .qd-conteudo) { padding-bottom: 0; }
+.qd-conteudo { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.qd-sem-quadro { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; max-width: 520px; margin: 48px auto 0; padding: 0 4px; }
+.qd-sem-tit { margin: 0; font-size: 17px; font-weight: 600; color: var(--ink); }
+.qd-sem-txt { margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink-2); }
+.qd-bt { display: inline-flex; align-items: center; justify-content: center; min-height: 32px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
+.qd-bt:hover { background: var(--surface-raised); }
+.qd-bt-pri { border-color: transparent; background: var(--action); color: var(--on-action); }
+.qd-bt-pri:hover { background: var(--action); opacity: .9; }
+/* ADA-6: o Responder da tarefa sem fundo cheio (o protótipo do Gil: a tarefa parece conversa, não alerta). */
+.qd-bt-leve { border-color: transparent; background: none; color: var(--ink-2); font-weight: 600; }
+.qd-bt-leve:hover { background: var(--surface-raised); color: var(--ink); }
+.qd-bt:disabled { opacity: .55; cursor: default; }
+.qd-bt:focus-visible, .qd-voltar:focus-visible, .qd-chip:focus-visible, .qd-resp-in:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+/* A tarefa aberta: o corpo à esquerda, o painel (232px) à direita; abaixo de 700px o painel desce. */
+.qd-tarefa { width: 100%; max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+.qd-t-cab { position: relative; display: flex; align-items: center; gap: 8px; min-height: 32px; min-width: 0; }
+.qd-voltar { display: inline-flex; align-items: center; gap: 2px; min-height: 30px; min-width: 0; padding: 0 8px 0 4px; border: 0; border-radius: 8px; background: transparent;
+  color: var(--ink-2); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
+.qd-voltar > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.qd-voltar:hover { background: var(--surface-raised); color: var(--ink); }
+.qd-t-sep { color: var(--line-strong); }
+.qd-t-cab .qd-id { font-size: 12px; flex: none; }
+.qd-t-corpo { display: grid; grid-template-columns: minmax(0, 1fr); gap: 32px; align-items: start; }
+.qd-com-lado .qd-t-corpo { grid-template-columns: minmax(0, 1fr) 232px; gap: 28px; }
+.qd-t-principal { display: flex; flex-direction: column; gap: 14px; min-width: 0; padding: 22px 28px 28px; border: 1px solid var(--line); border-radius: 14px; background: var(--qd-card); }
+.qd-t-tit { margin: 4px 0 0; font-size: 24px; font-weight: 600; line-height: 1.25; letter-spacing: -.015em; color: var(--ink); overflow-wrap: anywhere; }
+/* foco-ok: recebe o foco só pelo código (tabindex -1, ao abrir a tarefa); não é parada do Tab */
+.qd-t-tit:focus { outline: none; }
+.qd-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.qd-chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 1px solid transparent; border-radius: 8px; background: var(--qd-col-fundo);
+  color: var(--ink); font: inherit; font-size: 12.5px; font-weight: 500; white-space: nowrap; text-decoration: none; }
+a.qd-chip:hover { background: var(--surface-raised); }
+.qd-chip-vazio { color: var(--ink-3); border: 1px dashed var(--line-strong); background: transparent; }
+.qd-chip .icon.mascote { width: 16px !important; height: 16px !important; min-width: 16px; border-radius: 5px; }
+.qd-chip .qd-anel { width: 16px; height: 16px; font-size: 7.5px; border-width: 1.5px; }
+.qd-t-desc { font-size: 14.5px; line-height: 1.65; color: var(--ink); padding: 6px 0 4px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.qd-t-desc-vazia { color: var(--ink-3); }
+.qd-t-sec { margin: 6px 0 0; padding-top: 14px; border-top: 1px solid var(--line); font-size: 13px; font-weight: 600; color: var(--ink); }
+/* NOD-419: o histórico discreto da tarefa (recolhido) e o popover do "Só sai para…". */
+.qd-hist { margin: 6px 0 0; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--ink-3); }
+.qd-hist-sum { cursor: pointer; width: max-content; }
+.qd-hist-lista { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
+.qd-hist-l { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.qd-hist-desfeito > span:first-child { text-decoration: line-through; }
+.qd-hist-hora { font-variant-numeric: tabular-nums; }
+.qd-pop-trava .qd-pas-modos { display: grid; gap: 4px; }
+.qd-t-principal .qd-voce-frase, .qd-t-resposta { margin: 0; font-size: 14px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.qd-t-resposta { color: var(--ink-2); }
+.qd-resp-form { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.qd-resp-in { width: 100%; min-height: 64px; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); color: var(--ink);
+  font: 14px/1.45 var(--font-sans); resize: vertical; }
+/* NOD-417: os comentários da tarefa, com cara de conversa (sem cartão nem fundo); "acionou" é uma linha fina. */
+.qd-coms { display: flex; flex-direction: column; gap: 10px; }
+.qd-com-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.qd-com { display: flex; gap: 10px; min-width: 0; }
+.qd-com-av .qd-anel, .qd-com-av .icon.mascote { width: 22px !important; height: 22px !important; min-width: 22px; font-size: 9px; }
+.qd-com-corpo { min-width: 0; flex: 1; }
+.qd-com-cab { margin: 0 0 2px; display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; }
+.qd-com-nome { font-weight: 600; color: var(--ink); }
+.qd-com-cab time { color: var(--ink-3); }
+.qd-com-txt { margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+/* ADA-4: o comentário que foi e não voltou fica meio apagado; o que não saiu, com "Tentar de novo" em texto. */
+.qd-com-pendente .qd-com-txt { color: var(--ink-2); }
+.qd-com-pendente:not(.qd-com-falhou) { opacity: .7; }
+.qd-com-est { font-size: 12px; color: var(--ink-3); }
+.qd-com-tentar { font-size: 12px; }
+.qd-trab-pend { margin: 6px 0 0; font-size: 12.5px; color: var(--ink-3); }
+.qd-trab-pend-txt { color: var(--ink-2); }
+.qd-com-acao, .qd-com-vazio { margin: 2px 0 0; font-size: 12px; color: var(--ink-3); }
+/* NOD-430: a Atividade da tarefa ("Você, pela Ada criou 1 tarefa"), linhas finas acima dos comentários. */
+.qd-ativ { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.qd-at-criada { margin: 0; font-size: 12.5px; color: var(--ink-2); }
+.qd-at-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--ink-2); }
+.qd-at-quem { font-weight: 600; color: var(--ink); }
+.qd-at time { margin-left: 8px; color: var(--ink-3); }
+.qd-com-form { display: flex; align-items: flex-end; gap: 8px; border-bottom: 1px solid var(--line); padding: 2px 0 6px; }
+.qd-com-in { flex: 1; min-height: 32px; max-height: 160px; padding: 6px 0; border: 0; background: transparent; color: var(--ink); font: 14px/1.45 var(--font-sans); resize: none; field-sizing: content; }
+.qd-com-previa { margin: 4px 0 0; min-height: 16px; font-size: 12px; color: var(--ink-3); } /* ADA-28 (D): quem o comentário aciona */
+.qd-com-form:focus-within { border-bottom-color: var(--line-strong); }
+.qd-com-bt { border: 0; background: none; padding: 6px 2px; font: 500 13px var(--font-sans); color: var(--ink-3); cursor: pointer; }
+.qd-com-bt:hover, .qd-com-bt:focus-visible { color: var(--ink); }
+/* NOD-418: o trabalho da tarefa ("só o atual"). Tudo cinza; vermelho só no ⊗ da falha. */
+.qd-trab { display: flex; flex-direction: column; gap: 6px; }
+.qd-trab-atual { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.qd-trab-linha { margin: 0; display: flex; gap: 8px; align-items: baseline; font-size: 13px; color: var(--ink-2); }
+.qd-trab-selo { width: 1em; text-align: center; color: var(--ink-3); }
+.qd-trab-selo[data-estado="falhou"] { color: var(--danger); }
+.qd-trab-est { min-width: 0; }
+.qd-trab-hora { margin-left: auto; color: var(--ink-3); font-size: 12px; }
+.qd-trab-frase { margin: 0 0 0 calc(1em + 8px); font-size: 13.5px; line-height: 1.5; color: var(--ink-2); white-space: pre-wrap; overflow-wrap: anywhere; }
+.qd-trab-log, .qd-trab-acoes { margin: 0 0 0 calc(1em + 8px); font-size: 12.5px; color: var(--ink-3); }
+.qd-trab-tg { text-decoration: none; color: var(--ink-3); font-size: 12.5px; align-self: flex-start; }
+.qd-trab-passos, .qd-trab-anteriores { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; color: var(--ink-3); }
+.qd-trab-passo { overflow-wrap: anywhere; }
+.qd-trab-passo[data-estado="rodando"] { color: var(--ink-2); }
+.qd-trab-anteriores { gap: 8px; margin-left: calc(1em + 8px); }
+.qd-trab-nota { margin: 0; font-size: 12.5px; color: var(--ink-3); overflow-wrap: anywhere; }
+.qd-trab-form { display: flex; align-items: flex-end; gap: 8px; border-bottom: 1px solid var(--line); padding: 2px 0 6px; }
+.qd-trab-form:focus-within { border-bottom-color: var(--line-strong); }
+.qd-rotulo { margin: 0 0 8px; font-size: 12px; font-weight: 500; color: var(--ink-3); }
+.qd-lado { display: flex; flex-direction: column; padding: 6px 2px 0; font-size: 12.5px; min-width: 0; }
+.qd-lado-sec { padding: 16px 0; }
+.qd-lado-sec:first-child { padding-top: 0; }
+.qd-lado-sec + .qd-lado-sec { border-top: 1px solid var(--line); }
+.qd-lado-sec .qd-rotulo { margin-bottom: 6px; }
+.qd-lado-vazio { margin: 0; color: var(--ink-3); }
+.qd-props { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 6px 10px; margin: 0; align-items: center; }
+.qd-props dt { color: var(--ink-3); }
+.qd-props dd { margin: 0; min-width: 0; color: var(--ink); overflow-wrap: anywhere; }
+/* NOD-416: Status, Responsável e "Mover para" na tarefa aberta; o branch; o histórico; "Nova tarefa…" na barra. */
+.qd-sel { width: 100%; min-height: 28px; padding: 2px 6px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--ink); font: inherit; }
+/* QA do PR 623: o select de destino ocupa a linha inteira (o botão Mover desce) e corta com reticências; o title tem o nome. */
+.qd-mover { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.qd-mover .qd-sel { flex: 1 1 100%; min-width: 0; text-overflow: ellipsis; }
+.qd-branch { font-size: 12px; overflow-wrap: anywhere; }
+.qd-hist { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 13px; }
+.qd-hist-quem { font-weight: 600; color: var(--ink); }
+.qd-hist-oque { color: var(--ink-2, var(--ink)); }
+.qd-hist-quando { color: var(--ink-3); margin-left: 4px; }
+.qd-lado ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; color: var(--ink-2); }
+.qd-lado li { display: flex; align-items: flex-start; gap: 6px; min-width: 0; }
+.qd-lado li .qd-ic { color: var(--ink-3); margin-top: 2px; }
+
+/* A conversa no quadro: a pílula de vidro no pé, 640px no máximo; a resposta numa faixa fina por cima. */
+.qd-vista > .qc-wrap { position: sticky; bottom: 0; z-index: 5; margin-top: auto; padding: 10px 24px calc(env(safe-area-inset-bottom) + 16px);
+  --qc-vidro: color-mix(in srgb, var(--surface) 86%, transparent); --qc-vidro-forte: color-mix(in srgb, var(--surface) 94%, transparent); --qc-desfoque: blur(24px) saturate(1.8); }
+.qc-caixa { position: relative; max-width: 640px; margin: 0 auto; }
+.qc-pil { position: relative; z-index: 2; min-height: 46px; border-radius: 23px; display: flex; align-items: center; gap: 2px; padding: 0 4px 0 14px;
+  background: var(--qc-vidro); -webkit-backdrop-filter: var(--qc-desfoque); backdrop-filter: var(--qc-desfoque);
+  border: 1px solid color-mix(in srgb, var(--line) 85%, transparent); box-shadow: var(--shadow-pop); }
+.qc-pil:focus-within { border-color: var(--line-strong); }
+.qc-pil[data-soltando] { border-color: var(--line-strong); border-style: dashed; } /* revisão 4 do ADA-5: arrastando arquivo, a pílula mostra onde soltar */
+/* foco-ok: o campo não tem contorno próprio; a pílula inteira ganha a borda (:focus-within) e, no forced-colors, o contorno. */
+.qc-txt { flex: 1; min-width: 0; border: 0; outline: 0; resize: none; background: none; color: var(--ink); font: 15px/1.4 var(--font-sans); padding: 12px 4px;
+  field-sizing: content; min-height: 44px; max-height: 170px; overflow-y: auto; }
+/* ADA-5: as peças do composer do chat na pílula. O campo cresce até 170 px (a altura vem do JS, web/lib/composer.ts: Safari e
+   Firefox não têm field-sizing); com mais de uma linha, os botões descem com a última. As listas @ e / abrem por cima. */
+.qc-pil { flex-wrap: wrap; align-items: flex-end; padding-block: 4px; }
+.qc-pil:has(.qc-anexos:not([hidden])) { border-radius: 18px; padding-top: 8px; }
+.qc-pil > .qc-bt, .qc-pil > .mic, .qc-pil > .ditado { margin-block: 0; align-self: flex-end; }
+.qc-pil > .qc-bt.qc-enviar { margin-bottom: 2px; }
+.qc-txt { padding-block: 10px; }
+.qc-clipe { margin-left: -8px; }
+.qc-anexos { order: -1; padding: 0 4px 4px 0; }
+.qc-sug, .qc-barra, .qc-dica { position: absolute; left: 0; bottom: calc(100% + 6px); z-index: 30; margin: 0; }
+.qc-dica { right: 0; }
+.qc-sug[hidden], .qc-barra[hidden], .qc-dica[hidden] { display: none; }
+.qc-pil .mic { width: 34px; height: 34px; border-radius: 50%; border: 0; background: none; color: var(--ink-2); display: grid; place-items: center; flex: none; cursor: pointer; margin-bottom: 2px; }
+.qc-pil .mic:hover, .qc-pil .mic:focus-visible { background: var(--surface-raised); color: var(--ink); }
+.qc-pil .mic:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.qc-pil .mic[hidden], .qc-pil .ditado[hidden], .qc-pil.gravando .mic { display: none; }
+.qc-pil .ditado { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px 0 5px; border-radius: 17px; background: var(--surface-raised); flex: none; margin-bottom: 2px; }
+.qc-pil.gravando .qc-txt { cursor: default; }
+.qc-bt.qc-enviar[data-modo="parar"] { background: var(--surface-raised); color: var(--ink); }
+/* Revisão 3 do ADA-5 (2026-11-04): com o bot trabalhando e texto ou anexo no campo, o Parar fica ao lado do Enviar (como
+   no chat, botoesDoCampo). */
+.qc-bt.qc-parar { width: 34px; height: 34px; margin-bottom: 2px; background: var(--surface-raised); color: var(--ink); }
+.qc-bt.qc-parar svg { width: 14px; height: 14px; }
+.qc-bt.qc-parar[hidden] { display: none; }
+/* foco-ok: o conteúdo da tarefa só recebe o foco pelo código (Esc com texto), para o Esc seguinte fechá-la. */
+#quadro .qd-conteudo:focus { outline: none; }
+.qc-txt::placeholder { color: var(--ink-3); }
+.qc-bt { width: 38px; height: 38px; border-radius: 50%; display: inline-grid; place-items: center; flex: none; border: 0; background: none; color: var(--ink-2); cursor: pointer; }
+.qc-bt svg { width: 20px; height: 20px; }
+/* ADA-2 F5: o + do clipe só aparece no celular (celular-base.css). */
+.qc-clipe .qc-ic-mais { display: none; }
+.qc-bt.qc-enviar { width: 34px; height: 34px; margin-right: 2px; background: var(--action); color: var(--on-action); }
+.qc-bt.qc-enviar:hover { opacity: .9; }
+.qc-bt.qc-enviar svg { width: 18px; height: 18px; }
+.qc-bt:focus-visible, .qc-hist-bt:focus-visible, .qc-link:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+/* ADA-6: o cartão-mensagem e a faixa sobem juntos por cima da pílula; o cartão fica fora da região viva (#qc-faixa). */
+.qc-sobre { position: absolute; z-index: 1; left: 16px; right: 16px; bottom: calc(100% - 4px); }
+.qc-faixa:empty, .qc-cartao:empty { display: none; }
+.qc-resp { border-radius: 14px; background: var(--qc-vidro-forte); -webkit-backdrop-filter: var(--qc-desfoque); backdrop-filter: var(--qc-desfoque);
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); box-shadow: 0 6px 20px -8px color-mix(in srgb, var(--ink) 18%, transparent); animation: qc-sobe .24s ease-out both; }
+@keyframes qc-sobe { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.qc-linha { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 4px 6px 8px 10px; font-size: 13.5px; line-height: 1.35; color: var(--ink-2); }
+.qc-aviso { min-height: 28px; padding-top: 0; font-size: 12.5px; color: var(--ink-3, var(--ink-2)); }
+.qc-linha .icon.mascote { width: 20px !important; height: 20px !important; min-width: 20px; flex: none; }
+.qc-resp-txt { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.qc-giro { width: 14px; height: 14px; flex: none; border-radius: 50%; border: 2px solid var(--line-strong); border-top-color: var(--ink-2); animation: qd-giro .9s linear infinite; }
+.qc-erro-ic { display: inline-grid; place-items: center; width: 16px; height: 16px; flex: none; border-radius: 50%; font: 700 11px/1 var(--font-sans); font-style: normal;
+  color: var(--danger); border: 1.5px solid currentColor; }
+.qc-erro .qc-resp-txt { color: var(--ink); }
+.qc-aguarda .qc-resp-txt { color: var(--ink-3); }
+.qc-link { flex: none; color: var(--signal); text-decoration: none; font-weight: 600; font-size: 13.5px; }
+.qc-link:hover { color: var(--signal); text-decoration: underline; }
+.qc-hist-bt { flex: none; width: 28px; height: 28px; border-radius: 8px; display: inline-grid; place-items: center; border: 0; background: none; color: var(--ink-3); cursor: pointer; }
+.qc-hist-bt:hover { background: var(--surface-raised); color: var(--ink); }
+.qc-hist-bt svg { width: 14px; height: 14px; transition: transform .16s ease; }
+.qc-hist-bt[aria-expanded="true"] svg { transform: rotate(180deg); }
+.qc-hist { max-height: min(320px, 40vh); overflow-y: auto; overscroll-behavior: contain; padding: 10px 12px 6px; border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
+.qc-hist-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.qc-hist-lista li { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 10px; font-size: 13px; line-height: 1.4; }
+.qc-hist-lista p { margin: 0; grid-column: 1; overflow-wrap: anywhere; }
+.qc-hist-lista time { grid-column: 2; grid-row: 1; color: var(--ink-3); font-size: 12px; }
+.qc-h-eu { color: var(--ink); }
+.qc-h-bot { color: var(--ink-2); }
+.qc-hist-abrir { margin-top: 10px; font-size: 13px; }
+
+/* ADA-6: o recibo com ações (Ler tudo, Abrir · Mover, Desfazer), o cartão-mensagem, as sugestões e o contador. Tudo
+   sutil: parece uma mensagem (superfície, borda fina), nunca um alerta (sem cor chapada). */
+.qc-acoes { flex: none; display: inline-flex; align-items: center; gap: 6px; }
+.qc-ponto { color: var(--ink-3); }
+.qc-msg { margin-bottom: 6px; border-radius: 14px; background: var(--qc-vidro-forte); -webkit-backdrop-filter: var(--qc-desfoque); backdrop-filter: var(--qc-desfoque);
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); box-shadow: 0 6px 20px -8px color-mix(in srgb, var(--ink) 18%, transparent); animation: qc-sobe .2s ease-out both; }
+.qc-msg-topo { display: flex; align-items: center; gap: 8px; padding: 8px 6px 0 12px; font-size: 13px; color: var(--ink-3); }
+.qc-msg-topo .icon.mascote { width: 20px !important; height: 20px !important; min-width: 20px; flex: none; }
+.qc-msg-nome { flex: 1; min-width: 0; font-weight: 600; color: var(--ink-2); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.qc-msg-fechar { flex: none; width: 28px; height: 28px; border-radius: 8px; border: 0; background: none; color: var(--ink-3); font: 18px/1 var(--font-sans); cursor: pointer; }
+.qc-msg-fechar:hover { background: var(--surface-raised); color: var(--ink); }
+.qc-msg-fechar:focus-visible, .qc-msg-corpo:focus-visible, .qc-ideia:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.qc-msg-corpo { max-height: min(420px, 50vh); overflow-y: auto; overscroll-behavior: contain; padding: 6px 14px 12px; font-size: 14px; line-height: 1.5; color: var(--ink); overflow-wrap: anywhere; }
+.qc-msg-corpo > :first-child { margin-top: 0; }
+.qc-msg-corpo > :last-child { margin-bottom: 0; }
+.qc-ideias { display: flex; gap: 6px; margin: 0 4px 8px; overflow-x: auto; scrollbar-width: none; }
+.qc-ideias[hidden] { display: none; }
+.qc-ideias::-webkit-scrollbar { display: none; }
+.qc-ideia { flex: none; min-height: 30px; padding: 4px 12px; border-radius: 15px; border: 1px solid color-mix(in srgb, var(--line) 85%, transparent);
+  background: var(--qc-vidro); -webkit-backdrop-filter: var(--qc-desfoque); backdrop-filter: var(--qc-desfoque); color: var(--ink-2); font: 500 13px var(--font-sans); cursor: pointer; white-space: nowrap; }
+.qc-ideia:hover { color: var(--ink); border-color: var(--line-strong); }
+.qc-conta { margin: 0 14px 4px; text-align: right; font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.qc-conta[hidden] { display: none; }
+/* ADA-6 (critério 2): a faixa (e o cartão) ficam por cima da pílula; o fim do conteúdo reserva a altura deles, medida na
+   tela (--qc-faixa-alto), para nenhum card terminar debaixo da caixa. */
+.qd-vista > .qd-conteudo { padding-bottom: var(--qc-faixa-alto, 0px); }
+/* ADA-4: a fala da pessoa numa linha pequena acima do status (enviando → ✓); a falha é texto secundário + "Tentar de novo",
+   sem vermelho; o ■ Parar é o mesmo círculo do enviar; o card do lote pisca a borda uma vez. */
+.qc-fala { display: flex; justify-content: flex-end; align-items: baseline; gap: 6px; margin: 0; padding: 8px 10px 0 40px; font-size: 12.5px; line-height: 1.35; color: var(--ink-3); }
+.qc-fala-txt { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--ink-2); }
+.qc-fala-est { flex: none; font-size: 11.5px; color: var(--ink-3); }
+.qc-falhou .qc-resp-txt { color: var(--ink-2); }
+.qc-tempo { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.qc-bt.qc-enviar.qc-parar svg { width: 14px; height: 14px; }
+.qd-card.pulsa { animation: qd-pulsa 1.2s ease-out 1; }
+@keyframes qd-pulsa { 0% { box-shadow: 0 0 0 2px var(--action); } 70% { box-shadow: 0 0 0 2px var(--action); } 100% { box-shadow: 0 0 0 0 transparent; } }
+
+/* Issue 247 (NOD-429 v4, Gil a pedido do Marlon): com o painel ao lado, a caixa de recado segue o eixo e a largura da coluna
+   da tarefa (.qd-t-principal) e o painel vira uma coluna própria à direita. As contas repetem as da .qd-tarefa (no
+   máximo 1040px, centrada) e da .qd-t-corpo (painel de 232px + 28px de vão). Só acima de 700px: no celular nada muda. */
+@container (min-width: 701px) {
+  .qd-vista:has(.qd-tarefa.qd-com-lado) > .qc-wrap { padding-inline: max(0px, calc((min(100%, 1240px) - 1040px) / 2)); }
+  .qd-vista:has(.qd-tarefa.qd-com-lado) > .qc-wrap > .qc-caixa { max-width: none; margin: 0 calc(232px + 28px) 0 0; }
+}
+
+/* ---------- Vista estreita: a grade vira a lista por estado ---------- */
+/* Layout pela largura da própria vista (container query, como a agenda), não pela janela: vale para a janela estreita no
+   computador e para o celular; o que é só de toque fica na CONSULTA_CELULAR abaixo (AGENTS.md, ADR-094). */
+@container (max-width: 700px) {
+  .qd-so-largo { display: none; }
+  .qd-so-estreito { display: block; }
+  .qd-flag { margin-left: 0; }
+  .qd-barra-q { flex-wrap: wrap; row-gap: 4px; }
+  .qd-com-lado .qd-t-corpo { grid-template-columns: minmax(0, 1fr); gap: 22px; }
+  .qd-lado { padding: 4px 2px 0; }
+  .qd-t-principal { padding: 18px 16px 20px; }
+  .qd-t-tit { font-size: 22px; }
+  .qd-vista > .qc-wrap { padding: 8px 0 calc(env(safe-area-inset-bottom) + 12px); }
+  .qc-sobre { left: 8px; right: 8px; }
+  /* A resposta quebra em até 3 linhas em vez de cortar; o histórico cresce até metade da tela. */
+  .qc-resp-txt { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+  .qc-hist { max-height: 50vh; }
+  /* ADA-6: as ações do recibo descem para a linha de baixo, alinhadas ao texto. */
+  .qc-linha { flex-wrap: wrap; row-gap: 2px; }
+  .qc-acoes { order: 3; flex-basis: 100%; padding-left: 28px; flex-wrap: wrap; }
+  .qc-ideias { margin-inline: 8px; }
+}
+
+/* ---------- Celular (a mesma CONSULTA_CELULAR do mobile.css, ADR-094) ---------- */
+@media (hover: none) and (pointer: coarse) and (max-width: 600px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  .qd-vista { padding-top: calc(env(safe-area-inset-top) + 64px); }
+  .qd-link, .qd-filtro-bt, .qd-q-mais, .qd-col-bt, .qd-col-cab { min-height: 44px; }
+  /* Revisão 4 do PR 625: os links curtos dos trabalhos ("Repetir" a 12,5 px tem ~42 px) e o "Mandar" do recado e do
+     comentário (6 px de padding) também ficam com 44×44 no toque. */
+  .qd-trab-acoes .qd-link, .qd-trab-tg { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; }
+  .qd-com-bt { min-height: 44px; min-width: 44px; }
+  .qd-q-mais { width: 44px; height: 44px; }
+  .qd-bt, .qd-voltar, .qd-chip { min-height: 44px; }
+  .qc-bt, .qc-bt.qc-enviar, .qc-hist-bt, .qc-pil .mic { width: 44px; height: 44px; }
+  .qc-ideia { min-height: 44px; font-size: 14px; }
+  .qc-msg-fechar { width: 44px; height: 44px; }
+  .qc-acoes .qc-link { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; }
+  /* ADA-5: 16 px no campo (o iOS não dá zoom no foco); o 🎤 sai quando há texto ou anexo, como no chat. */
+  .qc-txt { font-size: 16px; }
+  .qc-pil:has(.qc-txt:not(:placeholder-shown)) .mic, .qc-pil:has(.qc-anexos:not([hidden])) .mic { display: none; }
+  .qc-bt.qc-enviar { background: none; color: var(--on-action); position: relative; }
+  .qc-bt.qc-enviar::before { content: ""; position: absolute; inset: 5px; border-radius: 50%; background: var(--action); }
+  .qc-bt.qc-enviar svg { position: relative; }
+  .qc-link { min-height: 44px; display: inline-flex; align-items: center; }
+  /* NOD-420: o Responder do card em alvo de 44 e 16px (o iOS não dá zoom no foco). */
+  .qd-card-resp-in, .qd-card-resp-bt { min-height: 44px; font-size: 16px; }
+  /* Na pílula do celular o par fica só com os ícones, em alvos de 44 (ADR-094); o nome segue no aria-label. */
+  .qd-seg-bt { width: 44px; height: 44px; padding: 0; }
+  .qd-seg-bt span { display: none; }
+  /* Puxar e o cutucão (web/mobile.css) movem a cápsula inteira quando há quadro. */
+  .cabecalho.cabecalho-pilula .qd-pil.bnc-puxando { transition: none; }
+  .cabecalho.cabecalho-pilula .qd-pil.bnc-cutuca { animation: bnc-cutuca .9s cubic-bezier(.2, .8, .2, 1) 1; }
+  .cabecalho.cabecalho-pilula .qd-pil { background: color-mix(in srgb, var(--surface) 82%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+    box-shadow: var(--shadow-pop); }
+  /* NOD-430: no celular a tarefa aberta (pelo quadro ou pelo código num chat) sobe como folha. */
+  .qd-tarefa { min-height: calc(100% - 8px); padding: 14px 14px calc(env(safe-area-inset-bottom) + 16px); border-radius: 16px 16px 0 0;
+    background: var(--surface); box-shadow: var(--shadow-pop); animation: qd-sobe .22s cubic-bezier(.2, .8, .2, 1) both; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qd-col-nova, .qd-menu, .qd-pop, .qd-folha, .qd-tarefa { animation: none; }
+  /* ADA-4: o card do lote não pisca: só a borda, por um instante. */
+  .qd-card.pulsa { animation: none; outline: 2px solid var(--action); outline-offset: -1px; }
+  .qd-arrastando { transform: none; }
+  /* A troca vira um fade curto: o indicador não anda, a aba escolhida acende no lugar. */
+  .qd-seg-ind { transition: opacity 120ms ease-out; transform: none !important; opacity: 0; }
+  .qd-seg-bt { transition: background-color 120ms ease-out, color 120ms ease-out; }
+  .qd-seg-bt[aria-selected="true"] { background: var(--surface); box-shadow: 0 0 0 1px var(--line); }
+  .qd-av-rodando::after { animation: none; display: none; }
+  .qd-av-rodando::before { border: 1.5px dashed var(--success); }
+  .qd-aviso { animation: none; }
+  .qd-brilho { animation: none; background-color: var(--qd-card); }
+  .qc-resp { animation: none; }
+  .qc-hist-bt svg { transition: none; }
+  .qc-giro { animation: none; border-style: dashed; }
+}
+
+@media (forced-colors: active) {
+  .qc-pil:focus-within { outline: 2px solid CanvasText; outline-offset: 2px; }
+  .qd-card-bt:focus-visible { outline: 2px solid CanvasText; outline-offset: 2px; }
+  .qd-seg-bt[aria-selected="true"] { outline: 1px solid CanvasText; }
+  .qd-col-in { outline: 2px solid CanvasText; outline-offset: 1px; }
+}
+
+/* NOD-443 (ADR-143): as pessoas do quadro e o mural de Atividade. Discreto: links, sem modal, sem botão cheio. */
+.qd-pessoas { display: grid; gap: 6px; margin: 0 0 8px; font-size: 13px; }
+.qd-pessoas-links { display: flex; gap: 12px; }
+.qd-pessoas-painel { display: grid; gap: 8px; max-width: 520px; }
+.qd-pessoas-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.qd-pessoas-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.qd-modos { border: 0; margin: 0; padding: 0; display: grid; gap: 4px; width: 100%; }
+.qd-desfeito .qd-hist-oque { text-decoration: line-through; }
+.qd-t-saiu { color: var(--ink-2, var(--ink)); font-size: 13px; margin: 4px 0; }
+.qc-modo { margin: 0 0 4px 12px; font-size: 12px; color: var(--ink-2, var(--ink)); }
+/* NOD-421: as linhas de sistema da tarefa (GitHub) e o estado do PR: texto menor, cinza, sem alerta. */
+.qd-t-linhas { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 12px; color: var(--ink-3); }
+.qd-pr-estado { font-size: 12px; color: var(--ink-3); }
+/* O ícone do PR em Entregáveis (3ª revisão): fechado sem merge em cinza, mergeado em violeta, como o ponto do card. */
+.qd-ic-fechado { color: var(--ink-3); }
+.qd-ic-mergeado { color: var(--agent-violet); }
+.qd-tag-pr { gap: 5px; }
+/* O ponto do PR no card (🧭 da Ada): só o ponto tem cor, sem fundo chapado. Conflito em âmbar, mergeado em violeta. */
+.qd-pr-ponto { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--ink-3); }
+.qd-pr-ok { background: var(--success); }
+.qd-pr-falhou { background: var(--danger); }
+.qd-pr-conflito { background: var(--warning); }
+.qd-pr-mergeado { background: var(--agent-violet); }
+@media (forced-colors: active) { .qd-pr-ponto { background: CanvasText; } }
+/* NOD-421 (revisão do PR 621): o aviso do GitHub no topo do quadro: uma linha de texto, cinza, sem caixa nem ícone. */
+.qd-aviso-gh { margin: 2px 0 0; font-size: 12px; line-height: 18px; color: var(--ink-3); }
+
+/* ---------- NOD-455 (definido em 2026-11-02): o quadro da dona na tela de quem participa (#qcp) ----------
+   Mesma base do quadro (NOD-429): colunas cinza, card branco discreto. Classes qcp-; só tokens do nod (ADR-070). */
+/* NOD-455 (QA): o casco é o container da grade/lista, como a .qd-vista; sem isto o celular via a grade larga. */
+.qcp-casco { min-height: 100%; padding: 20px 24px 32px; background: var(--qd-fundo); overflow: auto; container-type: inline-size; }
+.qcp { width: 100%; max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.qcp-topo { display: flex; flex-direction: column; gap: 4px; }
+.qcp-tit { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -.01em; color: var(--ink); }
+.qcp-sub { font-weight: 400; color: var(--ink-2); }
+.qcp-meta { margin: 0; font-size: 14px; color: var(--ink); }
+.qcp-gente { margin: 0; font-size: 13px; color: var(--ink-2); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.qcp-vazio { margin: 24px 0; font-size: 14px; color: var(--ink-2); }
+.qcp-mural { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: var(--qd-raio); background: var(--qd-col-fundo); }
+.qcp-mural .qd-hist { margin: 0; }
+.qcp-pedir, .qcp-comentar { display: flex; gap: 8px; align-items: center; }
+.qcp-pedir { position: sticky; bottom: 0; padding: 10px 0 0; background: var(--qd-fundo); }
+.qcp-pedir .qd-meta-in, .qcp-comentar .qd-meta-in { flex: 1; min-width: 0; }
+.qcp-alheia { margin: 0; font-size: 13px; color: var(--ink-2); }
+.qcp-acoes { margin: 0; font-size: 13px; color: var(--ink-3, var(--ink-2)); }
+.qcp-editar { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.qcp-editar .qd-meta-in, .qcp-editar .qd-resp-in { width: 100%; }
+.qcp-esqueleto { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; max-width: 1240px; margin: 0 auto; }
+.qcp-esq-col { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: var(--qd-raio); background: var(--qd-col-fundo); }
+.qcp-esq-col i { display: block; height: 56px; border-radius: 8px; background: var(--qd-card); animation: qcp-pulsa 1.4s ease-in-out infinite; }
+.qcp-esq-col i.curto { height: 32px; width: 60%; }
+@keyframes qcp-pulsa { 50% { opacity: .55; } }
+.qcp-secao .qd-anel { flex: none; }
+@media (prefers-reduced-motion: reduce) { .qcp-esq-col i { animation: none; } }
+@media (max-width: 699px) {
+  .qcp-casco { padding: 12px 12px 24px; }
+  .qcp-esqueleto { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ADA-6 (revisão 3, alto): numa tela baixa (o celular deitado, ou de pé com o teclado aberto) as sugestões somariam ~52 px
+   à pílula, que cobriria o cabeçalho das colunas. Ali elas não aparecem: a pílula fica do tamanho de antes. */
+@media (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  .qc-ideias { display: none; }
+}
+
+/* ====================================================================================================================
+   NOD-460: o quadro em tela cheia (coluna de 264, sem o teto de 1240), a barra (chips, busca, Exibir), o "+" por coluna,
+   o selo "Trabalhando · há N min", o compacto e o vazio inline. Do protótipo nod-460 (q460-*), com o prefixo qd-.
+   ==================================================================================================================== */
+.qd-vista > .qd-conteudo:has(.qd-grade) { --qd-col-min: 264px; max-width: none; }
+.qd-vista > .qd-conteudo .qd-col-lista { overscroll-behavior-y: contain; }
+/* A grade de 264 rola de lado: o card trazido à vista (o foco, o scrollIntoView) não para embaixo das tiras presas à direita. */
+.qd-vista > .qd-conteudo .qd-grade { scroll-padding-inline: 8px calc(2 * var(--qd-tira) + 24px); }
+
+/* A barra: Todas · Comigo · um chip por agente · +N | Buscar · n trabalhando · Exibir · ⋯ */
+.qd-barra-q:has(.qd-busca) { flex-wrap: wrap; row-gap: 6px; }
+.qd-barra-q .qd-filtros { flex-wrap: wrap; min-width: 0; }
+.qd-barra-q .qd-chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px; border: 0; border-radius: 999px; background: transparent; white-space: nowrap; flex-shrink: 0; }
+.qd-barra-q .qd-chip:hover { background: transparent; color: var(--ink); }
+.qd-barra-q .qd-chip[aria-pressed="true"] { background: var(--surface-raised); color: var(--ink); }
+.qd-chip-av { display: inline-grid; place-items: center; line-height: 0; }
+.qd-chip-av .icon.mascote, .qd-chip-av nod-mascote { width: 16px !important; height: 16px !important; min-width: 16px; border-radius: 5px; }
+.qd-chip-av .icon.mascote svg { width: 13px; height: 13px; }
+.qd-chip-av .qd-anel { width: 16px; height: 16px; font-size: 7.5px; border-width: 1.5px; }
+.qd-chip-n { font-size: 12px; font-weight: 500; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.qd-chip[aria-pressed="true"] .qd-chip-n { color: var(--ink-2); }
+.qd-barra-q .qd-chip-mais { padding: 0 9px; }
+.qd-chip-mais-l, .qd-exibir-l { position: relative; display: inline-flex; }
+.qd-menu-ag { left: 0; right: auto; width: auto; min-width: 200px; }
+.qd-menu-ag .qd-menu-it { flex-wrap: nowrap; }
+.qd-menu-ag .qd-chip-nome { flex: 1; }
+.qd-barra-q .qd-trab { height: 28px; padding: 0 10px 0 8px; border: 0; border-radius: 999px; background: transparent; font: inherit; font-size: 12.5px; color: var(--ink-2); cursor: pointer; flex-shrink: 0; }
+.qd-barra-q .qd-trab:hover { color: var(--ink); }
+.qd-barra-q .qd-trab[aria-pressed="true"] { background: var(--surface-raised); color: var(--ink); font-weight: 600; }
+
+.qd-busca { display: inline-flex; align-items: center; gap: 6px; width: 168px; height: 30px; padding: 0 5px 0 9px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--qd-card); color: var(--ink-3); cursor: text; transition: width .16s ease; }
+.qd-busca:focus-within, .qd-busca:has(.qd-busca-in:not(:placeholder-shown)) { width: 220px; border-color: var(--line-strong); color: var(--ink-2); }
+.qd-busca:has(.qd-busca-in:focus-visible) { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+/* foco-ok: a pílula .qd-busca ganha o contorno pelo :has(:focus-visible); no forced-colors o campo tem contorno Highlight. */
+.qd-busca-in { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; background: none; color: var(--ink); font: inherit; font-size: 13px; }
+.qd-busca-in::placeholder { color: var(--ink-3); }
+.qd-busca-in::-webkit-search-cancel-button { display: none; }
+.qd-kbd { padding: 0 5px; border: 1px solid var(--line); border-radius: 4px; font: 500 11px/16px var(--font-mono); color: var(--ink-3); }
+.qd-busca:focus-within .qd-kbd { display: none; }
+/* QA do PR 645: o × fica dentro da pílula (é irmão do label, para não ser o rótulo do campo), à direita. */
+.qd-busca-l { position: relative; display: inline-flex; align-items: center; }
+.qd-busca-l:has(.qd-busca-limpar) .qd-busca { padding-right: 30px; }
+.qd-busca-limpar { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: grid; place-items: center; flex: none; width: 22px; height: 22px; border: 0; border-radius: 50%; background: none; color: var(--ink-3); font: inherit; font-size: 15px; line-height: 1; cursor: pointer; }
+.qd-busca-limpar:hover { background: var(--surface-raised); color: var(--ink); }
+.qd-mark { padding: 0 1px; border-radius: 3px; background: var(--signal-soft); color: inherit; }
+
+.qd-exibir { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent;
+  color: var(--ink-2); font: inherit; font-size: 13px; font-weight: 500; white-space: nowrap; flex-shrink: 0; cursor: pointer; }
+.qd-exibir:hover, .qd-exibir[aria-expanded="true"] { background: var(--surface-raised); color: var(--ink); }
+.qd-ponto { width: 6px; height: 6px; border-radius: 50%; background: var(--signal); }
+.qd-menu-ex { width: auto; min-width: 232px; }
+.qd-menu-ex .qd-menu-it { flex-wrap: nowrap; }
+.qd-caixa { display: grid; place-items: center; flex: none; width: 16px; height: 16px; border: 1.5px solid var(--line-strong); border-radius: 4px; color: var(--on-action); }
+[aria-checked="true"] > .qd-caixa { border-color: var(--action); background: var(--action); }
+.qd-menu-nota { margin: 4px 0 0; padding: 7px 10px 4px; border-top: 1px solid var(--line); font-size: 12px; line-height: 1.4; color: var(--ink-3); }
+
+/* O "+" do cabeçalho da coluna: sempre visível e apagado; forte no hover e no foco. */
+.qd-col-add { display: grid; place-items: center; flex: none; width: 24px; height: 24px; margin-left: auto; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--ink-3); cursor: pointer; }
+.qd-col:hover .qd-col-add, .qd-col-add:hover, .qd-col-add:focus-visible, .qd-col-add[aria-expanded="true"] { color: var(--ink); }
+.qd-col-add:hover { background: color-mix(in srgb, var(--qd-col-fundo) 55%, var(--line)); }
+.qd-col-add + .qd-col-mais { margin-left: 0; }
+.qd-chip:focus-visible, .qd-trab:focus-visible, .qd-exibir:focus-visible, .qd-col-add:focus-visible, .qd-busca-limpar:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+/* O selo: bolinha verde parada + "Trabalhando · há N min", no lugar do horário. */
+.qd-selo { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; line-height: 1.35; color: var(--ink-2); white-space: nowrap; }
+.qd-selo i { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
+
+/* Compacto (Exibir): código, título e selo; a pergunta de "Precisa de você" fica. */
+.qd-compacto .qd-tags, .qd-compacto .qd-card-pe { display: none; }
+.qd-compacto .qd-card { gap: 3px; padding: 7px 10px 8px; }
+.qd-compacto .qd-card-tit { -webkit-line-clamp: 1; line-clamp: 1; }
+
+/* O campo de nova tarefa no topo da coluna. */
+.qd-nova { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px 9px; border: 1px solid var(--signal); border-radius: var(--qd-raio); background: var(--qd-card);
+  box-shadow: 0 0 0 3px var(--signal-soft); list-style: none; }
+.qd-nova form { display: contents; }
+.qd-nova:has(.qd-nova-in:focus-visible) { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+/* foco-ok: o cartão .qd-nova ganha o contorno pelo :has(:focus-visible); no forced-colors o campo tem contorno Highlight. */
+.qd-nova-in { width: 100%; padding: 2px 0; border: 0; outline: 0; background: none; color: var(--ink); font: inherit; font-size: 13px; font-weight: 500; }
+.qd-nova-in::placeholder { color: var(--ink-3); font-weight: 400; }
+.qd-nova-dica, .qd-nova-msg { margin: 0; font-size: 11.5px; line-height: 1.35; color: var(--ink-3); }
+.qd-nova kbd { font: inherit; font-weight: 600; color: var(--ink-2); }
+.qd-nova-erro { border-color: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
+.qd-nova-msg { color: var(--danger); font-weight: 500; }
+
+/* Nada encontrado: uma linha inline sobre a grade (sem modal), com Limpar busca e Ver em todas. */
+.qd-vazio-1 { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 10px 12px; border: 1px dashed var(--line-strong); border-radius: 10px;
+  font-size: 13px; line-height: 1.45; color: var(--ink-2); }
+.qd-vazio-1 > span { margin-right: auto; }
+
+/* Telas estreitas: a barra quebra; no celular (a lista) os chips viram uma linha que rola de lado. */
+@media (max-width: 760px) {
+  .qd-barra-q:has(.qd-busca) { align-items: flex-start; }
+  .qd-busca { width: 140px; }
+  .qd-barra-q .qd-trab .qd-avs-pilha { display: none; }
+}
+@container (max-width: 640px) {
+  .qd-barra-q .qd-filtros { flex: 1 1 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
+  .qd-barra-q .qd-filtros { -webkit-mask-image: linear-gradient(90deg, #000 86%, transparent); mask-image: linear-gradient(90deg, #000 86%, transparent); } /* cor-fixa: canal alfa da máscara, não é cor visível */
+  .qd-barra-q .qd-filtros::-webkit-scrollbar { display: none; }
+  .qd-barra-q .qd-barra-dir { flex: 1 1 100%; margin-left: 0; }
+  .qd-busca-l { flex: 1; min-width: 0; }
+  .qd-busca { flex: 1; width: auto; }
+  .qd-busca:focus-within, .qd-busca:has(.qd-busca-in:not(:placeholder-shown)) { width: auto; }
+  .qd-busca .qd-kbd { display: none; }
+}
+/* No celular (ADR-094): alvos de toque de 44px e a busca em 16px (o iOS não dá zoom no campo). */
+@media (hover: none) and (pointer: coarse) and (max-width: 600px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  .qd-barra-q .qd-chip, .qd-barra-q .qd-trab { min-height: 44px; font-size: 14px; }
+  .qd-busca { height: 44px; border-radius: 10px; }
+  .qd-busca-in { font-size: 16px; }
+  .qd-exibir, .qd-col-add { min-height: 44px; min-width: 44px; }
+  .qd-busca-limpar { right: 0; width: 44px; height: 44px; }
+  .qd-busca-l:has(.qd-busca-limpar) .qd-busca { padding-right: 46px; }
+}
+
+@media (prefers-reduced-motion: reduce) { .qd-busca { transition: none; } }
+@media (forced-colors: active) {
+  .qd-barra-q .qd-chip[aria-pressed="true"], .qd-barra-q .qd-trab[aria-pressed="true"] { outline: 1px solid CanvasText; }
+  .qd-selo i, .qd-ponto { background: CanvasText; forced-color-adjust: none; }
+  .qd-mark { background: Highlight; color: HighlightText; forced-color-adjust: none; }
+  .qd-nova, .qd-busca, .qd-vazio-1 { border: 1px solid CanvasText; }
+  /* O campo da busca e o do "+" tiram o outline (o anel é do contêiner): no alto contraste o foco volta no próprio campo. */
+  .qd-busca-in:focus-visible, .qd-nova-in:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
+  [aria-checked="true"] > .qd-caixa { background: Highlight; border-color: Highlight; color: HighlightText; forced-color-adjust: none; }
+}
+
+/* ---------- ADA-14 (ADR-153): o seletor de quadro (popover no computador, folha de baixo no estreito) ---------- */
+.qd-qs { position: relative; display: inline-flex; margin: 0 0 6px; max-width: 100%; }
+.qd-qs-bt { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; max-width: 100%; padding: 4px 8px 4px 6px; margin-left: -6px; border: 0; border-radius: 8px;
+  background: none; color: var(--ink); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; text-align: left; }
+.qd-qs-bt:hover, .qd-qs-bt[aria-expanded="true"] { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.qd-qs-proj { color: var(--ink-3); font-weight: 500; }
+.qd-qs-atual { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qd-qs-fundo { display: none; }
+.qd-qs-pop { position: absolute; top: calc(100% + 4px); left: -6px; z-index: 30; display: flex; flex-direction: column; gap: 8px; width: 320px; max-width: calc(100vw - 24px);
+  max-height: min(70vh, 520px); padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); box-shadow: var(--shadow-pop); }
+.qd-qs-cab { display: none; align-items: center; justify-content: space-between; }
+.qd-qs-tit { font-size: 16px; font-weight: 600; }
+.qd-qs-fechar { width: 44px; height: 44px; border: 0; border-radius: 10px; background: none; color: var(--ink-2); font-size: 22px; line-height: 1; cursor: pointer; }
+.qd-qs-busca { height: 32px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 8px; background: transparent; color: var(--ink); font: inherit; font-size: 13px; }
+.qd-qs-lista { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; min-height: 0; }
+.qd-qs-gt { margin: 0; padding: 0 6px 2px; font-size: 11.5px; font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: .03em; }
+.qd-qs-ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.qd-qs-it { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 34px; padding: 4px 8px; border: 0; border-radius: 8px; background: none; color: var(--ink);
+  font: inherit; font-size: 13.5px; text-align: left; cursor: pointer; }
+.qd-qs-it:hover, .qd-qs-it:focus-visible { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.qd-qs-it[aria-current="true"] { background: var(--surface-selected); font-weight: 600; }
+.qd-qs-nome { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qd-qs-tag { flex: none; padding: 0 6px; border: 1px solid var(--line); border-radius: 6px; font-size: 11px; line-height: 18px; color: var(--ink-3); font-weight: 400; }
+.qd-qs-n { flex: none; font-size: 11.5px; color: var(--ink-3); font-weight: 400; }
+.qd-qs-vazio { margin: 4px 6px; font-size: 13px; color: var(--ink-3); }
+.qd-qs-pe { display: flex; gap: 14px; padding: 6px 6px 2px; border-top: 1px solid var(--line); font-size: 13px; }
+.qd-qs-novo { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding-top: 8px; border-top: 1px solid var(--line); margin: 0; }
+.qd-qs-novo input, .qd-qs-novo select { flex: 1 1 100%; height: 32px; padding: 0 8px; border: 1px solid var(--line-strong); border-radius: 8px; background: transparent; color: var(--ink); font: inherit; font-size: 13px; }
+.qd-qs-erro { flex-basis: 100%; margin: 0; font-size: 12px; color: var(--danger); }
+@container (max-width: 700px) {
+  .qd-qs-fundo { display: block; position: fixed; inset: 0; z-index: 40; background: color-mix(in srgb, var(--ink) 30%, transparent); }
+  .qd-qs-pop { position: fixed; top: auto; left: 0; right: 0; bottom: 0; z-index: 41; width: auto; max-width: none; max-height: 85vh;
+    padding: 14px 14px calc(env(safe-area-inset-bottom) + 16px); border: 0; border-radius: 16px 16px 0 0; animation: qd-sobe .22s cubic-bezier(.2, .8, .2, 1) both; }
+  .qd-qs-cab { display: flex; }
+}
+/* O toque (CONSULTA_CELULAR, ADR-094): alvos de 44pt e campo de 16px (sem o zoom do iOS). */
+@media (hover: none) and (pointer: coarse) and (max-width: 600px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  .qd-qs-bt, .qd-qs-it, .qd-qs-pe .qd-link { min-height: 44px; }
+  .qd-qs-busca, .qd-qs-novo input, .qd-qs-novo select, .qd-qs-novo .qd-bt { min-height: 44px; font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { .qd-qs-pop { animation: none; } }

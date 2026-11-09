@@ -1,0 +1,11 @@
+// Worker nodbot-site: serve esta pasta como está (static assets, sem build).
+// Deploy (da raiz do repo): npx wrangler deploy -c site/wrangler.jsonc
+// Ver docs/adr/adr-118-site-marketing-cloudflare-workers.md e site/README.md.
+{
+  "name": "nodbot-site",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": ".",
+    "not_found_handling": "404-page"
+  }
+}

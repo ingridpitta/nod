@@ -1,0 +1,57 @@
+name: Bug
+description: Algo não funciona como deveria.
+labels: ["bug", "triagem"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado por relatar. Falha de segurança **não** vem aqui: siga o SECURITY.md.
+        Não cole tokens, senhas, e-mails ou dados de clientes nos campos abaixo.
+  - type: textarea
+    id: o-que-aconteceu
+    attributes:
+      label: O que aconteceu
+      description: O que você viu, e o que esperava ver.
+    validations:
+      required: true
+  - type: textarea
+    id: passos
+    attributes:
+      label: Passos para reproduzir
+      placeholder: |
+        1. NOD_LOGIN=stub npm run dev
+        2. Abrir a conversa com ...
+        3. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: onde
+    attributes:
+      label: Onde
+      options:
+        - Rodando local (npm run dev)
+        - App do macOS
+        - App do Windows
+        - Servidor próprio
+    validations:
+      required: true
+  - type: input
+    id: versao
+    attributes:
+      label: Versão ou commit
+      placeholder: "ex.: 1.0.0-rc.7 ou o SHA do git"
+  - type: dropdown
+    id: executor
+    attributes:
+      label: Executor
+      options:
+        - catcher (sem IA)
+        - Claude Code
+        - Codex
+        - Não sei
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: O trecho do log do servidor ou do console do navegador. Tire qualquer segredo antes.
+      render: text

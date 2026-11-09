@@ -1,0 +1,241 @@
+/* =====================================================================================
+   Tokens do design system do Nod (definido em 2026-10-04; fonte: o design system "Nod", project/tokens.json,
+   direção D "grafite + cor do agente"). É o ÚNICO arquivo da web com cor literal: os outros CSS usam var(--…)
+   e tests/unit/web/cores-por-token.test.ts recusa hex/rgb fora daqui (exceção: linha marcada com "cor-fixa").
+   desktop/setup.css (tela de conexão do Mac, que não carrega este arquivo) tem uma cópia dos valores que usa; o mesmo
+   teste confere que ela continua igual a esta.
+
+   Regras de uso (README do design system):
+   - action é a única cor de ação (botão primário, enviar), com uma exceção do próprio design system: dentro de um aviso
+     de estado, o botão que resolve usa a cor do estado; signal é só para o que é NOVO (divisor de novas,
+     não lidas, menção a você) e nunca para link, seleção, botão, foco ou aviso;
+   - estados: danger (o trabalho não começa ou parou), warning (o usuário resolve depois), success; informação
+     é neutra (surface-raised + line + ink);
+   - a cor do agente (agent-*) aparece só no avatar, no ponto de "trabalhando" e no marcador da menção, mais as
+     exceções das emendas da ADR-070 (o brilho do pensamento e o balão da pessoa, --balao-*, NOD-431).
+
+   Tema: claro por padrão; escuro pelo sistema (prefers-color-scheme) ou por escolha (data-theme no <html>,
+   gravado por web/lib/tema.ts). data-theme="light" vence o sistema escuro e data-theme="dark" vence o claro.
+   ===================================================================================== */
+
+@font-face { font-family: "Geist"; font-style: normal; font-display: swap; font-weight: 100 900;
+  src: url(/fontes/geist-latin-wght-normal.woff2) format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Geist"; font-style: normal; font-display: swap; font-weight: 100 900;
+  src: url(/fontes/geist-latin-ext-wght-normal.woff2) format("woff2-variations");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Geist Mono"; font-style: normal; font-display: swap; font-weight: 100 900;
+  src: url(/fontes/geist-mono-latin-wght-normal.woff2) format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Geist Mono"; font-style: normal; font-display: swap; font-weight: 100 900;
+  src: url(/fontes/geist-mono-latin-ext-wght-normal.woff2) format("woff2-variations");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+
+:root {
+  color-scheme: light;
+
+  /* Superfícies, da mais funda à selecionada */
+  --surface: #ffffff;
+  --surface-side: #f7f7f8;
+  --surface-raised: #f0f0f2;
+  --surface-selected: #ececef;
+
+  /* Linhas: line é decorativa; line-strong é a borda de campos e controles (3:1) */
+  --line: #e5e5e9;
+  --line-strong: #8e8e96;
+
+  /* Texto */
+  --ink: #18181b;
+  --ink-2: #5d5d66;
+  --ink-3: #6b6b74;
+
+  /* Ação e sinal */
+  --action: #18181b;
+  --on-action: #ffffff;
+  --signal: #1866c0;
+  --on-signal: #ffffff;
+  --signal-soft: #e6f0fb;
+  --focus-ring: var(--ink);
+
+  /* O revisor do Automático (modos de aprovação, PR 4; tela A3, o cartão compacto "estilo Grok"): o azul claro do
+     cartão, a borda, o escudo e o Aprovar. Próprio, e não signal: signal é só o que é NOVO, nunca botão. */
+  --revisor: #1866c0;
+  --on-revisor: #ffffff;
+  --revisor-soft: #eef4fc;
+  --revisor-line: #c6daf3;
+  /* O ladrilho do escudo no cartão (A3). Escudo sobre ele: 4,5:1 no claro, 4,8:1 no escuro. */
+  --revisor-ladrilho: #dbe6fb;
+
+  /* Estados */
+  --warning: #7a4e08;
+  --warning-soft: #fdf5e6;
+  --warning-line: #efd6a6;
+  /* Realce da busca na conversa (NOD-42): todas as ocorrências e a atual, com
+     o texto de cada uma (a bolha da própria pessoa tem texto branco). Não é cor de agente (ADR-070). */
+  --realce-busca: #fbe7a8;
+  --realce-busca-atual: #f2c14e;
+  --realce-busca-tinta: #1a1a1d;
+  --realce-busca-texto: #1a1a1d;
+  --danger: #c42b1c;
+  --danger-soft: #fdecea;
+  --danger-line: #f3c2bc;
+  --success: #177040;
+  --success-soft: #e8f5ee;
+  --on-status: #ffffff;
+
+  /* NOD-327: a faixa do ícone de arquivo por família (planilha, documento, apresentação, PDF) e o papel da prévia */
+  --arquivo-planilha: #1e8a4c;
+  --arquivo-documento: #2b6cd4;
+  --arquivo-apresentacao: #e0632a;
+  --arquivo-pdf: #d0352b;
+  --papel: #ffffff;
+
+  /* Cor de identidade dos agentes (as 12 skins do mascote): iguais nos dois temas */
+  --agent-encre: #0a0a0c;
+  --agent-brun: #8b5e3c;
+  --agent-rouge: #e8483f;
+  --agent-orange: #f08a24;
+  --agent-ambre: #f0b429;
+  --agent-vert: #3ecf8e;
+  --agent-turquoise: #2fbfa0;
+  --agent-bleu: #3b93f0;
+  --agent-violet: #8b5cf6;
+  --agent-rose: #e152b0;
+  --agent-gris: #a3a3a3;
+  --agent-creme: #f1efe9;
+  /* Olhos do avatar: brancos em toda skin, exceto creme (fica clara demais e leva olhos em tinta) */
+  --agent-olho: #ffffff;
+  --agent-olho-creme: #18181b;
+
+  /* NOD-431 (emenda da ADR-070): o balão da pessoa na cor do bot da conversa. Fundo, tinta e fundo do código de cada
+     skin saem de src/domain/contraste-do-balao.ts (texto sempre branco, como no Grok, ≥ 4,5:1 sobre o fundo e sobre o chip;
+     separado da página e do balão do bot; o fundo só muda de luminosidade quando precisa, mantendo o tom); tests/unit/domain/contraste-do-balao.test.ts confere estes valores. */
+  --balao-encre: #0a0a0c; --balao-encre-tinta: #ffffff; --balao-encre-codigo: #232324;
+  --balao-brun: #8b5e3c; --balao-brun-tinta: #ffffff; --balao-brun-codigo: #7d5536;
+  --balao-rouge: #e42a1f; --balao-rouge-tinta: #ffffff; --balao-rouge-codigo: #cd261c;
+  --balao-orange: #b15f0c; --balao-orange-tinta: #ffffff; --balao-orange-codigo: #9f560b;
+  --balao-ambre: #996e0b; --balao-ambre-tinta: #ffffff; --balao-ambre-codigo: #8a630a;
+  --balao-vert: #218659; --balao-vert-tinta: #ffffff; --balao-vert-codigo: #1e7950;
+  --balao-turquoise: #20826d; --balao-turquoise-tinta: #ffffff; --balao-turquoise-codigo: #1d7562;
+  --balao-bleu: #1174dd; --balao-bleu-tinta: #ffffff; --balao-bleu-codigo: #0f68c7;
+  --balao-violet: #8452f5; --balao-violet-tinta: #ffffff; --balao-violet-codigo: #774add;
+  --balao-rose: #d62599; --balao-rose-tinta: #ffffff; --balao-rose-codigo: #c1218a;
+  --balao-gris: #757575; --balao-gris-tinta: #ffffff; --balao-gris-codigo: #696969;
+  /* Creme e cinza escurecem no mesmo tom até o branco passar. */
+  --balao-creme: #807451; --balao-creme-tinta: #ffffff; --balao-creme-codigo: #736849;
+
+  /* Tipografia */
+  --font-sans: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Sombra só no que flutua (menus, popovers, gavetas, diálogos); cards separam por line */
+  --shadow-pop: 0 6px 20px rgba(24, 24, 27, .10), 0 1px 2px rgba(24, 24, 27, .06);
+  /* O campo da conversa (plano "tela limpa", 2026-10-16): borda fina e uma sombra mais leve que a do que flutua */
+  --shadow-composer: 0 6px 20px rgba(24, 24, 27, .07), 0 1px 2px rgba(24, 24, 27, .05);
+  /* Extensões do app, fora do tokens.json: o botão das chaves e do segmentado, e o fundo atrás de diálogos */
+  --shadow-knob: 0 1px 2px rgba(24, 24, 27, .22);
+  --backdrop: rgba(24, 24, 27, .28);
+
+  /* ADA-2 (ADR-148): a forma do celular — alvo de toque, campo (16 px: o iOS não dá zoom ao focar) e corpo de leitura.
+     Usados só dentro da consulta do celular (web/celular-base.css). */
+  --cel-alvo: 44px;
+  --cel-campo: 16px;
+  --cel-corpo: 16px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --surface: #131315;
+    --surface-side: #18181b;
+    --surface-raised: #232327;
+    --surface-selected: #2a2a2f;
+    --line: #2d2d32;
+    --line-strong: #6a6a73;
+    --ink: #ededef;
+    --ink-2: #a4a4ac;
+    --ink-3: #8b8b94;
+    --action: #ededef;
+    --on-action: #131315;
+    --signal: #4ea3f0;
+    --on-signal: #0b1622;
+    --signal-soft: #15283c;
+    --revisor: #4ea3f0;
+    --on-revisor: #0b1622;
+    --revisor-soft: #132335;
+    --revisor-line: #26425f;
+    --revisor-ladrilho: #1b3350;
+    --warning: #ebbd6a;
+    --warning-soft: #2a2214;
+    --warning-line: #4d3c1c;
+    --realce-busca: #5a4716;
+    --realce-busca-atual: #c99a2e;
+    --realce-busca-tinta: #0a0a0c;
+    --realce-busca-texto: #f5ecd6;
+    --danger: #f2796b;
+    --danger-soft: #2e1613;
+    --danger-line: #5a2a24;
+    --success: #4cc38a;
+    --success-soft: #132a1e;
+    --on-status: #131315;
+    --shadow-pop: 0 8px 24px rgba(0, 0, 0, .45), 0 0 0 1px rgba(255, 255, 255, .04);
+    --shadow-composer: 0 6px 20px rgba(0, 0, 0, .32), 0 1px 2px rgba(0, 0, 0, .4);
+    --shadow-knob: 0 1px 2px rgba(0, 0, 0, .5);
+    --backdrop: rgba(0, 0, 0, .5);
+    --arquivo-planilha: #3fb874;
+    --arquivo-documento: #5b93ef;
+    --arquivo-apresentacao: #f08a52;
+    --arquivo-pdf: #f06b5f;
+    --papel: #ffffff;
+    --balao-encre: #31313b;
+    --balao-encre-codigo: #46464f;
+  }
+}
+
+/* Mesmos valores do bloco acima: a escolha manual vence o sistema nos dois sentidos. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface: #131315;
+  --surface-side: #18181b;
+  --surface-raised: #232327;
+  --surface-selected: #2a2a2f;
+  --line: #2d2d32;
+  --line-strong: #6a6a73;
+  --ink: #ededef;
+  --ink-2: #a4a4ac;
+  --ink-3: #8b8b94;
+  --action: #ededef;
+  --on-action: #131315;
+  --signal: #4ea3f0;
+  --on-signal: #0b1622;
+  --signal-soft: #15283c;
+  --revisor: #4ea3f0;
+  --on-revisor: #0b1622;
+  --revisor-soft: #132335;
+  --revisor-line: #26425f;
+  --revisor-ladrilho: #1b3350;
+  --warning: #ebbd6a;
+  --warning-soft: #2a2214;
+  --warning-line: #4d3c1c;
+  --realce-busca: #5a4716;
+  --realce-busca-atual: #c99a2e;
+  --realce-busca-tinta: #0a0a0c;
+  --realce-busca-texto: #f5ecd6;
+  --danger: #f2796b;
+  --danger-soft: #2e1613;
+  --danger-line: #5a2a24;
+  --success: #4cc38a;
+  --success-soft: #132a1e;
+  --on-status: #131315;
+  --shadow-pop: 0 8px 24px rgba(0, 0, 0, .45), 0 0 0 1px rgba(255, 255, 255, .04);
+  --shadow-composer: 0 6px 20px rgba(0, 0, 0, .32), 0 1px 2px rgba(0, 0, 0, .4);
+  --shadow-knob: 0 1px 2px rgba(0, 0, 0, .5);
+  --backdrop: rgba(0, 0, 0, .5);
+  --arquivo-planilha: #3fb874;
+  --arquivo-documento: #5b93ef;
+  --arquivo-apresentacao: #f08a52;
+  --arquivo-pdf: #f06b5f;
+  --papel: #ffffff;
+  --balao-encre: #31313b;
+  --balao-encre-codigo: #46464f;
+}

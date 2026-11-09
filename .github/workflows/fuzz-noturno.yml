@@ -1,0 +1,52 @@
+# Fuzz noturno das ações (NOD-398): o mesmo tests/concurrency/fuzz-acoes.test.ts do job integration, com N=200 entradas
+# absurdas por ação (no PR são 20, para caber em 90 s). A semente sai no log: FUZZ_SEMENTE=<a do log> FUZZ_N=200 reproduz.
+# Roda às 06:00 UTC (03:00 em Brasília) e à mão (Actions → fuzz-noturno → Run workflow).
+# Actions pinadas pelos mesmos SHAs do ci.yml:
+#   actions/checkout v4.2.2   = 11bd71901bbe5b1630ceea73d27597364c9af683
+#   actions/setup-node v4.4.0 = 49933ea5288caeca8642d1e84afbd3f7d6820020
+name: fuzz-noturno
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: fuzz-noturno
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    # O runner que sobe o Postgres na porta 5434 (ver ci.yml): um job por vez nele.
+    runs-on: [self-hosted, linux, nod-integracao]
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    env:
+      DATABASE_URL_DONO: postgres://nod_dono:nod@127.0.0.1:5434/nod
+      DATABASE_URL_TEST: postgres://nod_app:nod@127.0.0.1:5434/nod_test
+      FUZZ_N: "200"
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24.19.0"
+          cache: npm
+      - run: npm ci
+      - run: psql postgres://postgres:postgres@127.0.0.1:5434/postgres -v ON_ERROR_STOP=1 -f infra/postgres/init/01_roles.sql
+      - run: npm run db:migrate:test
+      # Semente nova a cada noite (sem ela o teste usaria a do commit, como no PR, e o noturno repetiria as mesmas entradas).
+      - run: FUZZ_SEMENTE=$(( (RANDOM << 16) | RANDOM )) npx vitest run --project concurrency tests/concurrency/fuzz-acoes.test.ts

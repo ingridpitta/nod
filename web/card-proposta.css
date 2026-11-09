@@ -1,0 +1,333 @@
+/* NOD-399 (definido em 2026-10-30): o card de proposta e os avisos de erro da conversa, port do componente comum do
+   protótipo v2 aprovado pelo Marlon (gamefik.github.io/nod-prototipos/card-proposta/, `_nod/card-proposta`, ee8f6f2).
+   Uma continuação da fala do bot, não um formulário. Markup em web/lib/card-proposta.ts.
+   - .cp            card de proposta (criar, mudar, excluir, conectar, permitir)
+   - .cp-linha      o card decidido, encolhido numa linha: .cp-ok, .cp-recusado, .cp-expirado, .cp-aguarda
+   - .cp-erro       aviso de erro: fundo neutro, círculo vermelho com "!" e uma frase
+   Só usa tokens (claro e escuro vêm deles). O recuo de 52 px (36 px no celular) é o do mascote da fala do bot:
+   o card fica na coluna dela, sem recuo duplo. Contornos sempre em --line. */
+
+.cp, .cp-linha, .cp-erro {
+  --cp-recuo: 52px;
+  box-sizing: border-box;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+.cp *, .cp-linha *, .cp-erro * { box-sizing: border-box; }
+
+/* ---------- card ---------- */
+.cp {
+  width: min(440px, calc(100% - var(--cp-recuo)));
+  margin: -4px 0 22px var(--cp-recuo);
+  padding: 12px 14px 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-side);
+}
+.cp-titulo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink);
+}
+.cp-logo {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  object-fit: contain;
+}
+.cp-logo svg, svg.cp-logo { display: block; }
+/* o logo de app do nod (.app-logo) encolhe para caber no título */
+.cp-titulo .app-logo {
+  flex: none;
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 0 !important;
+  border-radius: 5px !important;
+  font-size: 11px !important;
+  line-height: 20px !important;
+}
+
+.cp-linhas {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+.cp-linhas li { margin: 0; overflow-wrap: anywhere; }
+.cp-rot { color: var(--ink-3); }
+.cp-de { color: var(--ink-3); text-decoration: line-through; text-decoration-thickness: 1px; }
+.cp-para { color: var(--ink); font-weight: 500; text-decoration: none; }
+.cp-seta { color: var(--ink-3); padding: 0 2px; }
+.cp-linhas code, .cp-detalhes code {
+  font-size: 12.5px;
+  padding: 0 4px;
+  border-radius: 5px;
+  background: var(--surface-raised);
+  color: var(--ink);
+}
+
+/* Detalhes: o resto fica guardado */
+.cp-detalhes { margin-top: 6px; }
+.cp-detalhes > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  list-style: none;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  border-radius: 6px;
+}
+.cp-detalhes > summary::-webkit-details-marker { display: none; }
+.cp-detalhes > summary::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin-left: 2px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+}
+.cp-detalhes[open] > summary::after { transform: translateY(1px) rotate(-135deg); }
+.cp-detalhes > summary:hover { color: var(--ink); }
+.cp-detalhes dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 12px;
+  margin: 8px 0 0;
+  font-size: 12.5px;
+}
+.cp-detalhes dt { color: var(--ink-3); }
+.cp-detalhes dd { margin: 0; color: var(--ink-2); overflow-wrap: anywhere; }
+.cp-detalhes p { margin: 8px 0 0; font-size: 12.5px; }
+
+/* Ações: o verbo e um "Agora não" discreto */
+.cp-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+.cp .cp-sim, .cp-erro .cp-acao, .cp .cp-nao {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  min-height: 30px;
+  margin: 0;
+  padding: 5px 12px;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+}
+.cp .cp-sim {
+  border: 1px solid var(--action);
+  background: var(--action);
+  color: var(--on-action);
+}
+.cp .cp-sim:hover { filter: brightness(1.15); }
+.cp .cp-nao {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-2);
+  font-weight: 500;
+  padding-inline: 10px;
+}
+.cp .cp-nao:hover { color: var(--ink); background: var(--surface-raised); }
+/* Excluir: o verbo em vermelho, nunca o card */
+.cp .cp-sim.cp-perigo {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--danger);
+  filter: none;
+}
+.cp .cp-sim.cp-perigo:hover { background: var(--surface-raised); }
+.cp .cp-sim[aria-busy="true"], .cp .cp-sim:disabled { opacity: .6; cursor: default; filter: none; }
+
+/* ---------- estados: o card encolhe numa linha ---------- */
+.cp-linha {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  width: fit-content;
+  max-width: calc(100% - var(--cp-recuo));
+  margin: -4px 0 22px var(--cp-recuo);
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-side);
+  font-size: 13px;
+}
+/* com extra: o card confirmado guarda algo (o endereço com Copiar) numa segunda linha */
+.cp-linha.cp-com-extra { width: min(440px, calc(100% - var(--cp-recuo))); padding: 10px 14px 12px; border-radius: 14px; }
+.cp-extra { flex: 1 0 100%; min-width: 0; margin-top: 6px; }
+/* QA do PR #607: o texto (e os links do fim) corre numa caixa só ao lado do ícone; quando quebra, o ícone fica na
+   primeira linha do texto e o "· Reabrir · Dispensar" não se separa por dentro. */
+.cp-linha > .cp-texto { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
+.cp-linha > .cp-ic { align-self: flex-start; margin-top: 3px; }
+.cp-fim { white-space: nowrap; }
+.cp-linha b, .cp-linha strong { color: var(--ink); font-weight: 600; }
+.cp-linha .cp-sep { color: var(--ink-3); }
+.cp-ic { flex: none; width: 14px; height: 14px; display: block; }
+.cp-ok .cp-ic { color: var(--success); }
+.cp-recusado { color: var(--ink-3); }
+.cp-recusado .cp-ic, .cp-expirado .cp-ic, .cp-aguarda .cp-ic { color: var(--ink-3); }
+.cp-link {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 3px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.cp-link:hover { text-decoration-color: currentColor; }
+
+/* ---------- erro e avisos: neutro, ícone pequeno ---------- */
+.cp-erro {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  column-gap: 10px;
+  align-items: start;
+  width: min(440px, calc(100% - var(--cp-recuo)));
+  margin: -4px 0 22px var(--cp-recuo);
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-side);
+}
+.cp-erro > .cp-acoes { grid-column: 2; }
+/* pleno: largura toda, ação à direita (faixa do Marketplace, listas) */
+.cp-erro.cp-pleno {
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  width: auto;
+  margin: 0;
+}
+.cp-erro.cp-pleno > .cp-acoes { grid-column: 3; grid-row: 1; margin-top: 0; }
+.cp-erro.cp-pleno > .cp-erro-ic { align-self: start; margin-top: 2px; }
+.cp-faixa { margin: 0 0 16px; }
+.cp-erro-ic {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin-top: 1.5px;
+  border-radius: 50%;
+  background: var(--danger);
+  color: var(--on-status, #fff);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  font-style: normal;
+}
+.cp-erro-corpo { min-width: 0; }
+.cp-erro-frase { margin: 0; color: var(--ink); }
+.cp-erro-mais { margin: 2px 0 0; color: var(--ink-2); font-size: 12.5px; }
+.cp-erro .cp-acoes { margin-top: 8px; }
+.cp-erro.cp-solto > .cp-acoes { margin-top: 6px; }
+.cp-erro .cp-acao {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 500;
+}
+.cp-erro .cp-acao:hover { background: var(--surface-raised); }
+/* solto: o mesmo aviso sem caixa, dentro de uma lista, gaveta ou faixa */
+.cp-erro.cp-solto {
+  width: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.cp-solto .cp-erro-frase { font-size: 13px; }
+
+/* na gaveta, o aviso do topo fica na caixa cinza dos outros cards (rodada 1, #204): a .gaveta-status e o bloco
+   "fora do ar" do computador ganham o fundo --surface-side; o .cp-solto dentro de uma lista ou embaixo de um campo continua sem caixa */
+.gaveta-status:has(> .cp-erro), .gaveta-status.cp-gaveta {
+  display: block;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-side);
+}
+.cp-fora > .cp-erro.cp-solto {
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-side);
+}
+
+/* leitor de tela */
+.cp-sr {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0; border: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+}
+
+/* foco visível */
+.cp :focus-visible, .cp-linha :focus-visible, .cp-erro :focus-visible {
+  outline: 2px solid var(--focus-ring, var(--ink));
+  outline-offset: 2px;
+}
+
+/* entrada discreta ao encolher */
+.cp-giro { animation: cp-gira .9s linear infinite; }
+@keyframes cp-gira { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .cp-giro { animation: none; }
+  .cp .cp-sim:hover { filter: none; }
+}
+
+/* o recuo acompanha a fala do bot (ícone + vão): 27 + 8 = 35 px abaixo de 700 px (interface.css), 28 + 8 = 36 px no
+   celular (mobile.css). Revisão 2: o corte era 760 px e, entre 701 e 760, o card ficava fora da coluna da fala. */
+@media (max-width: 700px) {
+  .cp, .cp-linha, .cp-erro { --cp-recuo: 35px; }
+  .cp, .cp-erro { width: calc(100% - var(--cp-recuo)); }
+}
+/* toque no celular (alvos de 44 px, recuo de 36 px): no mobile.css, bloco NOD-399 (ADR-094). */
+
+/* alto contraste */
+@media (forced-colors: active) {
+  .cp, .cp-linha, .cp-erro { border-color: CanvasText; }
+  .cp .cp-sim { border-color: ButtonText; }
+  .cp-erro-ic { background: CanvasText; color: Canvas; forced-color-adjust: none; }
+}
+
+/* as marcas do pedido (rotina parada, ×N) e o rótulo das permissões dentro de Detalhes */
+.cp-marcas { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 0; }
+.cp-detalhes .cp-permissoes { margin: 8px 0 4px; font-size: 12.5px; }
+
+/* Jornada C (docs/specs/onboarding-jornada-c.md): o card "Conectar uma IA neste computador" na conversa, uma linha por IA
+   com o botão do cartão de Provedores de IA, e o aviso da barra como botão de verdade. */
+.cp-sem-ia .cp-linhas { display: grid; gap: 6px; margin-top: 8px; }
+.cp-sem-ia .cp-ia { display: flex; align-items: center; gap: 8px; }
+.cp-sem-ia .cp-ia-txt { flex: 1; min-width: 0; color: var(--ink); }
+.cp-sem-ia .cp-rodape { margin: 8px 0 0; font-size: 12px; }
+.cp-sem-ia:focus-visible { outline: 2px solid var(--line); outline-offset: 2px; }
+.aviso-sem-ia {
+  display: block; width: 100%; text-align: left; font: inherit; font-size: 12.5px; color: var(--ink-2);
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-side); cursor: pointer;
+}
+.aviso-sem-ia:hover { color: var(--ink); background: var(--surface-raised); }
+.aviso-sem-ia b { color: var(--ink); font-weight: 600; }

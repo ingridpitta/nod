@@ -1,0 +1,76 @@
+# NOD-93 (ADR-123, ADR-127): a VM do computador do bot no Mac, com o supervisor da ADR-122 no próprio disco. Modelo: `desktop/vm-local/runtime.ts` troca os marcadores (ARCH, IMAGEM, CPUS, MEMORIA, DISCO, SOCKET)
+# e grava a configuração da instância; o resto ({{.User}}, {{.Dir}}) é do Lima. Escrito para o Lima 2.2.1 (o boot de verdade é UAT no Mac).
+# Regras (tests/unit/desktop/vm-local-runtime.test.ts): vz, sem Rosetta, sem mounts do Mac, nenhuma porta no host;
+# o único canal é o socket de controle do supervisor (/run/nod-computador/ctl.sock), num caminho só do nod.
+minimumLimaVersion: 2.2.0
+vmType: vz
+os: Linux
+arch: @@ARCH@@
+images:
+  - location: "@@IMAGEM@@"
+    arch: @@ARCH@@
+cpus: @@CPUS@@
+memory: "@@MEMORIA@@"
+disk: "@@DISCO@@"
+mounts: []
+additionalDisks:
+  # Perfis, cookies e chaves do supervisor (/var/lib/nod-computador, nod-dados.service): sobrevive a Atualizar e Redefinir.
+  - name: nod-dados
+    format: true
+    fsType: ext4
+containerd:
+  system: false
+  user: false
+vmOpts:
+  vz:
+    rosetta:
+      enabled: false
+      binfmt: false
+video:
+  display: none
+ssh:
+  loadDotSSHPubKeys: false
+  forwardAgent: false
+  forwardX11: false
+upgradePackages: false
+provision:
+  # ADR-127 §2: o socket de controle é root:nod 0660; o Lima encaminha como o usuário dele, que entra no grupo.
+  # definido em 2026-10-29 (NOD-93, 1º ensaio no Mac): o Lima abre a sessão ssh que encaminha o ctl.sock ANTES de rodar
+  # o `mode: system`, e a sessão guarda os grupos do login: no 1º boot o usermod chegava tarde e o socket recusava o
+  # Mac (supervisor "mudo" até a VM reiniciar). O `mode: boot` roda no bootcmd do cloud-init, antes de o usuário
+  # existir: põe o nome dele no /etc/group, e o login já sai com o nod. O `mode: system` abaixo acerta o gshadow.
+  - mode: boot
+    script: |
+      getent group nod >/dev/null || groupadd --system nod
+      membros=$(getent group nod | cut -d: -f4)
+      case ",$membros," in
+        *,"{{.User}}",*) ;;
+        *) sed -i "s/^\(nod:[^:]*:[^:]*:\)\(.*\)\$/\1\2${membros:+,}{{.User}}/" /etc/group ;;
+      esac
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -eu -o pipefail
+      getent group nod >/dev/null || groupadd --system nod
+      usermod -aG nod "{{.User}}"
+probes:
+  - script: |
+      #!/bin/bash
+      set -eu -o pipefail
+      if ! timeout 60s bash -c "until test -S /run/nod-computador/ctl.sock; do sleep 2; done"; then
+        echo >&2 "o supervisor do computador não abriu o socket (disco nod-dados montado?)"
+        exit 1
+      fi
+    hint: Veja journalctl -u nod-dados -u nod-computador.socket -u nod-computador no convidado
+portForwards:
+  - guestSocket: /run/nod-computador/ctl.sock
+    hostSocket: "@@SOCKET@@"
+  # Nenhuma porta TCP/UDP do convidado chega ao Mac.
+  - guestIP: 0.0.0.0
+    guestPortRange: [1, 65535]
+    proto: any
+    ignore: true
+  - guestIP: 127.0.0.1
+    guestPortRange: [1, 65535]
+    proto: any
+    ignore: true

@@ -1,0 +1,36 @@
+# ADA-229 (ADR-152, item 8): o app do Windows. Config própria porque a do Mac leva o npm das IAs e a VM local
+# (extraResources só do macOS). NSIS de 1 clique por usuário: instala em %LOCALAPPDATA%\Programs\nod sem pedir admin,
+# cria os atalhos no Menu Iniciar e na Área de Trabalho e abre o app no fim.
+# Assinatura (item 9, NOD-471): desligada por padrão. Só com NOD_WINDOWS_ASSINAR=1 o workflow passa o WIN_CSC_LINK;
+# sem certificado, o electron-builder 26 monta sem assinar.
+appId: app.nod.desktop
+productName: nod
+copyright: Copyright © 2026 nod
+directories:
+  output: release
+  buildResources: desktop/resources
+files:
+  - dist/desktop/**
+  - package.json
+  - '!node_modules/**'
+extraMetadata:
+  main: dist/desktop/main.mjs
+asar: true
+npmRebuild: false
+win:
+  icon: desktop/resources/icon.png
+  artifactName: nod-${version}-win-x64.${ext}
+  target:
+    - target: nsis
+      arch: [x64]
+nsis:
+  oneClick: true
+  perMachine: false
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: nod
+  runAfterFinish: true
+  deleteAppDataOnUninstall: false
+  # ADA-245: desinstalar o app (Aplicativos, ou o Fechar do "Remover o nod deste computador") remove também o motor.
+  include: scripts/windows/app-desinstalar.nsh
+publish: null

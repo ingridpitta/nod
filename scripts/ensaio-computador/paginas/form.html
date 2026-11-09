@@ -1,0 +1,12 @@
+<!doctype html><meta charset="utf-8"><title>Cadastro de cliente</title>
+<body style="font:20px sans-serif;padding:32px">
+<h1>Cadastro de cliente</h1>
+<form method="post" action="/enviar">
+  <p><label>Nome <input name="nome"></label></p>
+  <p><label>E-mail <input name="email" type="email"></label></p>
+  <p><label>Telefone <input name="telefone"></label></p>
+  <p><label>Cidade <select name="cidade"><option value="">Escolha</option><option>Recife</option><option>Curitiba</option><option>Belém</option></select></label></p>
+  <p><label>Mensagem <textarea name="mensagem" rows="3" cols="40"></textarea></label></p>
+  <p><button type="submit">Enviar</button></p>
+</form>
+</body>

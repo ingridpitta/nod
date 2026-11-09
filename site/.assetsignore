@@ -1,0 +1,5 @@
+wrangler.jsonc
+README.md
+# estado local do wrangler dev (sqlite do miniflare): nunca vai ao ar
+.wrangler
+.DS_Store

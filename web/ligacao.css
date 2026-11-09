@@ -1,0 +1,224 @@
+/* =====================================================================================
+   Modo ligação (definido em 2026-10-04, ADR-071; protótipo "HiFiMac" aprovado em 2026-10-03), web/telas/ligacao.ts.
+   Só var(--…) de web/tokens.css (tests/unit/web/cores-por-token.test.ts lê este arquivo). Minimalista: superfície
+   lisa, uma coluna de legenda, controles redondos; o único vermelho é o Desligar (danger: a ligação para).
+   ===================================================================================== */
+
+#ligacao[hidden] { display: none; }
+
+/* ---- tela cheia ---- */
+.ligacao-cheia { position: fixed; inset: 0; z-index: 60; background: var(--surface-side); color: var(--ink); display: flex; flex-direction: column;
+  animation: lig-aparece .25s ease both; }
+.lc-topo { height: 88px; flex: none; display: flex; align-items: center; padding: 0 28px; }
+.lc-identidade { display: flex; flex-direction: column; align-items: center; gap: 14px; margin-top: -24px; flex: none; }
+.lc-mascote { min-height: 136px; display: grid; place-items: center; }
+.icon.mascote.xxl { width: 136px; height: 136px; }
+.lc-info { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.lc-nome { font-size: 30px; font-weight: 600; letter-spacing: -.02em; }
+.lc-relogio { font-size: 18px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.lc-estado { font-size: 14px; color: var(--ink-2); min-height: 20px; }
+.lc-aviso { width: min(820px, calc(100vw - 48px)); margin: 14px auto 0; display: flex; flex-direction: column; gap: 6px; }
+.lc-aviso .aviso-compacto { margin: 0; }
+.lc-aviso:empty { display: none; }
+
+/* A legenda (protótipo: coluna de 820 px, 24 px, a última fala do bot em tinta, o resto apagado). */
+.lc-legenda { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: 18px;
+  width: min(820px, calc(100vw - 48px)); margin: 0 auto; padding-bottom: 16px; }
+/* A fala mais antiga sai por cima esmaecendo, em vez de cortada no meio da linha. */
+.lc-legenda { -webkit-mask-image: linear-gradient(to bottom, transparent, #000 56px); mask-image: linear-gradient(to bottom, transparent, #000 56px); } /* cor-fixa: o #000 da máscara só define o alfa */
+.lc-fala { margin: 0; font-size: 24px; line-height: 1.45; color: var(--ink-3); animation: lig-sobe .35s cubic-bezier(.2, .7, .2, 1) both; }
+.lc-fala.lc-bot { text-align: left; padding-right: 120px; }
+.lc-fala.lc-bot.lc-atual { color: var(--ink); }
+.lc-fala.lc-pessoa { text-align: right; padding-left: 200px; }
+.lc-fala.lc-parcial { opacity: .7; }
+/* As falas de espera ("Hum, deixa eu ver…") nunca entram na transcrição: apagadas e em itálico. */
+.lc-fala.lc-espera { font-style: italic; color: var(--ink-3); opacity: .75; }
+.lc-sugestoes { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; }
+.lc-sugestoes > span { font-size: 13px; color: var(--ink-3); margin-right: 4px; }
+.chip-sugestao.bt { border-radius: 999px; height: 38px; padding: 0 16px; font-size: 14px; font-weight: 400; border-color: var(--line); }
+
+.lc-card { width: min(560px, calc(100vw - 48px)); margin: 0 auto; }
+.lc-card:empty, .lc-teclado-wrap:empty { display: none; }
+.lc-teclado-wrap { width: min(820px, calc(100vw - 48px)); margin: 8px auto 0; }
+.lc-teclado { display: flex; gap: 8px; align-items: center; padding: 6px 6px 6px 18px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--surface); }
+/* foco-no-conteiner: .lc-teclado */
+.lc-teclado input { flex: 1; min-width: 0; border: 0; background: none; color: var(--ink); font: inherit; font-size: 15px; outline: none; }
+.lc-teclado .bt.pri { width: 40px; height: 40px; border-radius: 50%; padding: 0; display: grid; place-items: center; }
+.lc-teclado:focus-within { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+.lc-controles { height: 120px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 56px; }
+.lc-grupo { display: flex; gap: 14px; }
+
+/* Botões redondos (os da tela cheia têm 60 px; o Desligar, 64). */
+.lig-bt { width: 60px; height: 60px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer;
+  display: grid; place-items: center; padding: 0; }
+.lig-bt:hover { background: var(--surface-raised); }
+.lig-bt:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.lig-bt.ativo, .lig-bt[aria-pressed="true"] { background: var(--action); border-color: var(--action); color: var(--on-action); }
+.lig-bt.desligar { width: 64px; height: 64px; border: 0; background: var(--danger); color: var(--on-status); }
+.lig-bt.desligar:hover { opacity: .9; background: var(--danger); }
+.lc-topo .lig-bt { width: 52px; height: 52px; }
+
+/* O card da janela de aprovação (tela cheia e pílula). */
+.ligacao-janela { border: 1px solid var(--line); border-radius: 20px; background: var(--surface); padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; }
+.lj-cab { display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--ink-2); }
+.lj-contagem { font-variant-numeric: tabular-nums; color: var(--ink-3); }
+.lj-frase { margin: 0; font-size: 16px; line-height: 1.45; color: var(--ink); }
+.lj-dica { margin: 0; font-size: 13px; color: var(--ink-3); }
+.lj-acoes { display: flex; gap: 8px; justify-content: flex-end; }
+.lj-acoes .bt { padding: 8px 16px; font-size: 13px; border-radius: 999px; }
+
+/* ---- pílula ---- */
+.ligacao-pilula { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 40; display: flex; flex-direction: column; align-items: center; gap: 10px;
+  width: max-content; max-width: calc(100vw - 24px); animation: lig-aparece .2s ease both; }
+.lp-barra { height: 60px; padding: 0 8px 0 10px; border-radius: 30px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow-pop);
+  display: flex; align-items: center; gap: 10px; }
+.lp-mascote { display: grid; place-items: center; }
+.lp-mascote .icon.mascote.sm { width: 34px; height: 34px; }
+.lp-info { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.lp-nome { font-size: 14px; font-weight: 600; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lp-relogio { font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; min-width: 38px; }
+.lp-controles { display: flex; align-items: center; gap: 6px; }
+.lp-controles .lig-bt { width: 44px; height: 44px; border: 0; background: var(--surface-raised); }
+.lp-controles .lig-bt.ativo, .lp-controles .lig-bt[aria-pressed="true"] { background: var(--action); color: var(--on-action); }
+.lp-controles .lig-bt.desligar { width: 48px; height: 48px; background: var(--danger); color: var(--on-status); }
+.lp-aviso, .lp-card { width: 456px; max-width: calc(100vw - 24px); display: flex; flex-direction: column; gap: 6px; }
+.lp-aviso:empty, .lp-card:empty { display: none; }
+/* ADR-077: os chips "Diga algo como" embaixo da pílula (configuração guiada do onboarding). */
+.lp-sugestoes { width: 456px; max-width: calc(100vw - 24px); }
+.lp-sugestoes:empty { display: none; }
+.lp-sugestoes .lc-sugestoes { justify-content: center; }
+.lp-sugestoes .chip-sugestao.bt { background: var(--surface); box-shadow: var(--shadow-pop); }
+/* O rótulo flutua sobre a timeline como os chips: sem fundo, ele se misturava ao texto da conversa embaixo. */
+.lp-sugestoes .lc-sugestoes > span { background: var(--surface); border-radius: 999px; padding: 4px 10px; box-shadow: var(--shadow-pop); }
+.lp-aviso .aviso-compacto { margin: 0; box-shadow: var(--shadow-pop); }
+.lp-card .ligacao-janela { box-shadow: var(--shadow-pop); }
+
+/* ---- rede de segurança: a IA do Mac caiu no meio da ligação (definido em 2026-10-05; protótipos 2A, 2B e 2C) ----
+   O aviso é o componente de estado do design system (tom alerta); aqui só o que a ligação acrescenta: o título numa
+   linha própria, o texto em tinta, a linha de botões e os cards de IA. O botão principal é a ação da tela (--action),
+   não a cor do alerta: continuar é o caminho, não o problema. */
+.aviso-estado.lig-sem-ia { align-items: flex-start; padding: 14px 16px; font-size: 14px; line-height: 21px; }
+.lig-sem-ia .aviso-estado-ic { margin-top: 2px; }
+.lig-sem-ia .aviso-estado-txt { color: var(--ink); }
+.lig-sem-ia .aviso-estado-txt > b { display: block; }
+.lsi-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+.lsi-acoes .bt, .lsi-card .bt { height: 36px; padding: 0 14px; border-radius: 8px; font-size: 13px; font-weight: 500; }
+.lsi-acoes .bt:not(.pri):not(.link), .lsi-card .bt { border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); }
+.aviso-estado.lig-sem-ia .bt.pri { display: inline-flex; align-items: center; gap: 8px; padding-left: 8px; background: var(--action); border-color: var(--action); color: var(--on-action); }
+.aviso-estado.lig-sem-ia .bt.link { height: 36px; padding: 0 10px; border: 0; background: none; color: var(--ink-2); font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
+.aviso-estado.lig-sem-ia .bt:disabled { opacity: .55; cursor: default; }
+.lsi-logo { flex: none; width: 22px; height: 22px; border-radius: 6px; background: var(--surface); color: var(--ink); display: grid; place-items: center; }
+.lsi-logo svg { width: 15px; height: 15px; }
+.lsi-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+.lsi-card { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.lsi-card-cab { display: flex; align-items: center; gap: 8px; font-size: 13px; line-height: 18px; }
+.lsi-card-cab b { font-weight: 500; }
+.lsi-card-txt { margin: 0; font-size: 12px; line-height: 16px; color: var(--ink-2); }
+.lsi-rodape { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.aviso-estado.lig-sem-ia .lsi-rodape .bt.link { padding: 0; }
+.lsi-rodape > span, .lsi-nota { font-size: 12px; line-height: 16px; color: var(--ink-3); }
+.lsi-nota { margin: 8px 0 0; color: var(--ink-2); }
+/* O aviso neutro depois da escolha: o logo da IA que assumiu no lugar do ícone. */
+.lig-ia-voltou { align-items: center; }
+.lig-ia-voltou .lsi-logo { width: 26px; height: 26px; border: 1px solid var(--line); border-radius: 7px; }
+.lig-ia-voltou .lsi-logo svg { width: 16px; height: 16px; }
+.lc-aviso .aviso-estado.lig-sem-ia, .lc-aviso .lig-ia-voltou { margin: 0; }
+/* Na pílula a coluna é estreita: os cards empilham. */
+.lp-aviso .aviso-estado.lig-sem-ia { margin: 0; box-shadow: var(--shadow-pop); }
+.lp-aviso .lsi-cards { grid-template-columns: minmax(0, 1fr); }
+.lp-aviso .lig-ia-voltou { box-shadow: var(--shadow-pop); }
+
+/* Quem fala: cinco barras em cinza; andam enquanto alguém fala (o bot ou a pessoa). */
+.lp-onda { display: inline-flex; align-items: center; gap: 3px; height: 18px; width: 26px; }
+.lp-onda i { display: block; width: 3px; height: 16px; border-radius: 2px; background: var(--line-strong); transform: scaleY(.3); transform-origin: center; }
+.lp-onda.fala-bot i, .lp-onda.fala-pessoa i { animation: lig-onda .9s ease-in-out infinite; background: var(--ink-2); }
+.lp-onda i:nth-child(2) { animation-delay: .12s; } .lp-onda i:nth-child(3) { animation-delay: .24s; }
+.lp-onda i:nth-child(4) { animation-delay: .36s; } .lp-onda i:nth-child(5) { animation-delay: .48s; }
+
+/* ---- depois da ligação: "Como foi a ligação?" e a recusa ao ligar ---- */
+.ligacao-avaliacao, .ligacao-recusa { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 40; width: 420px; max-width: calc(100vw - 24px);
+  animation: lig-aparece .2s ease both; }
+.ligacao-avaliacao { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow-pop); padding: 12px 14px 14px; }
+.ligacao-recusa .aviso-estado { box-shadow: var(--shadow-pop); }
+.la-cab { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); }
+.la-cab b { flex: 1; font-weight: 500; }
+.la-fechar.bt { border: 0; background: none; padding: 4px; color: var(--ink-3); display: grid; place-items: center; }
+.la-fechar.bt:hover { background: var(--surface-raised); color: var(--ink); }
+.la-motivo { margin: 8px 0 0; font-size: 13px; color: var(--ink-2); }
+.la-pergunta { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; font-size: 14px; color: var(--ink-2); }
+.la-pergunta > span { display: flex; gap: 6px; }
+.la-nota.bt { width: 36px; height: 36px; border-radius: 50%; border: 0; background: transparent; color: var(--ink-2); padding: 0; display: grid; place-items: center; }
+.la-nota.bt:hover { background: var(--surface-raised); color: var(--ink); }
+.la-motivos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.la-motivos .chip-sugestao.bt { height: 32px; font-size: 13px; padding: 0 12px; }
+.la-obrigado { margin: 10px 0 0; font-size: 13px; color: var(--ink-2); }
+
+/* Ajustes da voz: o menu do nod (bot-menu), com dois seletores e o idioma fixo. */
+.ligacao-ajustes-menu { width: 300px; padding: 6px 16px; }
+.ligacao-ajustes label, .ligacao-ajustes .la-linha { display: flex; align-items: center; justify-content: space-between; height: 50px; font-size: 14px; color: var(--ink); }
+.ligacao-ajustes label + label, .ligacao-ajustes .la-linha { border-top: 1px solid var(--line); }
+.ligacao-ajustes select { border: 1px solid var(--line-strong); border-radius: 10px; padding: 6px 10px; font: inherit; font-size: 13px; background: var(--surface); color: var(--ink); }
+.ligacao-ajustes .la-linha span:last-child { color: var(--ink-3); font-size: 13px; }
+.la-nota-ajuste { margin: 0 0 8px; font-size: 12px; color: var(--ink-3); min-height: 0; }
+.la-nota-ajuste:empty { display: none; }
+
+/* Consentimento e transcrição: o diálogo do nod (bot-dialogo). */
+.ligacao-consentimento .acoes, .ligacao-transcricao .acoes { display: flex; gap: 8px; justify-content: flex-end; margin-top: 22px; }
+.tr-corpo { max-height: min(60vh, 520px); overflow: auto; }
+.tr-falas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.tr-fala { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+.tr-fala b { font-size: 13px; color: var(--ink); }
+.tr-fala p { flex-basis: 100%; margin: 0; font-size: 14px; line-height: 1.55; color: var(--ink-2) !important; }
+.tr-bot p { color: var(--ink) !important; }
+.tr-interrompida p { color: var(--ink-3) !important; }
+.tr-vazia { font-size: 14px; color: var(--ink-3); }
+
+/* ---- na conversa ---- */
+/* O "Ligar" mora na gaveta do bot desde 2026-10-16 (plano "tela limpa"): a linha em ligação diz o estado em verde. */
+.gv-linha.em-ligacao { color: var(--success); }
+
+/* A linha "Chat de voz · 03:12": uma linha de sistema com o fone e as ações da transcrição. */
+.linha-ligacao { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px 8px; margin: 6px auto 14px; max-width: 620px; font-size: 12.5px; color: var(--ink-3); }
+.linha-ligacao svg { flex: none; }
+.linha-ligacao .ll-txt { color: var(--ink-2); }
+.linha-ligacao time { font-size: 11.5px; color: var(--ink-3); }
+.linha-ligacao .ll-acoes { display: inline-flex; gap: 10px; }
+.linha-ligacao .bt.link { font-size: 12px; }
+.linha-ligacao.ao-vivo .ll-txt b { font-weight: 500; color: var(--success); }
+
+/* "Em ligação" na barra lateral: no lugar da última mensagem, com o fone. */
+.sub-em-ligacao { display: inline-flex; align-items: center; gap: 4px; color: var(--success) !important; }
+.chip.chip-em-ligacao { color: var(--success); gap: 4px; }
+
+@keyframes lig-aparece { from { opacity: 0; } to { opacity: 1; } }
+@keyframes lig-sobe { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes lig-onda { 0%, 100% { transform: scaleY(.3); } 50% { transform: scaleY(1); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .ligacao-cheia, .ligacao-pilula, .ligacao-avaliacao, .ligacao-recusa, .lc-fala { animation: none; }
+  .lp-onda.fala-bot i, .lp-onda.fala-pessoa i { animation: none; transform: scaleY(.8); }
+}
+
+/* Janela baixa ou estreita: o mascote e a legenda encolhem, os controles chegam mais perto. */
+@media (max-height: 760px) {
+  .icon.mascote.xxl { width: 96px; height: 96px; }
+  .lc-mascote { min-height: 96px; }
+  .lc-nome { font-size: 24px; }
+  .lc-fala { font-size: 20px; }
+  .lc-controles { height: 100px; }
+}
+@media (max-width: 760px) {
+  .lc-controles { padding: 0 20px; }
+  .lc-fala.lc-bot { padding-right: 32px; }
+  .lc-fala.lc-pessoa { padding-left: 48px; }
+  .lc-fala { font-size: 20px; }
+  .lp-nome { display: none; }
+  .lsi-cards { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* NOD-122: alto contraste (forced-colors). O sistema troca os fundos pelas cores dele, então o foco que era só fundo some.
+   Aqui o foco ganha contorno em Highlight; nada muda fora deste modo. Gate: tests/unit/web/foco-forced-colors.test.ts. */
+@media (forced-colors: active) {
+  .lc-teclado:focus-within { outline: 2px solid Highlight; outline-offset: 2px; }
+}

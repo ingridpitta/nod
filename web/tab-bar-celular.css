@@ -1,0 +1,104 @@
+/* ADA-19 (F4 do celular, protótipo ada-2 v2, jornada 1, passos 2.5–2.6; ADR-148): a tab bar em pílula de vidro na inicial
+   — Conversas, Quadros e Sua vez —, o título grande que encolhe, as abas Sua vez e Quadros e a folha de recentes do ‹
+   segurado. Carregada depois de celular-base.css. Toda regra entra na consulta canônica (web/lib/celular.ts): janela
+   estreita no computador nunca vê nada daqui. Cor só por var(--…) (ADR-070). Blur só na pílula das abas e na busca
+   (ADR-148: nunca em lista). Com prefers-reduced-motion, nada anima. */
+@media (hover: none) and (pointer: coarse) and (max-width: 600px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+
+  .sidebar { --tab-altura: 60px; }
+
+  /* ---------- Tab bar ---------- */
+  .tab-bar-celular { position: absolute; z-index: 25; left: 16px; right: 16px; bottom: calc(env(safe-area-inset-bottom) + 2px);
+    display: flex; gap: 10px; align-items: center; }
+  .tab-abas, .tab-busca { border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); background: color-mix(in srgb, var(--surface) 86%, transparent);
+    -webkit-backdrop-filter: blur(24px) saturate(1.8); backdrop-filter: blur(24px) saturate(1.8); box-shadow: var(--shadow-composer); }
+  .tab-abas { flex: 1; min-width: 0; height: var(--tab-altura); box-sizing: border-box; border-radius: 30px; display: flex; padding: 4px; gap: 2px; }
+  .tab-aba { position: relative; flex: 1; min-width: 0; margin: 0; padding: 0; border: 0; border-radius: 26px; background: none;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: var(--ink-2);
+    font: 500 11px/1.1 var(--font-sans); -webkit-tap-highlight-color: transparent; transition: background-color .15s ease, color .15s ease; }
+  .tab-aba svg { width: 22px; height: 22px; flex: none; }
+  .tab-aba[aria-current="page"] { color: var(--ink); background: color-mix(in srgb, var(--ink) 7%, transparent); font-weight: 600; }
+  .tab-aba:focus-visible, .tab-busca:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  .tab-rotulo { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tab-ponto { position: absolute; top: 7px; left: calc(50% + 8px); width: 8px; height: 8px; border-radius: 50%; background: var(--ink);
+    box-shadow: 0 0 0 2px var(--surface); }
+  .tab-num { position: absolute; top: 2px; left: calc(50% + 4px); min-width: 17px; height: 17px; box-sizing: border-box; padding: 0 4px;
+    border-radius: 9px; border: 1px solid var(--ink); background: var(--surface); color: var(--ink); font: 600 11px/15px var(--font-sans); text-align: center; }
+  .tab-busca { flex: none; width: var(--tab-altura); height: var(--tab-altura); margin: 0; padding: 0; border-radius: 50%; display: grid; place-items: center;
+    color: var(--ink); -webkit-tap-highlight-color: transparent; }
+  .tab-busca svg { width: 24px; height: 24px; }
+
+  /* A lista passa por baixo da pílula: a folga é a altura dela, a barra de gestos e um respiro. */
+  .sidebar:has(.tab-bar-celular) .list { padding-bottom: calc(env(safe-area-inset-bottom) + var(--tab-altura) + 24px); }
+
+  /* ---------- Título grande que encolhe (web/lib/topo-encolhe.ts) ---------- */
+  .inicio-titulo-grande { margin: 4px 20px 8px; color: var(--ink); font: 700 30px/1.15 var(--font-sans); letter-spacing: -.02em; transition: opacity .2s ease; }
+  .inicio-topo { position: relative; }
+  .inicio-titulo-compacto { position: absolute; left: 50%; top: calc(env(safe-area-inset-top) + 26px); transform: translate(-50%, -50%);
+    color: var(--ink); font: 600 16px/1.2 var(--font-sans); opacity: 0; pointer-events: none; transition: opacity .2s ease; }
+  .inicio-topo.topo-encolhido { box-shadow: 0 1px 0 var(--line); }
+  .inicio-topo.topo-encolhido .inicio-titulo-compacto { opacity: 1; }
+  .sidebar:has(.inicio-topo.topo-encolhido) .inicio-titulo-grande { opacity: 0; }
+
+  /* ---------- Abas Sua vez e Quadros ---------- */
+  .aba-rotulo { margin: 8px 0 0; min-height: 32px; display: flex; align-items: center; padding: 0 20px; color: var(--ink-3); font: 600 13px/1.2 var(--font-sans); }
+  .aba-cont { margin-left: 4px; color: var(--ink-3); font-weight: 500; }
+  .aba-lista { margin: 0; padding: 0; list-style: none; }
+  .aba-pedido, .aba-quadro { position: relative; width: 100%; margin: 0; border: 0; background: none; text-align: left; color: var(--ink);
+    display: grid; gap: 12px; align-items: center; -webkit-tap-highlight-color: transparent; font: inherit; }
+  .aba-pedido { grid-template-columns: 40px minmax(0, 1fr) auto; min-height: 76px; padding: 10px 16px 10px 20px; }
+  .aba-pedido:active, .aba-quadro:active, .recente:active { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+  .aba-pedido::after, .aba-quadro::after { content: ""; position: absolute; left: 72px; right: 0; bottom: 0; height: 1px; background: var(--line); }
+  .aba-lista li:last-child > button::after { display: none; }
+  .aba-pedido .icon, .aba-quadro .icon { width: 40px; height: 40px; }
+  .pedido-txt, .quadro-txt { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .pedido-quem b, .quadro-txt b { font: 600 16px/1.25 var(--font-sans); color: var(--ink); }
+  .pedido-texto { font: 400 15px/1.35 var(--font-sans); color: var(--ink-2); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+  .pedido-motivo { font: 500 12px/1.3 var(--font-sans); color: var(--ink-3); }
+  .aba-pedido time { align-self: start; padding-top: 2px; font-size: 13px; color: var(--ink-3); }
+  .aba-quadro { grid-template-columns: 40px minmax(0, 1fr); min-height: 64px; padding: 8px 16px 8px 20px; }
+  .aba-quadro.destaque { min-height: 76px; }
+  .quadro-txt small { font: 400 13px/1.3 var(--font-sans); color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .aba-vazia, .aba-erro { padding: 48px 32px; display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; }
+  .aba-vazia p, .aba-erro p { margin: 0; font-size: 15px; color: var(--ink-2); }
+  .aba-esqueleto .esq-pedido { display: grid; grid-template-columns: 40px 1fr; gap: 12px; align-items: center; min-height: 76px; padding: 0 20px; }
+  .aba-esqueleto .esq.redondo { width: 40px; height: 40px; }
+
+  /* ---------- Folha de recentes (segurar o ‹) ---------- */
+  .folha-recentes-fundo { position: fixed; z-index: 40; inset: 0; background: color-mix(in srgb, var(--ink) 28%, transparent); animation: recentes-fundo .2s ease both; }
+  .folha-recentes { position: fixed; z-index: 41; left: 0; right: 0; bottom: 0; box-sizing: border-box;
+    max-height: calc(100dvh - env(safe-area-inset-top) - 12px); overflow-y: auto; overscroll-behavior: contain;
+    padding: 8px 0 calc(env(safe-area-inset-bottom) + 8px); border-radius: 22px 22px 0 0; background: var(--surface); box-shadow: var(--shadow-composer);
+    animation: recentes-sobe .26s cubic-bezier(.2, .8, .2, 1) both; }
+  /* foco-ok: a folha recebe o foco pelo código só para o leitor anunciar o diálogo; o contorno fica nas linhas */
+  .folha-recentes:focus { outline: none; }
+  .folha-pega { display: block; width: 36px; height: 5px; margin: 0 auto 6px; border-radius: 3px; background: var(--line-strong); }
+  .folha-recentes h3 { margin: 0; padding: 6px 20px 8px; font: 600 17px/1.2 var(--font-sans); color: var(--ink); }
+  .recentes-lista { margin: 0; padding: 0; list-style: none; }
+  .recente { position: relative; width: 100%; min-height: 60px; margin: 0; border: 0; background: none; text-align: left; color: var(--ink); font: inherit;
+    display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 0 20px; -webkit-tap-highlight-color: transparent; }
+  .recente::after { content: ""; position: absolute; left: 68px; right: 0; bottom: 0; height: 1px; background: var(--line); }
+  .recentes-lista li:last-child > .recente::after { display: none; }
+  .recente .icon { width: 36px; height: 36px; }
+  .recente-txt { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .recente-txt b { font: 600 16px/1.25 var(--font-sans); color: var(--ink); }
+  .recente[aria-current="true"] b::after { content: " · aberta"; font-weight: 400; color: var(--ink-3); }
+  .recente-txt small { font: 400 14px/1.3 var(--font-sans); color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .recente time { font-size: 13px; color: var(--ink-3); }
+  .recentes-vazio { margin: 0; padding: 32px 20px; text-align: center; font-size: 15px; color: var(--ink-2); }
+  @keyframes recentes-sobe { from { transform: translateY(100%); } to { transform: none; } }
+  @keyframes recentes-fundo { from { opacity: 0; } to { opacity: 1; } }
+
+  /* ---------- Paisagem baixa: a pílula fica com 52 ---------- */
+  @media (max-height: 500px) {
+    .sidebar { --tab-altura: 52px; }
+    .tab-abas { border-radius: 26px; }
+    .tab-aba { border-radius: 22px; }
+  }
+
+  /* ---------- Sem movimento ---------- */
+  @media (prefers-reduced-motion: reduce) {
+    .tab-aba, .inicio-titulo-grande, .inicio-titulo-compacto { transition: none; }
+    .folha-recentes, .folha-recentes-fundo { animation: none; }
+  }
+}

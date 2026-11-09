@@ -1,0 +1,466 @@
+# Jobs paralelos (Práticas §9): lint+typecheck e unit sem banco; integração, concorrência (2 fatias) e navegador com
+# Postgres, cada um no próprio service container (porta sorteada pelo Docker: .github/actions/banco-de-teste).
+# Os jobs com banco MIGRAM e NÃO rodam seed (Práticas §6): cada teste cria as próprias linhas.
+# CI=1 (padrão do GitHub) faz o skip de integração virar ERRO em tests/helpers/integracao.ts.
+# Roda no Blacksmith (definido em 2026-11-04, piloto): runner novo por job, escala com a fila, sem VM para administrar.
+# Antes rodava nas VMs próprias da GCP (infra/gcp/runner/, docs/deploy-gcp.md): com 2 runners vivos a fila passava de
+# 3 h por PR. O app `blacksmith-sh` está instalado na organização Gamefik para todos os repositórios (a ADR 037 do
+# monorepo gamefik registra a adoção lá). Voltar às VMs é trocar o `runs-on` de volta para `[self-hosted, linux]`.
+# O `deploy.yml` continua nas VMs (autentica pelo WIF a partir delas); fora do escopo deste piloto.
+# Actions pinadas por SHA imutável (verificados em 2026-09-16 na API do GitHub; actions/cache em 2026-11-04):
+#   actions/checkout v4.2.2  = 11bd71901bbe5b1630ceea73d27597364c9af683
+#   actions/setup-node v4.4.0 = 49933ea5288caeca8642d1e84afbd3f7d6820020
+#   actions/upload-artifact   = ea165f8d65b6e75b540449e92b4886f43607fa02 (o mesmo do desktop-release.yml)
+#   actions/cache v4.2.3      = 5a3ec84eff668545956fd18022155c47e93e2684 (no Blacksmith usa o backend de cache deles)
+name: ci
+on:
+  push:
+    branches: [main, "rebuild/**"]
+  # definido em 2026-10-28 (fila do runner: 290 runs em 24 h, 182 cancelados por push novo nas frentes): PR rascunho não
+  # roda (os jobs pulam pelo `if` abaixo; o bot confere com `npm run check` local e chama `gh pr ready` quando quer a
+  # CI, ver AGENTS.md); ready_for_review dispara o run. PR só de documentação também não roda, menos os arquivos de
+  # docs/ que os testes leem (paridade, deploy-gcp, runbook). Na main roda sempre: o deploy depende de cada ci.
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "**"
+      - "!docs/**"
+      - "!**/*.md"
+      - "docs/paridade.md"
+      - "docs/paridade.piso.json"
+      - "docs/deploy-gcp.md"
+      - "docs/runbook-producao.md"
+
+# Push novo no mesmo PR cancela o run antigo. Na main nada é cancelado: o deploy depende de cada ci.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lint-typecheck:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24.19.0"
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run fence:domain
+      - run: npm run fence:migrations
+
+  unit:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24.19.0"
+          cache: npm
+      - run: npm ci
+      - run: npm run test:unit
+
+  # ADA-282 (ADR-160): o snapshot do repo público, a seco. Exporta o HEAD pelo oss/manifesto.json, varre (padrões
+  # proibidos + gitleaks pinado por sha256) e compila o snapshot com o typecheck, para o export nunca levar dado de
+  # produção nem tirar algo de que o build depende. NUNCA faz push (o push é decisão do Marlon, à mão). Não bloqueia na
+  # primeira fase (continue-on-error): o veredito fica no resumo do job. Só roda no repo privado (no público o
+  # scripts/oss não existe).
+  oss:
+    if: github.repository == 'gamefik/nod' && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    continue-on-error: true
+    timeout-minutes: 15
+    env:
+      GITLEAKS_VERSAO: "8.28.0"
+      GITLEAKS_SHA256: a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24.19.0"
+          cache: npm
+      - name: gitleaks (pinado)
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/gitleaks.tgz" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSAO}/gitleaks_${GITLEAKS_VERSAO}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/gitleaks.tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/gitleaks.tgz" -C "$RUNNER_TEMP" gitleaks
+          echo "GITLEAKS=$RUNNER_TEMP/gitleaks" >> "$GITHUB_ENV"
+      - run: npm ci
+      - name: testes do export (com o gitleaks de verdade)
+        run: npx vitest run --project unit tests/unit/scripts/oss-exportar.test.ts
+      - name: export a seco + varredura
+        run: |
+          node scripts/oss/exportar.mjs --saida "$RUNNER_TEMP/oss" --json > "$RUNNER_TEMP/oss.json" || status=$?
+          node -e 'const r=require(process.argv[1]); console.log(`snapshot ${r.total} arquivos, ${r.excluidos} excluídos, limpo=${r.limpo}`); for (const a of [...r.avisos, ...r.pendencias]) console.log(a)' "$RUNNER_TEMP/oss.json" | tee -a "$GITHUB_STEP_SUMMARY"
+          exit "${status:-0}"
+      - name: o snapshot compila
+        run: |
+          ln -s "$GITHUB_WORKSPACE/node_modules" "$RUNNER_TEMP/oss/node_modules"
+          cd "$RUNNER_TEMP/oss" && npm run typecheck
+
+  # definido em 2026-11-04: o job de integração único (medido na main em 2026-11-04: 31 min, dos quais 18 min de
+  # concorrência em série) virou quatro jobs em paralelo, cada um com o próprio Postgres (service container na porta
+  # que o Docker sorteia: vários na mesma VM). A parede cai para o maior deles (~12 min). `npm run check` local segue
+  # rodando tudo em sequência. O service container repete nos quatro: o Actions não aceita âncora YAML.
+  integracao:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24.19.0"
+          cache: npm
+      - run: npm ci
+      - uses: ./.github/actions/banco-de-teste
+        with:
+          porta: ${{ job.services.postgres.ports['5432'] }}
+      - run: npm run test:integration
+      # A catraca C da paridade (NOD-391) compara o piso com o da base do commit (HEAD^1: no PR, a main que o merge recebe;
+      # na main, o commit de antes). O checkout raso traz só o HEAD: busca o pai.
+      - run: git fetch --no-tags --depth=2 origin "$(git rev-parse HEAD)"
+      - run: npm run test:conformidade
+
+  # A concorrência roda em série (singleFork no vitest.config.ts), então a fatia é por arquivo (scripts/ci/fatia-concorrencia.ts):
+  # duas metades em dois runners. Os arquivos que precisam do Chromium ficam no job `navegador`.
+  concorrencia:
+    name: e2e ${{ matrix.fatia }}/2
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        fatia: [1, 2]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24.19.0"
+          cache: npm
+      - run: npm ci
+      - uses: ./.github/actions/banco-de-teste
+        with:
+          porta: ${{ job.services.postgres.ports['5432'] }}
+      # O fuzz das ações (NOD-398) roda aqui, serial: grava linhas de verdade e limpa no fim (revisão 5).
+      # A lista de arquivos da fatia vem do script (rodízio alfabético, sem os de navegador): conferível com `vitest list`.
+      - run: npx vitest run --project concurrency $(node scripts/ci/fatia-concorrencia.ts ${{ matrix.fatia }}/2)
+        env:
+          FUZZ_N: "20"
+          # Critério 7 do NOD-398: a meta é o fuzz do PR (N=20) em menos de 90 s, e o tempo de cada rodada vai ao resumo do job.
+          # O teto que reprova tem folga para a fila da VM compartilhada (revisão 7). Só aqui: o desktop-release roda sem teto.
+          FUZZ_TETO_S: "150"
+
+  # Os testes com Chromium de verdade (os `*-chrome`, a tela.capturar e o bot de QA da NOD-398): precisam da web
+  # montada (dist/web) e do binário; medidos em 2026-11-04 somam ~5 min.
+  navegador:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24.19.0"
+          cache: npm
+      - run: npm ci
+      - uses: ./.github/actions/banco-de-teste
+        with:
+          porta: ${{ job.services.postgres.ports['5432'] }}
+      # NOD-398: o bot de QA e a tela.capturar precisam da web montada (dist/web) e de um Chromium. O playwright NÃO é
+      # dependência do projeto (a issue pede assim): a versão fica fixa aqui para o Chromium não mudar de um run para o
+      # outro. O runner nasce limpo a cada job, então o binário (~/.cache/ms-playwright, ~170 MB) vem do cache do
+      # Actions com a versão do playwright na chave; sem cache, o `install` baixa. Faltando alguma lib do sistema, o
+      # job instala pelo apt a lista FIXA de infra/gcp/runner/libs-chromium.txt (o sudo do runner hospedado permite).
+      - run: npx vite build
+      - uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-1.64.1-chromium-${{ runner.os }}
+      - run: |
+          npx --yes playwright@1.64.1 install chromium
+          # O binário DA versão fixada (o cache do runner pode ter revisões mais novas de outros jobs), exportado como
+          # NOD_CHROME para os testes: nada de "o maior do cache".
+          DIR=$(npx --yes playwright@1.64.1 install --dry-run chromium 2>/dev/null | grep -m1 'Install location' | awk '{print $NF}')
+          if [ -z "$DIR" ] || [ ! -d "$DIR" ]; then echo "::error::não achei a pasta do Chromium do playwright@1.64.1 ('$DIR')"; exit 1; fi
+          CHROME=$(ls -d "$DIR"/chrome-linux*/chrome | head -1)
+          test -x "$CHROME"
+          if ldd "$CHROME" | grep -q "not found"; then
+            sudo apt-get update -q && xargs sudo DEBIAN_FRONTEND=noninteractive apt-get install -yq < infra/gcp/runner/libs-chromium.txt
+            if ldd "$CHROME" | grep "not found"; then echo "::error::faltam libs do Chromium mesmo depois do apt"; exit 1; fi
+          fi
+          # ubuntu 24.04: o AppArmor trava user namespaces sem privilégio e o sandbox do Chrome não sobe. Só nesse caso a
+          # captura roda com --no-sandbox (NOD_CAPTURA_SEM_SANDBOX; a página é só o próprio servidor no loopback).
+          SEM_SANDBOX=""
+          if [ "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null || echo 0)" = "1" ]; then
+            SEM_SANDBOX="--no-sandbox"
+            echo "NOD_CAPTURA_SEM_SANDBOX=1" >> "$GITHUB_ENV"
+          fi
+          timeout 30 "$CHROME" --headless=new $SEM_SANDBOX --dump-dom about:blank >/dev/null
+          echo "NOD_CHROME=$CHROME" >> "$GITHUB_ENV"
+      - run: npx vitest run --project concurrency $(node scripts/ci/fatia-concorrencia.ts navegador)
+        env:
+          QA_RELATORIO_DIR: ${{ github.workspace }}/qa-relatorio
+          # Só neste job (que montou a web e o Chromium) a falta deles reprova; no desktop-release o check pula a captura.
+          NOD_QA_EXIGE_CHROME: "1"
+      # O relatório do bot de QA (qa-relatorio.md + o print da tela final em 390 e 1440), também quando o QA falha. Sem
+      # arquivo é aviso, não um 2º passo vermelho: o teste do QA já reprova o job quando não grava o relatório.
+      # Revisão 13: cota de artefatos do repositório cheia derrubava o job com todos os testes verdes; o relatório é
+      # diagnóstico (também vai ao resumo abaixo), então a falha do upload não reprova.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: success() || failure()
+        continue-on-error: true
+        with:
+          name: qa-relatorio
+          path: qa-relatorio/
+          if-no-files-found: warn
+          retention-days: 14
+      # O relatório também no resumo do job (revisão 7): lê sem baixar o zip; os prints seguem no artefato.
+      - if: success() || failure()
+        run: if [ -f qa-relatorio/qa-relatorio.md ]; then cat qa-relatorio/qa-relatorio.md >> "$GITHUB_STEP_SUMMARY"; fi
+
+  # definido em 2026-11-05: o smoke da janela do app do Mac (scripts/desktop/smoke-window.mjs) só rodava no
+  # desktop-release, e três das seis releases vermelhas desde a rc.1 caíram nele por PRs que mexeram no preload dias
+  # antes (a lista de chaves em 28/10; o sendSync do #597 na rc.3). Cada queda custava 1 h 40 de esteira. Roda aqui,
+  # num macOS hospedado (minutos 10× o Linux, por isso atrás do filtro), só quando o diff toca o app do desktop ou os
+  # contratos que o preload leva. Mesmo build e mesmo comando do release; sem assinatura, sem secret.
+  desktop-filtro:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    outputs:
+      roda: ${{ steps.filtro.outputs.roda }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - id: filtro
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] || ! git fetch --no-tags --depth=1 origin "$BASE"; then
+            echo "roda=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if git diff --name-only "$BASE" HEAD | grep -qE '^(desktop/|scripts/desktop/|src/contracts/|tsconfig\.desktop\.json$|electron-builder\.yml$|\.github/workflows/ci\.yml$|package(-lock)?\.json$)'; then
+            echo "roda=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "roda=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  desktop-smoke:
+    needs: desktop-filtro
+    if: needs.desktop-filtro.outputs.roda == 'true'
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24.19.0"
+          cache: npm
+      - run: npm ci
+      # Vazão (08/11): o binário do Electron vem do GitHub Releases e um 504 de lá derrubava o job. Com o cache (chave =
+      # versão no package-lock) o download só acontece quando o Electron muda.
+      - uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ~/Library/Caches/electron
+          key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: electron-${{ runner.os }}-
+      - run: npm run desktop:build
+      # O mesmo passo do desktop-release.yml, com o mesmo prazo: um Electron travado não prende o runner.
+      - name: Smoke da janela
+        timeout-minutes: 5
+        run: npx electron scripts/desktop/smoke-window.mjs
+
+  # ADA-11 (ADR-147): o smoke do motor no Windows de verdade. O windows-latest é hospedado (o runner próprio é Linux) e
+  # cobra minutos, então só roda quando o diff toca o que roda no motor. O filtro fica aqui dentro (num job barato no
+  # runner próprio) e não em on.paths: um job pulado conta como sucesso, e o ci da main continua liberando o deploy.
+  windows-filtro:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    outputs:
+      roda: ${{ steps.filtro.outputs.roda }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - id: filtro
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] || ! git fetch --no-tags --depth=1 origin "$BASE"; then
+            echo "roda=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if git diff --name-only "$BASE" HEAD | grep -qE '^(motor/|src/adapters/executor/|src/adapters/mcp-proxy/|src/adapters/conectores-locais/|src/contracts/|src/shared/|src/domain/|scripts/motor/|scripts/windows/|src/adapters/http/motor-instalacao(-windows)?\.ts$|src/adapters/http/rotas/motor\.ts$|src/adapters/http/servidor\.ts$|tests/windows/|desktop/windows/|desktop/atualizacao\.ts$|scripts/desktop/build\.mjs$|electron-builder-windows\.yml$|tsconfig(\.motor|\.desktop)?\.json$|\.github/workflows/ci\.yml$|package(-lock)?\.json$|vitest\.config\.ts$)'; then
+            echo "roda=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "roda=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  windows:
+    needs: windows-filtro
+    if: needs.windows-filtro.outputs.roda == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24.19.0"
+          cache: npm
+      - run: npm ci
+      - run: npm run motor:build
+      # O motor montado sobe no Windows (o bundle de verdade, não o .ts).
+      - shell: bash
+        run: |
+          SAIDA=$(node dist/motor/nod-motor.mjs versao)
+          ESPERADA=$(node -p "require('./package.json').version")
+          if [ "$SAIDA" != "$ESPERADA" ]; then echo "::error::o versao do motor escreveu '$SAIDA' (esperado '$ESPERADA')"; exit 1; fi
+      - run: npx vitest run --project windows
+      # Os unitários do caminho Windows que não supõem caminho POSIX também rodam no Windows de verdade (separador,
+      # maiúsculas e PATHEXT reais). Os outros fingem a plataforma e ficam só no Linux.
+      - run: npx vitest run --project unit tests/unit/motor/bundle-motor.test.ts tests/unit/executor/executor-windows.test.ts
+      # ADA-32 (ADR-151): o instalador `irm …/windows | iex`. Primeiro o PSScriptAnalyzer (zero avisos e erros; o Write-Host
+      # é de propósito: o script fala com quem colou o comando), depois a instalação de verdade no Windows PowerShell 5.1
+      # (o da pessoa) contra o servidor em loopback, até antes do pareamento, duas vezes: a segunda é a atualização, que
+      # recria a tarefa (-Force) e não toca o conexao.json.
+      - name: instalador do Windows (PSScriptAnalyzer)
+        shell: pwsh
+        run: |
+          npx tsx scripts/windows/gerar-instalador.ts "$env:RUNNER_TEMP\instalar-nod.ps1"
+          Install-Module PSScriptAnalyzer -RequiredVersion 1.25.0 -Scope CurrentUser -Force
+          $achados = @("$env:RUNNER_TEMP\instalar-nod.ps1", 'scripts\windows\conferir-instalacao.ps1', 'scripts\windows\instalar-pelo-exe.ps1', 'scripts\windows\desinstalar.ps1', 'scripts\windows\testar-exe.ps1', 'scripts\windows\testar-app.ps1') | ForEach-Object { Invoke-ScriptAnalyzer -Path $_ -Severity Warning,Error -ExcludeRule PSAvoidUsingWriteHost }
+          $achados | Format-Table ScriptName, RuleName, Line, Message -Wrap | Out-String -Width 200 | Write-Host
+          if (@($achados).Count -gt 0) { throw "PSScriptAnalyzer: $(@($achados).Count) achado(s)" }
+      - name: instalador do Windows (duas execuções até o pareamento)
+        shell: powershell
+        env:
+          NOD_INSTALAR_ATE: pareamento
+          NOD_SEM_CODEX: "1"
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $versao = node -p "require('./package.json').version"
+          $servidor = 'http://127.0.0.1:8765'
+          $srv = Start-Process -FilePath 'node' -ArgumentList @('node_modules\tsx\dist\cli.mjs', 'scripts\windows\servidor-de-teste.ts', '8765') -PassThru -NoNewWindow -RedirectStandardOutput "$env:RUNNER_TEMP\srv.log" -RedirectStandardError "$env:RUNNER_TEMP\srv.err"
+          try {
+            $ate = (Get-Date).AddSeconds(60)
+            while ($true) {
+              try { $null = Invoke-WebRequest -Uri "$servidor/api/motor/manifesto" -UseBasicParsing; break } catch { if ((Get-Date) -gt $ate) { Get-Content "$env:RUNNER_TEMP\srv.err"; throw 'o servidor de teste não subiu' }; Start-Sleep -Seconds 1 }
+            }
+            irm "$servidor/windows" | iex
+            & .\scripts\windows\conferir-instalacao.ps1 -Servidor $servidor -Versao $versao
+            # a segunda vez é a atualização: com uma conexão no lugar, que o instalador não pode tocar
+            $conexao = Join-Path $env:APPDATA 'nod-motor\conexao.json'
+            New-Item -ItemType Directory -Path (Split-Path $conexao) -Force | Out-Null
+            Set-Content -LiteralPath $conexao -Value '{"url":"https://nod.exemplo.com","chave":"nao-mexa"}' -Encoding ASCII
+            $antes = (Get-FileHash -LiteralPath $conexao).Hash
+            irm "$servidor/windows" | iex
+            & .\scripts\windows\conferir-instalacao.ps1 -Servidor $servidor -Versao $versao
+            if ((Get-FileHash -LiteralPath $conexao).Hash -ne $antes) { throw 'o instalador mexeu no conexao.json' }
+          } finally {
+            Stop-Process -Id $srv.Id -Force -ErrorAction SilentlyContinue
+            $log = Join-Path $env:LOCALAPPDATA 'nod\instalador.log'
+            if (Test-Path $log) { Get-Content $log -Tail 80 }
+          }
+      # ADA-226: o .exe (NSIS) que roda o mesmo instalador sem terminal. O makensis é o NSIS 3.13 fixado (choco);
+      # o -WX do gerar-exe faz de aviso um erro. O teste instala em silêncio, desinstala e instala pela janela só com
+      # Enter, com os prints de cada passo no artefato.
+      - name: instalador .exe (montar)
+        shell: pwsh
+        run: |
+          $mk = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+          if (-not ((Test-Path $mk) -and ((& $mk /VERSION) -eq 'v3.13'))) { choco install nsis --version=3.13.0 -y --force --no-progress; if ($LASTEXITCODE -ne 0) { throw 'choco install nsis falhou' } }
+          if ((& $mk /VERSION) -ne 'v3.13') { throw "makensis fora da versão fixada: $(& $mk /VERSION)" }
+          node scripts/windows/gerar-exe.mjs --saida dist/windows
+          if ($LASTEXITCODE -ne 0) { throw 'gerar-exe falhou' }
+      - name: instalador .exe (instalar, desinstalar e instalar pela janela)
+        shell: powershell
+        env:
+          NOD_INSTALAR_ATE: pareamento
+          NOD_SEM_CODEX: "1"
+        run: .\scripts\windows\testar-exe.ps1 -Exe dist\windows\nod-windows-x64.exe -Prints "$env:RUNNER_TEMP\prints-exe"
+      - if: success() || failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: nod-windows-exe
+          path: |
+            dist/windows/nod-windows-x64.exe
+            dist/windows/nod-windows-x64.exe.sha256
+            ${{ runner.temp }}/prints-exe/*.png
+          if-no-files-found: warn
+      # ADA-229 (ADR-152): o app desktop do Windows (Electron, NSIS de 1 clique do electron-builder, sem assinar):
+      # instala em silêncio, confere o nod.exe, os atalhos e Aplicativos, abre e fecha o app e desinstala.
+      # Vazão (08/11): o Electron e as ferramentas do electron-builder (NSIS, winCodeSign) vêm do GitHub Releases; um 504
+      # de lá derrubava o job. Cache com a versão no package-lock na chave, e uma nova tentativa só para erro 5xx/timeout
+      # de download (falha de build de verdade cai na primeira).
+      - uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: electron-${{ runner.os }}-
+      - name: app desktop (montar)
+        shell: pwsh
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: |
+          for ($i = 1; $i -le 3; $i++) {
+            npm run desktop:windows 2>&1 | Tee-Object -Variable saida
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($i -eq 3 -or -not ($saida -match 'Response code 5\d\d|ETIMEDOUT|ECONNRESET')) { throw 'desktop:windows falhou' }
+            Write-Host "download do GitHub Releases falhou (tentativa $i); de novo em 30 s"
+            Start-Sleep -Seconds 30
+          }
+      - name: app desktop (instalar, abrir e desinstalar)
+        shell: powershell
+        run: |
+          $v = (node -p "require('./package.json').version" | Out-String).Trim()
+          .\scripts\windows\testar-app.ps1 -Exe "release\nod-$v-win-x64.exe" -Prints "$env:RUNNER_TEMP\prints-app"
+      - if: success() || failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: nod-windows-app
+          path: |
+            release/nod-*-win-x64.exe
+            ${{ runner.temp }}/prints-app/*.png
+          if-no-files-found: warn

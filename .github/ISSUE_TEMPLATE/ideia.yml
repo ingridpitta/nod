@@ -1,0 +1,30 @@
+name: Ideia
+description: Uma funcionalidade nova ou uma melhoria.
+labels: ["ideia", "triagem"]
+body:
+  - type: markdown
+    attributes:
+      value: Antes de escrever código para uma ideia grande, espere uma resposta aqui. Assim ninguém perde trabalho.
+  - type: textarea
+    id: problema
+    attributes:
+      label: Qual é o problema
+      description: O que você tenta fazer hoje e onde emperra.
+    validations:
+      required: true
+  - type: textarea
+    id: proposta
+    attributes:
+      label: O que você propõe
+    validations:
+      required: true
+  - type: textarea
+    id: alternativas
+    attributes:
+      label: Alternativas que você considerou
+  - type: checkboxes
+    id: ajuda
+    attributes:
+      label: Contribuição
+      options:
+        - label: Quero implementar isto, com orientação.

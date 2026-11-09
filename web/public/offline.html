@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#131315" media="(prefers-color-scheme: dark)" />
+    <title>Nod · sem conexão</title>
+    <!-- Página pública guardada pelo service worker (ADR-094): não carrega nada do app nem da sessão. -->
+    <style>
+      :root { color-scheme: light dark; --fundo: #ffffff; --tinta: #18181b; --tinta-2: #5d5d66; --acao: #18181b; --sobre-acao: #ffffff; }
+      @media (prefers-color-scheme: dark) { :root { --fundo: #131315; --tinta: #ededef; --tinta-2: #a4a4ac; --acao: #ededef; --sobre-acao: #131315; } }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; background: var(--fundo); color: var(--tinta);
+        font: 16px/1.55 system-ui, -apple-system, sans-serif;
+        padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left)); }
+      main { width: 100%; max-width: 380px; }
+      img { width: 56px; height: 56px; }
+      h1 { font-size: 24px; line-height: 1.25; letter-spacing: -.4px; margin: 24px 0 10px; }
+      p { margin: 0 0 12px; color: var(--tinta-2); }
+      a { display: inline-flex; align-items: center; min-height: 48px; margin-top: 12px; padding: 10px 22px; border-radius: 14px;
+        background: var(--acao); color: var(--sobre-acao); font-weight: 600; text-decoration: none; }
+      a:focus-visible { outline: 2px solid var(--tinta); outline-offset: 3px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img src="/icons/nod-192.png" alt="" />
+      <h1>Sem conexão</h1>
+      <p>O Nod precisa da internet para mostrar as conversas e enviar o que você decidir.</p>
+      <p>Os bots que já estavam trabalhando continuam no computador ou no servidor.</p>
+      <a href="/">Tentar de novo</a>
+    </main>
+  </body>
+</html>

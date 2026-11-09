@@ -1,0 +1,269 @@
+/* ADA-2 (ADR-148, F1 da base do celular): a forma do Nod a 390 px — alvo de 44, campo de 16 (o iOS não dá zoom), corpo de
+   16, topo de vidro que só aparece quando o conteúdo passa por baixo, o quadro sem transbordo e a tarefa sem caixa.
+   Carregada depois de mobile.css. Toda regra entra na consulta canônica (web/lib/celular.ts, tests/unit/web/celular.test.ts):
+   janela estreita no computador nunca vê nada daqui (critério 13). Cor só por var(--…) (ADR-070). */
+@media (hover: none) and (pointer: coarse) and (max-width: 600px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+
+  /* ---------- Topo de vidro (web/lib/topo-encolhe.ts) ----------
+     Parado no topo, a faixa da pílula some (o conteúdo começa limpo); rolado, ela vira vidro sob o ‹ e a pílula, que já
+     têm o próprio. Sem transição: nada anima, então não há o que desligar com prefers-reduced-motion. */
+  .cabecalho.cabecalho-pilula:not(.topo-encolhido) { background: none; }
+  .cabecalho.cabecalho-pilula.topo-encolhido { height: calc(env(safe-area-inset-top) + 56px);
+    background: color-mix(in srgb, var(--surface) 72%, transparent); -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6);
+    box-shadow: 0 1px 0 var(--line); }
+  /* Com o paginador, os pontos (top: 100% + 6 da pílula) e a folga deles ficam dentro do vidro: 72 em vez de 56. */
+  .cabecalho.cabecalho-pilula.topo-encolhido:has(.pg-pontos) { height: calc(env(safe-area-inset-top) + 72px); }
+  .stage.qd-no-quadro .cabecalho.cabecalho-pilula.topo-encolhido { background: color-mix(in srgb, var(--qd-fundo) 72%, transparent); }
+  /* Com a tarefa aberta a página é --surface: o vidro segue a página. */
+  .stage.qd-no-quadro:has(.qd-tarefa) .cabecalho.cabecalho-pilula.topo-encolhido { background: color-mix(in srgb, var(--surface) 72%, transparent); }
+
+  /* ---------- Quadro: nada passa de 390 ---------- */
+  /* A meta volta a quebrar linha (o nowrap de paginas.css somava 755 px a 390): objetivo com reticências na 1ª linha, o
+     progresso e "Trazer do Linear… · Remover quadro" descem. */
+  .qd-meta { flex-wrap: wrap; white-space: normal; gap: 0 14px; font-size: 13px; }
+  /* Quebrando linha, o "·" entre as partes começava linha; no celular o espaço separa. */
+  .qd-meta > * + *::before { content: none; }
+  .qd-meta > .qd-barra { margin: 0; }
+  .qd-meta > .qd-meta-obj { flex: 1 1 100%; max-width: 100%; white-space: nowrap; }
+  /* A meta e o prazo: 44 de toque (a meta tem overflow: hidden, então cresce o próprio botão; o select também, com 16 px). */
+  .qd-meta > .qd-meta-obj { display: block; line-height: var(--cel-alvo); min-height: var(--cel-alvo); }
+  .qd-criar .qd-prazo-sel, .qd-meta-in { min-height: var(--cel-alvo); font-size: var(--cel-campo); }
+  .qd-prazo-sel { height: var(--cel-alvo); font-size: var(--cel-campo); }
+  /* "Outra data…": o campo de data (24 na quadro.css) também com 44 e 16. */
+  .qd-prazo-data { height: var(--cel-alvo); min-height: var(--cel-alvo); font-size: var(--cel-campo); }
+  /* "Trazer do Linear…" e "Remover quadro" numa linha só deles, embaixo, com 44 de toque (o ::after quebra a linha). */
+  .qd-meta::after { content: ""; order: 1; flex-basis: 100%; height: 0; }
+  .qd-meta > .qd-trazer, .qd-meta > .qd-remover { order: 2; display: inline-flex; align-items: center; min-height: var(--cel-alvo); margin: 0 20px 0 0; font-size: 13px; }
+  .qd-meta > .qd-trazer::before, .qd-meta > .qd-remover::before { content: none; }
+  /* A linha: o título fica com o espaço; o fim (quando, estado, avisos) no máximo 40 %, e o aviso "Movido por… · Desfazer"
+     desce para a 2ª linha inteira. */
+  .qd-l { flex-wrap: wrap; column-gap: 8px; }
+  .qd-l-bt { font-size: var(--cel-corpo); }
+  /* O fim (quando, ID) fica com o limite do desktop (55%): o "quando" e o ID não encolhem (nowrap) e, com menos, passavam por cima do Mover. */
+  .qd-l:has(.qd-l-fim .qd-aviso) .qd-l-fim { order: 3; flex-basis: 100%; max-width: 100%; padding: 0 0 6px 32px; }
+  .qd-l-fim .qd-aviso { min-width: 0; max-width: 100%; flex-wrap: nowrap; }
+  .qd-l-fim .qd-aviso-txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* A recusa explica o caminho: quebra linha e mostra o texto inteiro (o title não aparece no toque). */
+  .qd-l-fim .qd-aviso-recusa { flex-wrap: wrap; }
+  .qd-l-fim .qd-aviso-recusa .qd-aviso-txt { overflow: visible; white-space: normal; }
+  /* O "Desfazer" não encolhe com o texto (sem isso quebra no meio da palavra): quem cede é o "Movido por…", com reticências.
+     Na recusa, a ação vai para a linha de baixo inteira e sem o "·" na frente. */
+  .qd-l-fim .qd-aviso:not(.qd-aviso-recusa) .qd-aviso-acao { flex: none; }
+  .qd-l-fim .qd-aviso-recusa .qd-aviso-acao { flex-basis: 100%; }
+  .qd-l-fim .qd-aviso-recusa > span + .qd-link::before { content: none; }
+  /* "Precisa de você": a pergunta em até 2 linhas e o Responder leve (campo sem caixa, Enviar em texto). */
+  /* "Precisa de você": o fim (quando, estado) desce para a 2ª linha e o título fica com a linha ao lado do Mover; o Responder por último. */
+  .qd-l:has(.qd-card-resp) .qd-l-fim { order: 3; flex-basis: 100%; max-width: 100%; padding: 0 0 6px 32px; }
+  .qd-l:has(.qd-card-resp) > .qd-card-resp { order: 4; }
+  .qd-l:has(.qd-card-resp) .qd-l-tit { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
+  .qd-l .qd-card-resp { align-items: center; padding-left: 32px; border-top: 1px solid var(--line); }
+  .qd-l .qd-card-resp-in { flex: 1; min-width: 0; min-height: var(--cel-alvo); padding: 11px 0; border: 0; background: transparent; font-size: var(--cel-campo); resize: none; }
+  .qd-l .qd-card-resp-bt { min-height: var(--cel-alvo); min-width: var(--cel-alvo); padding: 0 4px; border: 0; background: none; color: var(--ink); font-weight: 600; }
+  .qd-lg-bt { font-size: 15px; }
+
+  /* ---------- A tarefa aberta: sem caixa, título grande, comentários em cartão suave ---------- */
+  /* A folha da tarefa vai de ponta a ponta, sem fundo, sombra nem raio: não é cartão dentro de cartão (padrão do Linear iOS). */
+  .qd-vista:has(> .qd-conteudo > .qd-tarefa) { padding-inline: 0; background: var(--surface); }
+  /* O composer sticky tirava a margem lateral do padding da vista: com a tarefa aberta ele volta a ter a mesma do quadro (12 a 390). */
+  .qd-vista:has(> .qd-conteudo > .qd-tarefa) > .qc-wrap { padding-inline: clamp(12px, 3vw, 24px); }
+  .qd-tarefa { padding-inline: 16px; background: var(--surface); box-shadow: none; border-radius: 0; }
+  .qd-t-principal { padding: 0; border: 0; border-radius: 0; background: transparent; gap: 16px; }
+  .qd-t-tit { font-size: 26px; line-height: 1.2; letter-spacing: -.02em; }
+  .qd-t-desc { font-size: 17px; line-height: 1.55; }
+  .qd-chip { min-height: var(--cel-alvo); font-size: 13px; }
+  /* Na folha --surface o fundo do quadro (--qd-col-fundo) some no escuro (1,05:1): o chip usa o cinza do cartão. */
+  .qd-tarefa .qd-chip { background: var(--surface-raised); }
+  .qd-com { padding: 12px; border-radius: 14px; background: var(--surface-raised); }
+  .qd-com-txt { font-size: var(--cel-corpo); }
+  /* A hora do comentário em --ink-2: folga de contraste no cartão (o teste mede 4,5:1 contra o fundo declarado, nos dois temas). */
+  .qd-com-cab time { color: var(--ink-2); }
+  .qd-com-acao { padding-left: 12px; }
+  .qd-com-form { min-height: var(--cel-alvo); }
+  .qd-com-in, .qd-nova-in, .qd-sel, .qd-prz-valor { font-size: var(--cel-campo); min-height: var(--cel-alvo); }
+  .qd-resp-in, .qc-txt, .qd-pas-inst { font-size: var(--cel-campo); }
+  .qd-com-in { padding: 11px 0; }
+  .qd-com-bt { min-height: var(--cel-alvo); min-width: var(--cel-alvo); font-size: 15px; }
+  .qd-sel, .qd-nova-in { border-radius: 10px; padding: 0 10px; }
+  .qd-nova-in { width: auto; flex: 1; }
+  /* O histórico: linhas com um ponto de 6 px, sem traço de cima. */
+  .qd-hist { border-top: 0; }
+  .qd-hist-l, .qd-hist > li, .qd-at-lista > li { position: relative; padding-left: 14px; }
+  .qd-hist-l::before, .qd-hist > li::before, .qd-at-lista > li::before { content: ""; position: absolute; left: 0; top: calc(.75em - 3px); width: 6px; height: 6px; border-radius: 50%; background: var(--line-strong); }
+  /* A linha "N movimentos" tem 44 (o Desfazer): o ponto e o texto se alinham pelo centro. */
+  .qd-hist-l { align-items: center; }
+  .qd-hist-l::before { top: calc(50% - 3px); }
+  .qd-hist-sum { min-height: var(--cel-alvo); padding-block: 12px; box-sizing: border-box; }
+
+  /* ---------- ADA-17: a tarefa aberta no celular (web/telas/tarefa-celular.ts) ---------- */
+  :root { --teclado: 0px; } /* o JS grava o valor no style do html (web/lib/teclado-visivel.ts), que vence esta regra */
+  /* Com a tarefa aberta o composer é o da tarefa: a pílula do quadro sai (o anúncio para o leitor de tela fica). */
+  .qd-vista:has(> .qd-conteudo > .qd-tarefa-cel) > .qc-wrap > :not(.qd-anuncio) { display: none; }
+  .qd-tarefa-cel { display: flex; flex-direction: column; min-height: 100%; padding-inline: 0; }
+  .qd-tarefa-cel > .qd-t-cab, .qd-tarefa-cel > .qd-t-principal { padding-inline: 16px; }
+  .qd-tarefa-cel .qd-t-principal { flex: 1; display: flex; flex-direction: column; gap: 16px; padding-bottom: 16px; }
+  .qd-tarefa-cel .qd-id { color: var(--ink-2); font-size: 13px; }
+  .qd-tarefa-cel .qd-t-desc-vazia { color: var(--ink-3); }
+  /* A bandeja: rola de lado (nunca a página), sem barra; chips de 44. */
+  .qd-bandeja { display: flex; gap: 8px; margin-inline: -16px; padding: 2px 16px; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
+  .qd-bandeja::-webkit-scrollbar { display: none; }
+  .qd-chip-cel { flex: none; height: var(--cel-alvo); padding: 0 12px; border: 0; border-radius: 999px; font-size: 15px; color: var(--ink); white-space: nowrap; }
+  .qd-chip-cel svg { width: 16px; height: 16px; }
+  .qd-chip-cel.qd-chip-vazio { color: var(--ink-2); }
+  .qd-chip-cel:disabled { opacity: 1; color: var(--ink-2); }
+  .qd-chip-branch { max-width: 160px; overflow: hidden; text-overflow: ellipsis; font-family: var(--font-mono); font-size: 13px; }
+  .qd-cel-erro { margin: 0; color: var(--danger); font-size: 15px; }
+  .qd-cel-erro .qd-link { min-height: var(--cel-alvo); color: var(--danger); font-weight: 600; text-decoration: underline; }
+  /* A atividade: uma linha do tempo só. Evento com ponto de 6 px; execução como linha (issue 294); comentário em cartão cinza sem borda. */
+  .qd-ativ-cel { display: flex; flex-direction: column; gap: 10px; }
+  .qd-ativ-antigas { align-self: flex-start; min-height: var(--cel-alvo); font-size: 15px; }
+  .qd-ativ-nota { margin: 0; color: var(--ink-2); font-size: 15px; }
+  .qd-linha-tempo { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+  .qd-ev { position: relative; padding-left: 14px; color: var(--ink-2); font-size: 15px; line-height: 1.4; }
+  .qd-ev::before { content: ""; position: absolute; left: 0; top: calc(.7em - 3px); width: 6px; height: 6px; border-radius: 50%; background: var(--line-strong); }
+  .qd-ev strong { color: var(--ink); font-weight: 600; }
+  .qd-ev time { color: var(--ink-2); }
+  .qd-ev .qd-hist-desfazer { min-height: var(--cel-alvo); margin-left: 4px; }
+  .qd-exec { display: flex; gap: 10px; align-items: flex-start; }
+  .qd-exec-av { flex: none; width: 28px; height: 28px; display: inline-grid; place-items: center; }
+  .qd-exec-corpo { flex: 1; min-width: 0; }
+  .qd-exec-l { display: flex; align-items: center; gap: 8px; margin: 0; min-height: 28px; font-size: 15px; }
+  .qd-exec-txt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .qd-exec-meta, .qd-exec-l time { color: var(--ink-2); }
+  .qd-exec[data-estado="falhou"] .qd-exec-txt strong + * { color: var(--danger); }
+  .qd-exec-frase { margin: 2px 0 0; color: var(--ink-2); font-size: 15px; }
+  .qd-exec-acoes { margin: 0; display: flex; flex-wrap: wrap; align-items: center; }
+  .qd-exec-acoes .qd-link { min-height: var(--cel-alvo); font-size: 15px; }
+  .qd-linha-tempo > .qd-com { display: flex; gap: 10px; align-items: flex-start; -webkit-touch-callout: none; }
+  .qd-com-corpo { flex: 1; min-width: 0; }
+  .qd-com-cab { display: flex; align-items: center; gap: 8px; margin: 0; }
+  .qd-com-nome { font-weight: 600; }
+  .qd-com-resp { margin-left: auto; min-height: var(--cel-alvo); color: var(--ink-2); font-size: 13px; }
+  .qd-com-cita { margin: 4px 0; padding: 4px 0 4px 10px; border-left: 3px solid var(--line-strong); color: var(--ink-2); font-size: 15px; }
+  .qd-com-cita-nome { font-weight: 600; color: var(--ink); }
+  .qd-com-txt { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  /* O composer único: colado embaixo da área visível (a .app já é a área acima do teclado, F1). */
+  .qd-cel-composer { position: sticky; bottom: 0; z-index: 2; display: flex; flex-direction: column; gap: 6px; padding: 8px 12px calc(env(safe-area-inset-bottom) + 8px);
+    background: var(--surface); box-shadow: 0 -1px 0 var(--line); }
+  .qd-cel-resp { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--ink-2); font-size: 13px; }
+  .qd-cel-resp strong { color: var(--ink); }
+  .qd-cel-resp-x { min-width: var(--cel-alvo); min-height: var(--cel-alvo); border: 0; background: none; color: var(--ink-2); font-size: 16px; }
+  .qd-cel-caixa { display: flex; align-items: flex-end; gap: 6px; padding: 0 4px 0 14px; border-radius: 22px; background: var(--surface-raised); }
+  .qd-cel-caixa .qd-com-in { flex: 1; min-width: 0; max-height: 40vh; border: 0; background: transparent; resize: none; color: var(--ink); }
+  .qd-cel-enviar { flex: none; display: inline-grid; place-items: center; width: var(--cel-alvo); height: var(--cel-alvo); padding: 0; border: 0; border-radius: 50%; background: none; color: var(--ink); }
+  .qd-cel-enviar svg { width: 22px; height: 22px; }
+  /* O topo encolhido mostra "VER-1 · título" numa linha, abaixo da pílula (web/lib/quadro-na-tela.ts, marcarTopo). */
+  .stage.qd-no-quadro:has(.qd-tarefa-cel) .cabecalho.topo-encolhido[data-titulo] { height: calc(env(safe-area-inset-top) + 80px); }
+  .stage.qd-no-quadro:has(.qd-tarefa-cel) .cabecalho.topo-encolhido[data-titulo]::after { content: attr(data-titulo); position: absolute; left: 56px; right: 56px; bottom: 6px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; color: var(--ink); font-size: 13px; font-weight: 600; pointer-events: none; }
+  /* A folha das propriedades: no body, acima do teclado, altura pela área visível (nunca vh). */
+  .qd-folha.qd-folha-cel { bottom: var(--teclado, 0px); max-height: calc(100dvh - var(--teclado, 0px) - env(safe-area-inset-top) - 12px); gap: 8px; padding-inline: 16px; overscroll-behavior: contain; }
+  .qd-folha-cel .qd-folha-alca { align-self: center; width: 36px; height: 5px; border-radius: 3px; background: var(--line-strong); touch-action: none; }
+  .qd-folha-cel .qd-folha-cab { touch-action: none; }
+  .qd-folha-cel .qd-folha-ok { min-height: var(--cel-alvo); font-size: 15px; font-weight: 600; }
+  .qd-fo-ops, .qd-props-cel { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+  .qd-fo-gtit { margin: 8px 0 2px; color: var(--ink-2); font-size: 13px; }
+  .qd-fo-op, .qd-prop { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 0 4px; border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--ink); font-size: 17px; text-align: left; }
+  .qd-fo-rot, .qd-prop-v { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .qd-fo-marca { color: var(--ink); font-weight: 600; }
+  .qd-fo-op-fixo { color: var(--ink-2); }
+  .qd-prop-k { flex: none; width: 112px; color: var(--ink-2); font-size: 15px; }
+  .qd-prop-v { text-align: right; }
+  .qd-prop-seta { flex: none; color: var(--ink-3); }
+  .qd-prop-branch, .qd-fo-branch { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
+  .qd-fo-linha { margin: 0; overflow-x: auto; white-space: nowrap; }
+  .qd-fo-frase { margin: 0; font-size: 17px; }
+  .qd-fo-campo { width: 100%; box-sizing: border-box; min-height: var(--cel-alvo); padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font-size: var(--cel-campo); }
+  .qd-fo-acoes { display: flex; justify-content: flex-end; gap: 8px; }
+  .qd-fo-acoes .qd-bt { min-height: var(--cel-alvo); padding: 0 16px; font-size: 15px; }
+  .qd-bt-perigo { color: var(--danger); }
+
+  /* ---------- Conversa e cards ---------- */
+  /* O corpo da conversa em 16. */
+  .bubble { font-size: var(--cel-corpo); }
+  /* "Pensou por N s · M ações": o pronto (min-height 20 na interface.css, mais específico que o 44 da mobile.css) volta a 44. */
+  .pensar > summary, .pensar[data-fase="pronto"] > summary { min-height: var(--cel-alvo); }
+  /* O enviar (e o parar, no mesmo lugar): o círculo de 44 enche a caixa (46 com a borda), igual ao microfone. */
+  .composer .box:not(.gravando) .send, .composer .box:not(.gravando) .parar-envio { width: var(--cel-alvo); min-width: var(--cel-alvo); height: var(--cel-alvo); min-height: var(--cel-alvo); margin: 0; }
+  .composer .box:not(.gravando) .send::after, .composer .box:not(.gravando) .parar-envio::after { inset: 0; }
+  /* As ações do artefato quebram linha dentro do card em vez de empurrar o título para fora. */
+  .artefato-cab { flex-wrap: wrap; row-gap: 0; }
+  .artefato-acoes { flex-wrap: wrap; flex-shrink: 1; min-width: 0; margin-left: auto; gap: 4px 12px; }
+  .pq-campo .pq-enviar { height: var(--cel-alvo); }
+  .cp .cp-sim, .cp .cp-nao, .cp-erro .cp-acao { min-height: var(--cel-alvo); padding-left: 16px; padding-right: 16px; font-size: 15px; }
+  /* O chip de link: 44 de toque de verdade. A margem de 9 + 26 + 9 abre a linha do chip para 44, e a área estendida fica
+     dentro dela: não invade a linha de cima nem a de baixo (um toque no texto vizinho não abre o link). */
+  a.lk-chip { position: relative; margin-block: 9px; }
+  /* O inset do ::after conta da caixa de padding: -10 = 9 de margem + 1 de borda (fica 44 da borda para fora, sem passar da margem). */
+  a.lk-chip::after { content: ""; position: absolute; inset: -10px -3px; }
+  /* A pílula de novas mensagens / "perguntou algo": 44. */
+  .pilula-novas, .pilula-novas.pilula-pergunta { min-height: var(--cel-alvo); font-size: 14px; }
+  /* A dica da primeira vez vira uma pílula sólida: não fica escrita por cima das mensagens. */
+  .pg-dica { padding: 6px 12px; border-radius: 999px; background: var(--surface-raised); color: var(--ink-2); box-shadow: var(--shadow-pop); font-size: 13px; }
+  /* A barra lateral: "+ Novo time" com 44. */
+  .novo-time.nova-secao-alvo { min-height: var(--cel-alvo); font-size: 15px; }
+
+  /* ---------- ADA-2 F5 (ADR-156): toque longo na mensagem ---------- */
+  /* Durante o segurar o iOS não abre a lupa nem o menu dele; fora do gesto a seleção fica como é. */
+  .fala-segurando, .fala-segurando * { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+  .message.fala-segurada .bubble, .msg-linha.fala-segurada { visibility: hidden; }
+  /* O menu de vidro: 240, raio 14, itens de 46 em 16 px; a fala segurada sobe (cópia) por cima do fundo desfocado. */
+  .bot-menu.menu-fala-seg { width: 240px; border-radius: 14px; background: color-mix(in srgb, var(--surface) 72%, transparent);
+    -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6); }
+  .bot-menu.menu-fala-seg button[role="menuitem"]:not(.emoji-mais) { min-height: 46px; font-size: 16px; }
+  .bot-menu.menu-fala-seg .linha-emojis button { min-width: var(--cel-alvo); min-height: var(--cel-alvo); }
+  .menu-fala-seg .mfs-divisor { height: 1px; margin: 4px 0; background: var(--line); }
+  .bot-menu.menu-fala-seg .fala-copia { position: fixed; box-sizing: border-box; margin: 0; overflow: hidden; pointer-events: none;
+    box-shadow: var(--shadow-pop); transform: scale(1.02); animation: inicio-segurar .18s cubic-bezier(.2, .8, .2, 1); }
+  /* ADA-2 F5 (ADR-156 §4): o card de aprovação (e o de lote, S8) em contorno. O verbo é uma pílula de contorno em --ink,
+     "Agora não" fica em texto; o perigo troca só a cor do contorno e do texto. `button.` vence o .cp .cp-sim e o :hover
+     da card-proposta.css sem !important (no toque o :hover gruda). */
+  .cp { border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+  .cp button.cp-sim, .cp button.cp-sim:hover { min-height: var(--cel-alvo); border: 1.5px solid var(--ink); border-radius: 22px; background: transparent; color: var(--ink); font-size: 15px; font-weight: 600; filter: none; }
+  .cp button.cp-nao, .cp button.cp-nao:hover { min-height: var(--cel-alvo); border-color: transparent; background: none; color: var(--ink-2); }
+  .cp button.cp-sim.cp-perigo, .cp button.cp-sim.cp-perigo:hover { border-color: var(--danger); background: transparent; color: var(--danger); }
+  /* ADA-2 F5 (ADR-156 §5): o composer em três peças, + · campo · mic/enviar. O + e a ponta saem da pílula e viram redondos
+     de vidro de 46; a pílula é desenhada pelo ::before da .box entre eles, então a árvore e a ordem de foco (+, texto,
+     mic, parar, enviar) são as mesmas do computador. O parar, quando aparece, fica dentro da pílula, na ponta dela; a
+     troca mic ↔ enviar continua a da mobile.css (campo vazio + ditado = mic; senão enviar; sem ditado, enviar sempre). */
+  .composer { --cmp-redondo: 46px; --cmp-vao: 6px; --cmp-vidro: color-mix(in srgb, var(--surface) 72%, transparent); }
+  .composer .box:not(.gravando) { position: relative; isolation: isolate; gap: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none;
+    -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .composer .box:not(.gravando)::before { content: ""; position: absolute; z-index: -1; inset: 0 calc(var(--cmp-redondo) + var(--cmp-vao)); border: 1px solid var(--line);
+    border-radius: 23px; background: var(--cmp-vidro); -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6); pointer-events: none; }
+  .composer .box:not(.gravando):has(> .mais-campo[hidden]), .composer .box.com-anexos:not(.gravando) { padding-left: 0; }
+  .composer .box:not(.gravando):not(.com-mais)::before, .composer .box:not(.gravando):has(> .mais-campo[hidden])::before { left: 0; }
+  /* O texto começa 14 px dentro da pílula, com ou sem o + (a mobile.css deixava 4 colado no + de dentro). */
+  .composer .box:not(.gravando) textarea, .composer .box.com-mais:not(.gravando) textarea { min-height: var(--cmp-redondo); padding: 12px 8px 12px 14px; }
+  .composer .box.com-mais:not(.gravando) > .mais-campo:not([hidden]) { margin-right: var(--cmp-vao); }
+  /* Os redondos: + e mic de vidro com borda --line; o enviar em contorno --ink, transparente. */
+  .composer .box:not(.gravando) > .mais-campo, .composer .box:not(.gravando) > .mic { width: var(--cmp-redondo); min-width: var(--cmp-redondo); height: var(--cmp-redondo);
+    border: 1px solid var(--line); border-radius: 50%; background: var(--cmp-vidro); color: var(--ink-2); -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6); }
+  .composer .box:not(.gravando) > .mic, .composer .box:not(.gravando) > .send { margin: 0 0 0 calc(var(--cmp-vao) * 2); }
+  .composer .box:not(.gravando) > .send { width: var(--cmp-redondo); min-width: var(--cmp-redondo); height: var(--cmp-redondo); min-height: var(--cmp-redondo);
+    border: 1.5px solid var(--ink); border-radius: 50%; background: transparent; color: var(--ink); font-size: 17px; }
+  .composer .box:not(.gravando) > .parar-envio { margin: 1px 4px 1px 0; }
+  /* Com anexo, as miniaturas e o resumo ficam dentro da pílula (alinham com ela, não com o +). */
+  .composer .box.com-mais:not(.gravando) > .anexos-fila, .composer .box.com-mais:not(.gravando) > .anexos-resumo { margin-left: calc(var(--cmp-redondo) + var(--cmp-vao));
+    margin-right: calc(var(--cmp-redondo) + var(--cmp-vao)); }
+  /* ADA-2 F5 (ADR-156 §5): o mesmo composer de três peças na pílula do quadro e da tarefa. O clipe vira o + redondo (S6),
+     o enviar ganha o contorno e o ditado é o mic redondo; os mesmos data-act de antes (a suíte do quadro não muda). */
+  .qc-pil { --cmp-redondo: 46px; --cmp-vao: 6px; --cmp-vidro: color-mix(in srgb, var(--surface) 72%, transparent); }
+  .qc-pil:not(.gravando) { isolation: isolate; gap: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none;
+    -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .qc-pil:not(.gravando)::before { content: ""; position: absolute; z-index: -1; inset: 0 calc(var(--cmp-redondo) + var(--cmp-vao)); border: 1px solid var(--line);
+    border-radius: 23px; background: var(--cmp-vidro); box-shadow: var(--shadow-pop); -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6);
+    pointer-events: none; }
+  .qc-pil:not(.gravando):focus-within::before { border-color: var(--line-strong); }
+  .qc-pil:not(.gravando):not(:has(> .qc-clipe))::before { left: 0; }
+  .qc-pil:not(.gravando) > .qc-txt { min-height: var(--cmp-redondo); padding: 12px 8px 12px 14px; }
+  .qc-clipe .qc-ic-mais { display: block; }
+  .qc-clipe svg:not(.qc-ic-mais) { display: none; }
+  .qc-pil:not(.gravando) > .qc-clipe, .qc-pil:not(.gravando) > .mic { width: var(--cmp-redondo); height: var(--cmp-redondo); margin: 0; border: 1px solid var(--line);
+    border-radius: 50%; background: var(--cmp-vidro); color: var(--ink-2); -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6); }
+  .qc-pil:not(.gravando) > .qc-clipe { margin-right: var(--cmp-vao); }
+  .qc-pil:not(.gravando) > .mic, .qc-pil:not(.gravando) > .qc-bt.qc-enviar { margin: 0 0 0 calc(var(--cmp-vao) * 2); }
+  .qc-pil:not(.gravando) > .qc-bt.qc-enviar { width: var(--cmp-redondo); height: var(--cmp-redondo); border: 1.5px solid var(--ink); border-radius: 50%; background: transparent; color: var(--ink); }
+  .qc-pil:not(.gravando) > .qc-bt.qc-enviar::before { content: none; }
+  .qc-pil:not(.gravando) > .qc-parar { margin: 0 4px 1px 0; }
+  .qc-pil:not(.gravando) > .qc-anexos { margin-left: calc(var(--cmp-redondo) + var(--cmp-vao)); margin-right: calc(var(--cmp-redondo) + var(--cmp-vao)); padding: 8px 8px 0 14px; }
+}

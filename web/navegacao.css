@@ -1,0 +1,1312 @@
+/* =====================================================================================
+   Menu, sidebar e gaveta (definido em 2026-09-30, canvas "Nod — tela do agente", página "Menu, sidebar e gaveta").
+   Vem depois de interface.css: o menu da conta, Seu espaço em tela cheia, o arrastar na barra e a gaveta por níveis.
+   ===================================================================================== */
+
+/* Abaixo de 900 px a barra tem 220: o mascote dos fixados volta a 40 para a grade de 4 caber. */
+@media (max-width: 900px) {
+  .fixado-bt .icon.lg { width: 40px; height: 40px; border-radius: 15px; }
+}
+
+/* ---- Arrastar na barra --------------------------------------------------------------
+   A origem esmaece, a grade mostra a vaga "Fixar", a seção de destino ganha fundo e a linha diz onde o bot entra.
+   "+ Nova seção", a grade vazia e "Meus agentes" vazio só aparecem enquanto se arrasta. */
+#sidebar [draggable="true"] { -webkit-user-drag: element; }
+#sidebar .origem-arrasto { opacity: .35; }
+.fantasma-arrasto { position: fixed; top: -1000px; left: -1000px; z-index: 50; background: var(--surface); border-radius: 14px;
+  box-shadow: var(--shadow-pop); }
+.fixados[data-vazio], .section[data-vazio], .nova-secao-alvo { display: none; }
+/* definido em 2026-10-06: arrastando, a lista ganha um fôlego embaixo — o último bot não encosta no rodapé e sobra onde
+   mirar para soltá-lo no fim; a rolagem automática (web/lib/arrastar.ts) leva até lá. */
+.arrastando-bot .list { padding-bottom: 72px; }
+.arrastando-bot .fixados[data-vazio] { display: grid; }
+.arrastando-bot .section[data-vazio] { display: block; min-height: 44px; }
+.fixados-vazio { grid-column: 1 / -1; margin: 0; padding: 18px 12px; border: 1.5px dashed var(--line-strong); border-radius: 14px; text-align: center;
+  font-size: 12.5px; color: var(--ink-3); }
+.vaga-fixar { display: flex; align-items: flex-end; justify-content: center; min-height: 118px; padding-bottom: 12px; box-sizing: border-box;
+  border: 1.5px dashed var(--line-strong); border-radius: 14px; background: var(--surface-raised); font-size: 11px; color: var(--ink); }
+.section.alvo-soltar { border-radius: 14px; background: var(--surface-raised); box-shadow: inset 0 0 0 1.5px var(--line-strong); }
+.section.alvo-soltar > h3::after { content: "Soltar aqui"; font-size: 12px; color: var(--ink); }
+.linha-insercao { position: relative; height: 2px; margin: 0 6px; border-radius: 1px; background: var(--ink); }
+.linha-insercao::before { content: ""; position: absolute; left: -4px; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--ink); }
+.arrastando-bot .nova-secao-alvo { display: block; margin: 6px 0 10px; padding: 12px; border: 1.5px dashed var(--line-strong); border-radius: 12px;
+  text-align: center; font-size: 13px; color: var(--ink-3); }
+.nova-secao-alvo.alvo-soltar { border-color: var(--ink); background: var(--surface-raised); color: var(--ink); }
+
+/* ---- Seções que recolhem (definido em 2026-10-04, web/lib/secoes.ts) -----------------
+   O título é o botão e ocupa a linha inteira. A seta só aparece no hover (no toque, sempre, mais clara) e fica à vista
+   com a seção recolhida, apontando para o lado. Recolhida, a seção mostra quantos bots tem e o ponto do aviso mais forte
+   entre os escondidos. Buscando, nada fica recolhido e o título é só texto: sem seta, contagem, ponto nem clique. */
+.secao-cab { flex: 1; min-width: 0; min-height: 24px; display: flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none;
+  font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.secao-cab:hover, .secao-cab:focus-visible { color: var(--ink); }
+/* `.section h3 span` (interface.css) encolhe todo span do título: o nome fica no tamanho do título e corta com reticências. */
+.secao-cab .secao-nome { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: inherit; color: inherit; }
+.secao-cab > svg { flex: none; width: 14px; height: 14px; transform: rotate(90deg); opacity: 0; transition: opacity .12s; }
+.secao-cab:hover > svg, .secao-cab:focus-visible > svg, .secao-cab[aria-expanded="false"] > svg { opacity: 1; }
+.secao-cab[aria-expanded="false"] > svg { transform: none; }
+@media (hover: none) { .secao-cab > svg { opacity: .6; } }
+.secao-cab small { flex: none; font-size: 11px; color: var(--ink-3); }
+.secao-aviso { flex: none; width: 7px; height: 7px; margin-left: 2px; border-radius: 50%; background: var(--signal); }
+.secao-aviso[data-aviso="decisao"] { background: var(--warning); }
+#sidebar:not([data-buscando]) .bot-row.escondida { display: none; }
+.section[data-recolhida] { padding-bottom: 4px; }
+#sidebar[data-buscando] .secao-cab { pointer-events: none; }
+#sidebar[data-buscando] .secao-cab > svg, #sidebar[data-buscando] .secao-cab small, #sidebar[data-buscando] .secao-aviso { display: none; }
+/* NOD-379 (critério 6): buscando, a seção ou a grade sem nenhum resultado some inteira, com o título (filtrarBots). */
+#sidebar [data-sem-resultado] { display: none !important; }
+
+/* ---- Menu da conta (canvas "Menu 1") -------------------------------------------------
+   Nasce acima do avatar, da largura da barra menos as margens. A faixa do topo só aparece quando algo precisa de você. */
+.bot-menu.menu-conta { width: 316px; padding: 8px; border-radius: 18px; box-shadow: var(--shadow-pop); }
+.menu-conta button { padding: 10px 12px; font-size: 14.5px; color: var(--ink); }
+.menu-conta button > svg { width: 18px; height: 18px; color: var(--ink-2); }
+.menu-conta .mc-nome { flex: 1; width: auto; font-size: inherit; }
+.menu-conta .mc-meta { width: auto; font-size: 13px; color: var(--ink-3); }
+.menu-conta button > svg:last-child:not(:first-child) { width: 16px; height: 16px; color: var(--ink-3); }
+.menu-conta kbd { font: 12px var(--font-sans); color: var(--ink-3); }
+
+/* ---- Seu espaço em tela cheia (canvas "Menu 2") --------------------------------------
+   As seções na coluna da esquerda, no lugar da barra; um botão só para sair: "‹ <de onde veio>", mais o Esc. */
+#espaco { position: fixed; inset: 0; z-index: 30; background: var(--surface); }
+.espaco { display: flex; height: 100%; }
+.espaco-nav { display: flex; flex-direction: column; flex-shrink: 0; width: 340px; box-sizing: border-box; padding: 16px 12px;
+  background: var(--surface-side); border-right: 1px solid var(--line); }
+.espaco-volta, .tela-volta { display: flex; align-items: center; gap: 10px; }
+.espaco-volta kbd, .tela-volta kbd { font: 11.5px var(--font-sans); color: var(--ink-3); }
+.espaco-voltar, .tela-voltar { display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px 7px 8px; border: 1px solid var(--line-strong); border-radius: 10px;
+  background: var(--surface); font: inherit; font-size: 14px; font-weight: 500; color: var(--ink); cursor: pointer; }
+.espaco-voltar:hover, .espaco-voltar:focus-visible, .tela-voltar:hover, .tela-voltar:focus-visible { background: var(--surface-raised); }
+.espaco-voltar .icon.sm, .tela-voltar .icon.sm { width: 20px; height: 20px; min-width: 20px; border-radius: 7px; }
+.espaco-voltar .icon.sm svg, .tela-voltar .icon.sm svg { width: 17px; height: 17px; }
+/* O mesmo "‹ <de onde veio>" no topo do Marketplace (definido em 2026-10-04). */
+.tela-volta { margin-bottom: 22px; }
+.espaco-nav h1 { margin: 0; padding: 26px 12px 12px; font-size: 22px; font-weight: 600; letter-spacing: -.3px; }
+.espaco-itens { display: flex; flex-direction: column; gap: 2px; }
+.espaco-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; border: 0; border-radius: 10px; background: none;
+  font: inherit; font-size: 14.5px; color: var(--ink); text-align: left; cursor: pointer; }
+.espaco-item > svg { color: var(--ink-2); }
+.espaco-item:hover, .espaco-item:focus-visible { background: var(--surface-raised); }
+.espaco-item[aria-current="page"] { background: var(--surface-selected); font-weight: 500; }
+.espaco-conteudo { flex: 1; min-width: 0; overflow: auto; padding: 64px 88px; }
+.espaco-conteudo > * { max-width: 720px; }
+.espaco-conteudo .tela { margin: 0; padding: 0; }
+.espaco-conteudo .espaco-secao > h2, .espaco-conteudo .tela-cab h1, .espaco-conteudo .tela > h1 { margin: 0 0 6px; font-size: 26px; font-weight: 600; letter-spacing: -.4px; }
+.espaco-conteudo .intro { margin: 0 0 18px; font-size: 14.5px; }
+.espaco-cartao { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.espaco-ia { display: flex; align-items: center; gap: 12px; padding: 16px 18px; }
+.espaco-ia > div { flex: 1; min-width: 0; }
+.espaco-ia b { display: block; font-size: 15px; font-weight: 500; }
+.espaco-ia small { display: block; margin-top: 2px; font-size: 13px; color: var(--ink-3); }
+/* NOD-171: o CLI abaixo do piso — o comando que atualiza, com Copiar (ia-fora.ts linhaAtualizarIa). */
+.ia-atualizar { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 0 18px 16px 40px; font-size: 13px; }
+.ia-atualizar p { margin: 0; }
+.ia-comando { display: flex; align-items: center; gap: 10px; align-self: stretch; padding: 6px 8px 6px 10px; border-radius: 8px; border: 1px solid var(--warning-line); background: var(--warning-soft); }
+.ia-comando code { flex: 1; background: none; padding: 0; overflow-x: auto; white-space: nowrap; }
+.espaco-ponto { flex-shrink: 0; width: 9px; height: 9px; border-radius: 50%; background: var(--success); }
+.espaco-ponto.falha { background: var(--danger); }
+.espaco-conteudo .bt.sm { padding: 7px 14px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); font-size: 13px; font-weight: 500; color: var(--ink); }
+.espaco-cartao .conexao-avancada { margin: 0; border-top: 1px solid var(--line); }
+.espaco-cartao .conexao-avancada > summary { display: flex; align-items: center; justify-content: space-between; padding: 13px 18px; font-size: 14px;
+  color: var(--ink); list-style: none; }
+.espaco-cartao .conexao-avancada > summary::-webkit-details-marker { display: none; }
+.espaco-cartao .conexao-avancada > summary::after { content: "›"; font-size: 18px; color: var(--ink-3); transition: transform .12s; }
+.espaco-cartao .conexao-avancada[open] > summary::after { transform: rotate(90deg); }
+.espaco-cartao .conexao-avancada[open] > summary { margin: 0; }
+
+/* ---- Seu espaço › Este Mac (definido em 2026-10-08, ADR-085; protótipo "Nod — Ritmo do Mac", prancha 3) ------------
+   O resumo de agora, a memória e o processador em barras, e os bots trabalhando ou esperando o Mac aliviar. */
+.este-mac .linha-centro-wrap { margin: 0 0 14px; }
+.mac-cartao { margin-bottom: 6px; }
+.mac-agora { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.mac-agora > div { display: flex; flex-direction: column; gap: 2px; padding: 14px 18px; min-width: 0; }
+.mac-agora > div + div { border-left: 1px solid var(--line); }
+.mac-agora b { font-size: 15px; font-weight: 500; color: var(--ink); }
+.mac-agora span { font-size: 13px; color: var(--ink-3); }
+.mac-medidor { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink-2); }
+.mac-medidor b { min-width: 86px; font-weight: 400; color: var(--ink); }
+.mac-barra { flex: 1; min-width: 48px; height: 6px; border-radius: 3px; background: var(--surface-raised); overflow: hidden; }
+.mac-barra i { display: block; height: 100%; border-radius: 3px; background: var(--ink-3); }
+.mac-barra.nivel-amarela i { background: var(--warning); }
+.mac-barra.nivel-vermelha i { background: var(--danger); }
+.mac-medidor > span:last-child { min-width: 92px; text-align: right; }
+.mac-sem-leitura { margin: 0; padding: 12px 18px; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink-3); }
+/* Emenda à ADR-085 (definido em 2026-10-09): memória e disco com o status curto à vista e o porquê atrás de um clique; o "›" à
+   direita gira ao abrir, como o de "Avançado" na conexão. A linha sem detalhe (processador) guarda o mesmo espaço, para os status alinharem. */
+.mac-det > summary { list-style: none; cursor: pointer; }
+.mac-det > summary::-webkit-details-marker { display: none; }
+.mac-det > summary::after { content: "›"; flex: none; width: 8px; font-size: 18px; line-height: 1; color: var(--ink-3); text-align: center; transition: transform .12s; }
+.mac-det[open] > summary::after { transform: rotate(90deg); }
+.mac-det > summary:hover, .mac-det > summary:focus-visible { background: var(--surface-raised); }
+/* Revisão do PR 224: o trilho da barra é da mesma cor do hover; sem isto a barra some ao passar o mouse na linha. */
+.mac-det > summary:hover .mac-barra, .mac-det > summary:focus-visible .mac-barra { background: var(--line); }
+div.mac-medidor { padding-right: 36px; }
+.mac-det-txt { margin: 0; padding: 0 18px 12px; font-size: 12.5px; line-height: 1.5; color: var(--ink-3); }
+@media (prefers-reduced-motion: reduce) { .mac-det > summary::after { transition: none; } }
+.mac-grupo { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; padding: 14px 18px 6px; border-top: 1px solid var(--line);
+  font-size: 12.5px; color: var(--ink-3); }
+.mac-grupo span:first-child { font-weight: 500; color: var(--ink); }
+@media (max-width: 760px) {
+  .mac-agora { grid-template-columns: minmax(0, 1fr); }
+  .mac-agora > div + div { border-left: 0; border-top: 1px solid var(--line); }
+}
+.espaco-cartao .conexao-avancada > :not(summary) { padding: 0 18px 12px; }
+.espaco-subtitulo { margin: 28px 0 10px; font-size: 13px; font-weight: 400; color: var(--ink-3); }
+.espaco-fora { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; padding: 12px 14px; border: 1px solid var(--warning-line); border-radius: 12px; background: var(--warning-soft); }
+.espaco-fora > div { flex: 1; min-width: 0; font-size: 14px; }
+.espaco-fora b { font-weight: 500; }
+.espaco-fora span { color: var(--warning); }
+.espaco-fora small { display: block; margin-top: 2px; font-size: 12.5px; color: var(--warning); }
+.espaco-fora .app-logo { width: 28px; height: 28px; min-width: 28px; border-radius: 7px; font-size: 13px; }
+.espaco-fora .bt.sm { border-color: var(--warning-line); }
+@media (max-width: 900px) {
+  .espaco-nav { width: 240px; }
+  .espaco-conteudo { padding: 40px 28px; }
+}
+
+/* ---- A gaveta do bot (canvas "Gaveta 1–4") -------------------------------------------
+   380 px, topo fixo com ⋯ e o painel (ou ‹ e o título num nível), corpo que rola e, nos níveis, o rodapé com as ações. */
+.com-detalhes .detalhes { flex-direction: column; padding: 0; overflow: hidden; background: var(--surface); }
+@media (min-width: 1100px) { .com-detalhes .detalhes { display: flex; } }
+.gv-topo { display: flex; flex-shrink: 0; align-items: center; gap: 8px; height: 64px; box-sizing: border-box; padding: 0 14px; }
+.gv-lado { display: flex; gap: 6px; width: 76px; }
+.gv-direita { justify-content: flex-end; }
+.gv-topo .gv-titulo { flex: 1; min-width: 0; margin: 0; text-align: center; font-size: 14.5px; font-weight: 600; letter-spacing: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gv-icone { display: grid; place-items: center; flex-shrink: 0; width: 34px; height: 34px; padding: 0; border: 1px solid transparent;
+  border-radius: 10px; background: var(--surface); color: var(--ink-2); cursor: pointer; }
+.gv-icone:hover, .gv-icone:focus-visible { background: var(--surface-raised); }
+.gv-painel, .gv-voltar { border-color: var(--line); }
+.gv-form { display: flex; flex-direction: column; flex: 1; min-height: 0; margin: 0; }
+.gv-corpo { display: flex; flex-direction: column; gap: 22px; flex: 1; min-height: 0; overflow: auto; padding: 0 18px 18px; }
+.gv-rodape { display: flex; flex-shrink: 0; gap: 8px; padding: 14px 18px 18px; border-top: 1px solid var(--line); }
+.gv-bt { display: inline-flex; flex: 1 1 0; align-items: center; justify-content: center; height: 40px; padding: 0 10px; border: 0;
+  border-radius: 12px; background: var(--surface-raised); font: inherit; font-size: 14px; font-weight: 500; color: var(--ink); text-align: center; cursor: pointer; white-space: nowrap; }
+.gv-bt:hover, .gv-bt:focus-visible { background: var(--surface-selected); }
+.gv-bt:disabled { opacity: .5; cursor: default; }
+.gv-bt.pri { background: var(--action); color: var(--on-action); }
+.gv-bt.pri:hover, .gv-bt.pri:focus-visible { background: var(--action); opacity: .88; }
+.gv-bt.perigo { border: 1px solid var(--danger-line); background: var(--surface); color: var(--danger); }
+.gv-bt.perigo:hover, .gv-bt.perigo:focus-visible { background: var(--danger-soft); }
+
+.gv-identidade { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.gv-identidade .icon.mascote.xl { width: 76px; height: 76px; }
+.gv-identidade h2 { margin: 10px 0 0; font-size: 20px; font-weight: 600; letter-spacing: -.3px; }
+.gv-identidade > span { margin-top: 3px; font-size: 13px; color: var(--ink-3); }
+.gv-descricao { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; margin: 12px 0 0;
+  font-size: 13px; line-height: 1.55; color: var(--ink-2); overflow-wrap: anywhere; }
+.gv-pilula { margin-top: 12px; padding: 7px 16px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--surface); font: inherit;
+  font-size: 13px; font-weight: 500; color: var(--ink); cursor: pointer; }
+.gv-pilula:hover, .gv-pilula:focus-visible { background: var(--surface-raised); }
+
+.gv-secao h3, .gv-bloco h3 { margin: 0 0 8px; padding: 0 4px; font-size: 13px; font-weight: 400; color: var(--ink-3); letter-spacing: 0; }
+.gv-secao-cab { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 8px; }
+.gv-secao-cab h3 { margin: 0; padding: 0; }
+.gv-link { border: 0; background: none; padding: 0; font: inherit; font-size: 13px; color: var(--ink); cursor: pointer; }
+.gv-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.gv-cartao { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.gv-cartao > * + * { border-top: 1px solid var(--line); }
+.gv-linha { display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; padding: 11px 14px; border: 0; background: none;
+  font: inherit; font-size: 13.5px; color: var(--ink); text-align: left; cursor: pointer; }
+.gv-linha:hover, .gv-linha:focus-visible { background: var(--surface-side); }
+.gv-linha > svg { flex-shrink: 0; color: var(--ink-2); }
+.gv-linha > svg:last-child:not(:first-child) { width: 16px; height: 16px; color: var(--ink-3); }
+.gv-linha-txt { flex: 1; min-width: 0; }
+.gv-linha-txt b { display: block; font-size: 13.5px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gv-linha-txt small { display: block; margin-top: 3px; font-size: 12px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gv-linha-txt code { font-size: 11px; }
+.gv-linha-txt .tag { margin-top: 5px; }
+.gv-meta { flex-shrink: 0; font-size: 13px; color: var(--ink-3); }
+.gv-linha .app-logo { width: 28px; height: 28px; min-width: 28px; border-radius: 7px; font-size: 13px; }
+.gv-linha .icon.sm { width: 28px; height: 28px; min-width: 28px; }
+.gv-cartao .detalhe-rotina { display: flex; flex-wrap: wrap; align-items: center; gap: 0; padding: 0 14px 0 0; }
+.gv-cartao .detalhe-rotina .dr-parada { margin: -4px 0 0; padding: 0 0 12px 14px; }
+.gv-cartao .detalhe-rotina .dr-parada small { font-size: 12px; color: var(--ink-3); }
+.gv-cartao .detalhe-rotina .gv-linha { flex: 1; }
+.gv-cartao .detalhe-rotina .chave { width: 40px; height: 24px; border-radius: 12px; }
+.gv-cartao .detalhe-rotina .chave span { top: 3px; left: 3px; width: 18px; height: 18px; }
+.gv-cartao .detalhe-rotina .chave[aria-checked="true"] span { left: 19px; }
+.gv-nota { margin: 8px 4px 0; }
+
+/* Tela do bot no topo do painel (definido em 2026-10-16). O fundo escuro é o monitor, igual nos dois temas. */
+.gv-tela { align-items: stretch; gap: 8px; }
+.tela-preview { position: relative; display: block; width: 100%; aspect-ratio: 1.6; margin: 0; padding: 0; border: 0; border-radius: 16px; overflow: hidden; background: #1c1c1e; cursor: pointer; } /* cor-fixa: monitor escuro nos dois temas */
+.tela-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tela-preview img[hidden] { display: none; }
+.tela-abrir { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+.tela-pilula { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px; background: #2c2c2e; color: #f4f4f5; font-size: 13px; font-weight: 500; } /* cor-fixa: pílula sobre o monitor escuro */
+.tela-pilula svg { width: 15px; height: 15px; }
+.tela-preview.com-imagem .tela-abrir { opacity: 0; }
+.tela-preview.com-imagem:hover .tela-abrir { opacity: 1; background: #00000088; } /* cor-fixa: véu sobre a miniatura */
+.tela-legenda { margin: 0; text-align: center; font-size: 13px; color: var(--ink-3); }
+.gv-rotina-vazia { margin: 0; padding: 22px 18px; border: 1px dashed var(--line-strong); border-radius: 14px; text-align: center; font-size: 13px; line-height: 1.55; color: var(--ink-3); }
+
+/* Os níveis: bloco com rótulo cinza, texto da instrução, execuções com ponto, dl do combinado. */
+.gv-bloco p { margin: 0; }
+.detalhes .gv-bloco .mudo, .detalhes .gv-secao > .mudo { padding: 0 4px; font-size: 13px; line-height: 1.55; }
+.gv-texto { padding: 0 4px; font-size: 13.5px; line-height: 1.6; color: var(--ink); white-space: pre-line; overflow-wrap: anywhere; }
+.gv-quando { display: flex; align-items: center; gap: 8px; padding: 0 4px; font-size: 13.5px; color: var(--ink); }
+.gv-quando svg { flex-shrink: 0; color: var(--ink-2); }
+.gv-proxima { display: block; margin-top: 6px; padding: 0 4px; font-size: 12.5px; color: var(--ink-3); }
+.gv-execucoes { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0 4px; list-style: none; }
+.gv-execucoes li { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--ink-2); }
+.gv-exec-ponto { flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; background: var(--line-strong); }
+.exec-executou .gv-exec-ponto { background: var(--success); }
+.exec-falhou .gv-exec-ponto { background: var(--danger); }
+.exec-bloqueada .gv-exec-ponto { background: var(--warning); }
+/* NOD-89: todo desfecho tem ponto, alinhado com as cores do histórico (estilos.css): passou em branco espera por você
+   (âmbar); os de registro (sem novidade, interrompida, adiada, não rodou) ficam cinza. */
+.exec-passou_em_branco .gv-exec-ponto { background: var(--warning); }
+.exec-sem_novidade .gv-exec-ponto, .exec-interrompida .gv-exec-ponto, .exec-adiada .gv-exec-ponto, .exec-nao_rodou .gv-exec-ponto { background: var(--ink-3); }
+.gv-execucoes li.exec { flex-wrap: wrap; }
+.exec-acao { flex-basis: 100%; padding-left: 139px; } /* ponto 7 + vão 10 + data 112 + vão 10: alinha ao texto, como no protótipo */
+/* NOD-89 (corte 1): onde a rotina roda — "Roda em <máquina>" e, no Mac, o aviso e o atalho. */
+.onde-roda { display: flex; align-items: flex-start; gap: 8px; margin: 8px 0 0; padding: 0 4px; font-size: 12.5px; line-height: 1.5; color: var(--ink-2); }
+.onde-roda-ic { display: inline-flex; flex-shrink: 0; margin-top: 2px; color: var(--ink-3); }
+.onde-roda-txt b { font-weight: 600; color: var(--ink); }
+.onde-roda-sep { margin: 0 2px; color: var(--ink-3); }
+.onde-roda .gv-link, .exec-acao .gv-link, .intro .gv-link { padding: 0; font-size: inherit; text-decoration: underline; text-underline-offset: 3px; }
+.gv-exec-quando { width: 112px; flex-shrink: 0; color: var(--ink-3); }
+.gv-dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 5px 12px; margin: 0; padding: 0 4px; font-size: 12.5px; }
+.gv-dl dt { color: var(--ink-3); }
+.gv-dl dd { margin: 0; color: var(--ink-2); overflow-wrap: anywhere; }
+.gv-app { display: flex; align-items: center; gap: 12px; }
+.gv-app > div { flex: 1; min-width: 0; }
+.gv-app .app-logo { width: 44px; height: 44px; min-width: 44px; border-radius: 11px; font-size: 20px; }
+.gv-app b { display: block; font-size: 17px; font-weight: 600; }
+.gv-app small { display: block; margin-top: 2px; font-size: 12.5px; color: var(--ink-3); }
+.gv-aviso { padding: 12px 14px; border: 1px solid var(--warning-line); border-radius: 12px; background: var(--warning-soft); font-size: 13px; line-height: 1.5; color: var(--warning); }
+.gv-aviso b { font-weight: 600; }
+.gv-aviso > div { margin-top: 8px; }
+.gv-bloco .segmentado { margin: 0 4px 8px; }
+.gv-bloco .segmentado .seg { flex: 1 1 0; padding: 8px 6px; font-size: 13px; text-align: center; }
+.gv-bloco .acesso-frase { margin: 0; padding: 0 4px; font-size: 13px; color: var(--ink-2); }
+.gv-acoes { padding: 2px 14px 6px; border: 1px solid var(--line); border-radius: 14px; }
+.gv-acoes .acesso-acoes { margin: 0; padding: 0; border: 0; }
+.gv-acoes .acesso-acoes li { padding: 8px 0; font-size: 13px; color: var(--ink); border-top: 1px solid var(--line); }
+.gv-acoes .acesso-acoes li::before { display: none; }
+.gv-acoes .acesso-acoes li:first-child { border-top: 0; }
+.gv-acoes .acesso-grupo { margin-top: 10px; padding-top: 8px; }
+.gv-acoes .acesso-grupo:first-child { margin-top: 4px; border-top: 0; }
+.gv-dar-acesso { position: static; margin: 0; padding: 0; border: 0; box-shadow: none; }
+
+/* Editar perfil: o mascote com as 8 formas e as 12 cores embaixo, depois os três campos. */
+.gv-mascote { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.gv-mascote .icon.mascote.xl { width: 84px; height: 84px; }
+.gv-formas, .gv-cores { display: flex; justify-content: space-between; width: 100%; }
+.gv-cores { padding: 0 4px; box-sizing: border-box; }
+.gv-forma { position: relative; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; cursor: pointer; }
+.gv-forma:hover { background: var(--surface-raised); }
+.gv-forma .icon.sm { width: 26px; height: 26px; min-width: 26px; }
+.gv-forma:has(input:checked) { background: var(--surface-raised); box-shadow: inset 0 0 0 1.5px var(--ink); }
+.gv-cor { position: relative; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; cursor: pointer; }
+.gv-cor .cor-amostra { width: 22px; height: 22px; }
+.gv-cor:has(input:checked) { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--ink); }
+.gv-forma input, .gv-cor input { position: absolute; opacity: 0; pointer-events: none; }
+.gv-forma:has(input:focus-visible), .gv-cor:has(input:focus-visible) { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.gv-campo { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--ink-3); }
+.gv-campo input, .gv-campo textarea, .gv-campo select, .gv-anotar input, .gv-anotar select, .gv-memoria input, .gv-memoria select {
+  box-sizing: border-box; width: 100%; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface);
+  font: inherit; font-size: 14px; color: var(--ink); }
+.gv-campo textarea { resize: vertical; line-height: 1.55; }
+/* Voz nas ligações (ADR-071): uma linha por voz com a prévia ▶, e a velocidade embaixo. */
+.gv-vozes { border: 0; margin: 0; padding: 0; }
+.gv-vozes legend { padding: 0; margin-bottom: 6px; }
+.gv-lista-vozes { display: grid; grid-template-columns: 1fr; gap: 6px; width: 100%; box-sizing: border-box; }
+.gv-voz { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 10px; box-sizing: border-box; min-width: 0; }
+.gv-voz:has(input:checked) { border-color: var(--ink); background: var(--surface-raised); }
+.gv-voz label { display: flex; align-items: center; gap: 10px; cursor: pointer; min-width: 0; flex: 1; text-align: left; }
+.gv-voz label span { display: flex; flex-direction: row; align-items: baseline; gap: 8px; min-width: 0; }
+.gv-voz b { color: var(--ink); font-weight: 600; font-size: 13px; }
+.gv-voz small { color: var(--ink-3); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gv-vozes .gv-voz input { width: auto; padding: 0; margin: 0; border: 0; accent-color: var(--ink); flex: none; }
+.gv-vozes .segmentado { margin-top: 8px; align-self: flex-start; }
+.gv-vozes .segmentado .seg input { position: absolute; opacity: 0; pointer-events: none; }
+.gv-vozes .segmentado .seg:has(input:checked) { background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--ink); }
+.gv-dupla { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.gv-detalhes summary { cursor: pointer; font-size: 13px; color: var(--ink-2); }
+.gv-detalhes[open] summary { margin-bottom: 12px; }
+.gv-detalhes .gv-campo + .gv-campo { margin-top: 12px; }
+.gv-anotar { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "texto texto" "tipo botao"; gap: 8px; }
+.gv-anotar input { grid-area: texto; }
+.gv-anotar select { grid-area: tipo; }
+.gv-anotar .gv-bt { grid-area: botao; padding: 0 18px; }
+.gv-memorias { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.gv-memoria { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; }
+.gv-memoria-cab { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.gv-memoria-cab select { width: auto; padding: 4px 8px; font-size: 12.5px; }
+
+/* Revisto em 2026-10-16 (plano "tela limpa", T1): o botão do painel no cabeçalho virou a pílula do bot, que fica à vista
+   com a gaveta aberta ou fechada (o clique alterna); as regras que escondiam o botão com a gaveta aberta saíram. */
+
+/* ADR-090: Seu espaço › Máquinas (protótipo "Nod — Motor na VM"). Só tokens (tests/unit/web/cores-por-token.test.ts). */
+.maq-lista { display: flex; flex-direction: column; gap: 12px; }
+.maq-cab { display: flex; align-items: center; gap: 12px; padding: 16px 18px; }
+.maq-ic { flex: none; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--surface-raised); color: var(--ink); }
+.maq-id { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.maq-id b { font-size: 15px; font-weight: 500; }
+.maq-id small { font-size: 13px; color: var(--ink-3); }
+.maq-estado { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+.maq-estado.fora { color: var(--warning); }
+.maq-ponto { width: 8px; height: 8px; border-radius: 50%; background: var(--success); flex: none; }
+.maq-ponto.fora { background: transparent; border: 1.5px solid var(--warning); box-sizing: border-box; }
+/* A tela fala por máquina (2026-10-09): a leitura da máquina no cartão, o status curto à vista e os números no clique. */
+.maq-nivel { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--success); }
+.maq-nivel.nivel-amarela { background: var(--warning); }
+.maq-nivel.nivel-vermelha { background: var(--danger); }
+.maq-quem { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink-3); }
+.maq-avatares { display: flex; }
+.maq-avatares .icon { margin-right: -5px; }
+/* ADR-121 (NOD-92): a máquina na nuvem no cartão — o sono, a falha com o motivo e a ação, e o "Dormir e acordar pelo Google". */
+.nv-sono { display: flex; flex-direction: column; gap: 8px; padding: 12px 18px 12px 66px; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink-2); }
+.nv-sono:empty { display: none; }
+.nv-sono p { margin: 0; }
+.nv-sono-linha { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; }
+.nv-sono-linha > .bt:last-child { margin-left: auto; }
+.nv-ajuste-wrap { position: relative; display: inline-flex; }
+.nv-ajuste-wrap .cl-menu { left: 0; right: auto; top: 36px; width: 200px; }
+.nv-falha { display: flex; flex-direction: column; gap: 4px; }
+.nv-acoes { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.nv-conectar { display: flex; flex-direction: column; gap: 10px; padding: 12px 18px 14px 66px; border-top: 1px solid var(--line); }
+.nv-conectar .cx-nota { margin: 0; font-size: 12.5px; color: var(--ink-3); }
+.nv-campo { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--ink-3); }
+.nv-campo input { box-sizing: border-box; width: 100%; max-width: 360px; min-height: 40px; padding: 8px 12px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; }
+.nv-aviso { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; padding: 12px 18px; margin-bottom: 14px; font-size: 13px; color: var(--ink-2); }
+.nv-aviso .nv-acoes { margin-left: auto; }
+/* PR 2 (NOD-92): "Criar minha máquina na nuvem" e a VM em criação. */
+.nv-criar { display: flex; flex-direction: column; gap: 14px; padding: 20px 22px; margin-bottom: 18px; }
+.nv-criar-cab { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.nv-criar-cab h3 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -.2px; }
+.nv-criar fieldset { margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.nv-criar legend { padding: 0; margin-bottom: 8px; font-size: 13px; color: var(--ink-3); }
+.nv-opcoes, .nv-provedores { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+.nv-opcao { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; cursor: pointer; }
+.nv-opcao:has(input:checked) { border-color: var(--action); background: var(--surface-selected); }
+.nv-opcao:has(input:focus-visible) { outline: 2px solid var(--action); outline-offset: 2px; }
+.nv-opcao input { margin: 3px 0 0; accent-color: var(--action); }
+.nv-opcao span { display: flex; flex-direction: column; gap: 2px; }
+.nv-opcao b { font-weight: 500; font-size: 14px; }
+.nv-opcao small { font-size: 12.5px; color: var(--ink-3); }
+.nv-opcao.desligada { cursor: not-allowed; opacity: .55; }
+.nv-criar-acoes { display: flex; justify-content: flex-end; }
+.nv-erro { margin: 0; font-size: 13px; color: var(--danger); }
+.nv-criando .mac-det-txt { margin: 8px 0 0; }
+.nv-criando .nv-acoes { display: flex; gap: 8px; margin-top: 10px; }
+.nv-criando .maq-estado .ob-gira { margin-right: 6px; }
+/* O "Conectar uma máquina": trilha de passos à esquerda, o passo atual à direita. */
+.cx-painel { display: grid; grid-template-columns: 200px minmax(0, 1fr); margin-bottom: 18px; }
+.cx-trilha { margin: 0; padding: 20px 14px; list-style: none; background: var(--surface-side); border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; }
+.cx-trilha li { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 9px; font-size: 13px; color: var(--ink-3); }
+.cx-trilha li span { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line-strong); display: grid; place-items: center; font: 500 11px var(--font-mono); flex: none; }
+.cx-trilha li.agora { background: var(--surface-selected); color: var(--ink); font-weight: 500; }
+.cx-trilha li.agora span { background: var(--action); color: var(--on-action); border-color: var(--action); }
+.cx-trilha li.feito { color: var(--ink-2); }
+.cx-trilha li.feito span { background: var(--success-soft); color: var(--success); border-color: transparent; }
+.cx-corpo { padding: 22px 24px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.cx-corpo h3 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -.2px; }
+.cx-corpo p { margin: 0; font-size: 14px; line-height: 1.55; color: var(--ink-2); }
+.cx-corpo .cx-nota { font-size: 12.5px; color: var(--ink-3); }
+.cx-cmd { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 12px; border-radius: 10px; background: var(--surface-raised); border: 1px solid var(--line); }
+.cx-cmd code { flex: 1; min-width: 0; font: 13px var(--font-mono); background: none; padding: 0; white-space: nowrap; overflow-x: auto; }
+.cx-codigo { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--ink-3); }
+.cx-codigo input { font: 500 22px var(--font-mono); letter-spacing: .16em; text-transform: uppercase; padding: 10px 14px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface); color: var(--ink); width: 260px; box-sizing: border-box; }
+.cx-confirma { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; }
+.cx-confirma div { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.cx-confirma b { font-weight: 500; font-size: 15px; }
+.cx-confirma small { font-size: 12.5px; color: var(--ink-3); }
+.cx-erro { color: var(--danger) !important; font-size: 13px !important; }
+.cx-ia { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
+.cx-ia + .cx-ia { border-top: 1px solid var(--line); }
+.cx-ia-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.cx-ia-txt b { font-weight: 500; font-size: 14px; }
+.cx-ia-txt code { font: 12.5px var(--font-mono); color: var(--ink-2); background: var(--surface-raised); padding: 2px 7px; border-radius: 6px; width: fit-content; }
+.cx-st { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-3); white-space: nowrap; }
+.cx-st i { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--line-strong); box-sizing: border-box; display: inline-block; }
+.cx-st.ok { color: var(--success); }
+.cx-st.ok i { background: var(--success); border-color: var(--success); }
+.cx-bots { display: flex; flex-direction: column; }
+.cx-bots-cab { display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-bottom: 1px solid var(--line); font-size: 12.5px; color: var(--ink-3); background: var(--surface-side); }
+.cx-bots-cab span { flex: 1; }
+.cx-bot { display: flex; align-items: center; gap: 10px; padding: 9px 14px; font-size: 14px; text-align: left; border: 0; background: transparent; color: var(--ink); width: 100%; }
+.cx-bot + .cx-bot { border-top: 1px solid var(--line); }
+.cx-bot small { color: var(--ink-3); font-size: 12.5px; }
+.cx-check { width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--line-strong); display: grid; place-items: center; font-size: 11px; flex: none; }
+.cx-bot[aria-checked="true"] .cx-check { background: var(--action); border-color: var(--action); color: var(--on-action); }
+.cx-rodape { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 4px; }
+
+/* NOD-94 (emenda 11 da ADR-090; protótipo nod-94): "Usar uma máquina só para o computador", instalação por SSH. Erro em
+   âmbar (nada aqui é perigo: é algo a conferir), progresso numa linha de 2 px no topo do diálogo e 5 etapas. */
+.ssh-atalho { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: -4px 0 14px; font-size: 13px; color: var(--ink-3); }
+.cl-dialogo.ssh-dialogo { width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow-y: auto; }
+.cl-dialogo.ssh-dialogo.ssh-progresso { padding-top: 26px; overflow-x: hidden; }
+.ssh-linha { position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--line); border-radius: 18px 18px 0 0; overflow: hidden; }
+.ssh-linha i { display: block; height: 100%; background: var(--action); transition: width .4s ease; }
+.ssh-linha-campo { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 12px; }
+.ssh-campo { display: flex; flex-direction: column; gap: 6px; margin: 0 0 12px; font-size: 13px; color: var(--ink-2); }
+.ssh-campo input, .ssh-chave-colar { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); color: var(--ink); font-size: 14px; }
+.ssh-campo [aria-invalid="true"] { border-color: var(--warning); }
+.ssh-chave-colar { font-family: var(--font-mono); font-size: 12px; resize: vertical; min-height: 84px; }
+.ssh-chave, .ssh-este-mac { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-side); }
+.ssh-chave-txt, .ssh-este-mac span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ssh-chave-txt small, .ssh-este-mac small { color: var(--ink-3); font-size: 12px; overflow-wrap: anywhere; }
+.ssh-chave-txt small { font-family: var(--font-mono); }
+.ssh-nota, .cl-dialogo .ssh-nota { margin: 2px 0 0; font-size: 12.5px; color: var(--ink-3); }
+.ssh-arquivo { color: var(--action); cursor: pointer; text-decoration: underline; }
+.ssh-arquivo:focus-within { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.ssh-seguro, .cl-dialogo .ssh-seguro { margin: 4px 0 0; font-size: 12.5px; color: var(--ink-3); }
+.ssh-de { margin-right: auto; align-self: center; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12.5px; color: var(--ink-3); }
+.ssh-erro, .cl-dialogo .ssh-erro { margin: 0; font-size: 12.5px; color: var(--warning); }
+.ssh-aviso, .cl-dialogo .ssh-aviso { margin: 10px 0; padding: 10px 12px; border: 1px solid var(--warning-line); border-radius: 10px; background: var(--warning-soft); color: var(--warning); font-size: 13px; line-height: 1.5; }
+.cl-dialogo .ssh-aviso p, .ssh-aviso p { margin: 0 0 6px; color: inherit; font-size: inherit; }
+.cl-dialogo .ssh-aviso p:last-child, .ssh-aviso p:last-child { margin: 0; }
+.ssh-aviso > div { display: flex; justify-content: flex-end; gap: 8px; }
+.ssh-impressoes { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px; margin: 8px 0; }
+.ssh-impressoes dt { font-weight: 600; }
+.ssh-impressoes dd { margin: 0; overflow-wrap: anywhere; }
+.ssh-acoes-erro { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ssh-etapas { list-style: none; margin: 14px 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ssh-etapas li { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--ink-3); }
+.ssh-etapas li > span { width: 20px; height: 20px; flex: none; display: grid; place-items: center; border-radius: 50%; border: 1.5px solid var(--line-strong); font-size: 11px; }
+.ssh-etapas li small { margin-left: auto; font-family: var(--font-mono); font-size: 12px; }
+.ssh-etapas li.feito, .ssh-etapas li.agora { color: var(--ink); }
+.ssh-etapas li.feito > span { background: var(--action); border-color: var(--action); color: var(--on-action); }
+.ssh-etapas li.agora > span { border-color: var(--action); color: var(--action); }
+.ssh-etapas li.erro { color: var(--warning); }
+.ssh-etapas li.erro > span { border-color: var(--warning); background: var(--warning-soft); }
+.ssh-espera, .cl-dialogo .ssh-espera { color: var(--ink-3); font-size: 13px; }
+.ssh-linhas summary { cursor: pointer; font-size: 13px; color: var(--ink-2); }
+.ssh-linhas pre { max-height: 180px; overflow: auto; padding: 8px 10px; border-radius: 8px; background: var(--surface-side); font-size: 11.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ssh-manual { margin: 10px 0; }
+.ssh-sudo { display: flex; gap: 8px; }
+.ssh-sudo input { flex: 1; }
+.ssh-fundo { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; padding: 9px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-side); font-size: 13px; color: var(--ink-2); }
+.ssh-fundo span { flex: 1; }
+.ssh-fundo.erro { border-color: var(--warning-line); background: var(--warning-soft); color: var(--warning); }
+@media (prefers-reduced-motion: reduce) { .ssh-linha i { transition: none; } }
+
+/* =====================================================================================================================
+   Provedores de IA, o cartão de IA e a Inteligência do bot (definido em 2026-10-10, plano "IAs: conexão, troca e escolha
+   de modelo", PR 3; protótipos Main, Gaveta, Inteligencia2 e Onboarding, aprovados). O cartão é o mesmo em Provedores de
+   IA e no onboarding (web/telas/cartao-ia.ts): logo redondo, estado curto, um botão, o verificar no hover e, quando há,
+   os passos de instalar, entrar e testar.
+   ===================================================================================================================== */
+.prov-titulo { display: flex; align-items: center; gap: 12px; }
+.prov-pilha { display: inline-flex; flex: none; }
+.prov-av { width: 30px; height: 30px; box-sizing: border-box; border-radius: 50%; background: var(--surface); border: 1px solid var(--line);
+  box-shadow: 0 0 0 2px var(--surface); display: grid; place-items: center; color: var(--ink); }
+.prov-av + .prov-av { margin-left: -9px; }
+.prov-av svg { width: 16px; height: 16px; display: block; }
+.prov-mini .prov-av { width: 18px; height: 18px; }
+.prov-mini .prov-av + .prov-av { margin-left: -7px; }
+.prov-mini .prov-av svg { width: 10px; height: 10px; }
+.prov-ordem { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 0 2px 8px; font-size: 12.5px; color: var(--ink-3); }
+.prov-ordem span:first-child { font-weight: 600; color: var(--ink-2); }
+.prov-ia-item { transition: box-shadow .12s, opacity .12s; }
+.prov-ia-item.arrastando, .int-ia.arrastando { opacity: .45; }
+.prov-ia-item.alvo { box-shadow: inset 0 3px 0 0 var(--action); }
+.prov-alca, .int-alca { flex: none; width: 22px; height: 32px; margin: 0 -4px; padding: 0; border: 0; border-radius: 6px; background: none;
+  display: grid; place-items: center; color: var(--ink-3); cursor: grab; touch-action: none; }
+.prov-alca:hover, .int-alca:hover { color: var(--ink); background: var(--surface-raised); }
+.prov-alca:focus-visible, .int-alca:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.prov-pos { flex: none; width: 12px; font-size: 12px; color: var(--ink-3); text-align: center; font-variant-numeric: tabular-nums; }
+/* NOD-373 (#j3-1/proposta): cada IA numa linhaConfig — a alça à esquerda, a posição e o logo no ícone. */
+.lc-linha.prov-ia { gap: 10px; padding-left: 10px; }
+.prov-ia .lc-ic { display: flex; align-items: center; gap: 6px; }
+.prov-ia .cl-logo { width: 28px; height: 28px; }
+.prov-ia .cl-logo svg { width: 16px; height: 16px; }
+.prov-ordem-grupo .lc-nota b { font-weight: 500; color: var(--ink-2); }
+.provedores .prov-avancado { margin-top: 18px; }
+/* ADR-101 (NOD-211, protótipo v3): as várias contas de uma IA, embaixo do cartão dela. */
+.contas-ia { margin: 0 14px 14px 44px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-side); font-size: 13px; }
+.contas-cab { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.contas-cab .mudo { font-size: 12px; }
+.contas-lista { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.contas-lista li { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 8px 10px; }
+.contas-lista li + li { border-top: 1px solid var(--line); }
+.contas-pos { color: var(--ink-3); text-align: center; font-variant-numeric: tabular-nums; }
+.contas-nome { font-weight: 600; }
+.contas-ident { margin-left: 6px; font-weight: 400; color: var(--ink-3); font-size: 12px; }
+.contas-selos { display: flex; gap: 6px; margin-top: 4px; }
+.contas-selos .selo { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line-strong); color: var(--ink-2); }
+.contas-modo label { display: flex; gap: 8px; align-items: flex-start; margin-top: 6px; }
+.contas-modo small { display: block; color: var(--ink-3); font-size: 12px; }
+.contas-estado { font-size: 12px; border-radius: 999px; padding: 2px 8px; white-space: nowrap; border: 1px solid transparent; }
+.contas-estado.e-uso { background: var(--success-soft); color: var(--success); }
+.contas-estado.e-disp { background: var(--surface-raised); color: var(--ink-2); }
+.contas-estado.e-limite { background: var(--warning-soft); color: var(--warning); border-color: var(--warning-line); }
+.contas-acoes-ic { display: flex; gap: 2px; }
+.contas-ic { width: 26px; height: 26px; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--ink-2); cursor: pointer; }
+.contas-ic:hover { background: var(--surface-raised); }
+.contas-ic:disabled { opacity: .3; cursor: default; background: none; }
+.contas-ic:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.contas-rodape { margin-top: 10px; }
+.contas-login { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; color: var(--ink-2); }
+.contas-nova { display: grid; gap: 6px; padding: 10px; border: 1px dashed var(--line-strong); border-radius: 8px; background: var(--surface); }
+.contas-nova input { width: 100%; margin-top: 4px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font: inherit; }
+.contas-acoes { display: flex; gap: 8px; }
+.contas-modo { margin: 12px 0 0; padding: 10px 0 0; border: 0; border-top: 1px solid var(--line); }
+.contas-modo legend { padding: 0; font-weight: 600; }
+.contas-privado { margin: 10px 0 0; color: var(--ink-3); font-size: 12px; }
+
+.ia-linha { display: flex; align-items: center; gap: 14px; padding: 16px 18px; }
+.ia-linha .ob-logo { width: 40px; height: 40px; border-radius: 50%; }
+.ia-linha .ob-logo svg { width: 22px; height: 22px; display: block; }
+.ia-linha .ob-ia-txt b { font-size: 15px; }
+.ia-linha .ob-pilula { flex: none; }
+.ob-card-ia .ia-linha { padding: 0; gap: 16px; }
+.ob-card-ia .ia-linha .ob-logo { width: 44px; height: 44px; }
+.ob-card-ia.aberto { gap: 10px; }
+.ia-verificar { flex: none; width: 32px; height: 32px; display: inline-grid; place-items: center; border: 0; border-radius: 8px; background: none;
+  color: var(--ink-3); cursor: pointer; opacity: 0; transition: opacity .15s, background .15s; }
+.ia-linha:hover .ia-verificar, .prov-ia:hover .ia-verificar, .prov-ia:focus-within .ia-verificar, .ia-verificar:focus-visible, .ia-verificar.girando { opacity: 1; }
+.ia-verificar:hover { background: var(--surface-raised); color: var(--ink); }
+.ia-verificar:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.ia-verificar.girando svg { animation: ob-gira .9s linear infinite; }
+/* O balão fica à esquerda do ícone: em cima, o `overflow: hidden` do cartão cortava o da primeira linha. */
+.ia-dica { position: relative; flex: none; }
+.ia-dica .ia-balao { position: absolute; right: calc(100% + 6px); top: 50%; transform: translateY(-50%); white-space: nowrap; padding: 6px 9px;
+  border-radius: 8px; background: var(--ink); color: var(--surface); font-size: 12px; opacity: 0; pointer-events: none; transition: opacity .12s; }
+.ia-dica:hover .ia-balao, .ia-dica:focus-within .ia-balao { opacity: 1; }
+.ia-explica { margin: 0 18px 16px 126px; padding: 10px 12px; border-radius: 10px; background: var(--warning-soft); font-size: 13px; line-height: 1.45; color: var(--ink); }
+.ia-explica p { margin: 0; }
+.ia-aviso-nota { margin: 0 18px 14px 126px; font-size: 13px; line-height: 1.45; color: var(--ink-3); }
+.ob-card-ia .ia-explica, .ob-card-ia .ia-aviso-nota { margin: 0 0 0 60px; }
+
+/* Os passos dentro do cartão: instalar, entrar, testar. */
+.ia-fluxo { display: flex; flex-direction: column; margin: -6px 18px 14px 126px; padding: 0; list-style: none; }
+.ob-card-ia .ia-fluxo { margin: 2px 0 0 60px; }
+/* NOD-373: na linha da IA (linhaConfig), o que vem embaixo alinha com o título (alça + posição + logo). */
+.prov-ia-item .ia-explica, .prov-ia-item .ia-aviso-nota, .prov-ia-item .ia-fluxo { margin-left: 92px; }
+.ia-passo { display: flex; gap: 12px; align-items: flex-start; padding: 8px 0; }
+.ia-passo-marca { width: 22px; height: 22px; box-sizing: border-box; flex: none; border-radius: 50%; border: 1px solid var(--line-strong);
+  color: var(--ink-3); display: grid; place-items: center; font-size: 11.5px; font-weight: 600; }
+.ia-passo-marca.feito { border: 0; background: var(--success); color: var(--on-status); }
+.ia-passo-marca.feito svg { width: 12px; height: 12px; }
+.ia-passo-marca.falha { border: 0; background: var(--warning); color: var(--on-status); }
+.ia-passo-marca.ativo { border-color: var(--ink); color: var(--ink); }
+.ia-passo-marca:has(.ob-gira) { border: 0; }
+.ia-passo-marca .ob-gira { width: 16px; height: 16px; border-color: var(--line); border-top-color: var(--ink); opacity: 1; }
+.ia-passo-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; line-height: 1.45; color: var(--ink-3); }
+.ia-passo-txt b { font-size: 14px; font-weight: 500; color: var(--ink); }
+.ia-passo.depois .ia-passo-txt b { color: var(--ink-3); }
+.ia-erro-txt { color: var(--ink-2); }
+.ia-log { font-family: var(--font-mono); font-size: 12px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ia-codigo { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
+.ia-codigo code { font-family: var(--font-mono); font-size: 22px; font-weight: 600; letter-spacing: .08em; color: var(--ink); padding: 6px 12px;
+  border-radius: 10px; background: var(--surface-side); border: 1px solid var(--line); user-select: all; }
+.ia-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-top: 4px; }
+.ia-acoes .ob-link svg { margin-left: 3px; vertical-align: -1px; }
+.ia-esperando { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-3); }
+.ia-esperando .ob-gira { width: 11px; height: 11px; }
+/* NOD-209 (protótipo aprovado em 2026-10-12): a conta logada, "Trocar conta" e os textos da troca. */
+.ob-ia-txt .ia-conta { display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 12.5px; color: var(--ink-3); }
+.ia-conta svg { flex: none; opacity: .8; }
+.ob-ia-txt .ia-conta-txt { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: inherit; }
+.ia-trocar { flex: none; font-size: 13px; font-weight: 500; }
+.ia-conta-atual { font-size: 12.5px; color: var(--ink-3); }
+.ia-passo-txt .ia-conta-atual b, .ia-passo-txt .ia-trocou b { font-size: inherit; }
+.ia-conta-atual b { font-weight: 500; color: var(--ink-2); }
+.ia-troca-dica { display: flex; gap: 8px; align-items: flex-start; margin-top: 4px; padding: 8px 10px; border-radius: 10px; background: var(--surface-side); border: 1px solid var(--line); font-size: 12.5px; line-height: 1.45; color: var(--ink-2); }
+.ia-troca-dica p { margin: 0; }
+.ia-troca-dica svg { flex: none; margin-top: 2px; color: var(--ink-3); }
+.ia-trocou { color: var(--ink-2); }
+.ia-trocou b { font-weight: 500; color: var(--ink); }
+.ia-colar { display: flex; gap: 8px; margin: 4px 0 0; }
+.ia-colar input { flex: 1; min-width: 0; height: 36px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface);
+  color: var(--ink); font: inherit; font-size: 13px; }
+.ia-colar input:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.ia-ajuda-link { align-self: flex-start; border: 0; background: none; padding: 0; margin-top: 2px; font: inherit; font-size: 12.5px; color: var(--ink-3);
+  text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.ia-ajuda-link:hover { color: var(--ink); }
+.ia-ajuda-link:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 4px; }
+.ia-ajuda { margin-top: 6px; padding: 10px 12px; border-radius: 10px; background: var(--surface-side); border: 1px solid var(--line);
+  font-size: 12.5px; line-height: 1.5; color: var(--ink-2); }
+.ia-ajuda p { margin: 0 0 6px; }
+.ia-ajuda .ob-link { font-size: 12.5px; }
+.ia-ajuda .ob-link svg { margin-left: 3px; vertical-align: -1px; }
+.ordem-final { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 10px; font-size: 13px; color: var(--ink-2); }
+.ordem-final .ob-logo { width: 22px; height: 22px; border-radius: 50%; }
+.ordem-final .ob-logo svg { width: 12px; height: 12px; }
+.ordem-final b { font-weight: 500; color: var(--ink); }
+
+/* 2A: a linha Inteligência da gaveta abre o menu dentro do cartão. */
+.ia-linha-wrap { position: relative; }
+.ia-atual { flex: none; display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-2); }
+.ia-av { width: 18px; height: 18px; box-sizing: border-box; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  display: inline-grid; place-items: center; flex: none; }
+.ia-av svg { width: 10px; height: 10px; display: block; }
+.ia-seta { flex: none; color: var(--ink-3); }
+.gv-linha[aria-expanded="true"] .ia-seta { transform: rotate(180deg); }
+.ia-menu { margin: 0 8px 8px; padding: 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-side); }
+.ia-op { display: flex; align-items: center; gap: 10px; width: 100%; box-sizing: border-box; padding: 8px 10px; border: 0; border-radius: 9px; background: none;
+  font: inherit; color: var(--ink); text-align: left; cursor: pointer; }
+.ia-op:hover, .ia-op:focus-visible { background: var(--surface); }
+.ia-op:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+.ia-op:disabled { cursor: default; opacity: .5; }
+.ia-op:disabled:hover { background: none; }
+.ia-op-txt { flex: 1; min-width: 0; }
+.ia-op-txt b { display: block; font-size: 13px; font-weight: 500; }
+.ia-op-txt small { display: block; margin-top: 1px; font-size: 11.5px; color: var(--ink-3); }
+.ia-op-modelo { padding-left: 34px; }
+.ia-grupo { display: flex; align-items: center; gap: 8px; margin-top: 6px; padding: 8px 10px 2px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--ink-3); }
+.ia-grupo-estado { color: var(--ink-3); }
+.ia-grupo-link { margin-left: auto; border: 0; background: none; padding: 0; font: inherit; font-size: 11.5px; color: var(--ink); text-decoration: underline; cursor: pointer; }
+.ia-mais { display: block; width: 100%; box-sizing: border-box; margin-top: 6px; padding: 9px 10px 4px; border: 0; border-top: 1px solid var(--line); background: none;
+  font: inherit; font-size: 12.5px; color: var(--ink-2); text-align: left; cursor: pointer; }
+.ia-mais:hover { color: var(--ink); }
+.ia-mais:focus-visible, .ia-grupo-link:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 4px; }
+
+/* 2B: os dois modos com rádio, a lista arrastável e a pílula "Modelo · Raciocínio". */
+.gv-form .modo { display: flex; flex-direction: column; gap: 8px; }
+.modo-op { display: flex; align-items: flex-start; gap: 12px; width: 100%; box-sizing: border-box; padding: 12px 14px; border: 1px solid var(--line);
+  border-radius: 14px; background: var(--surface); font: inherit; color: var(--ink); text-align: left; cursor: pointer; }
+.modo-op:hover { border-color: var(--line-strong); }
+.modo-op[aria-checked="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.modo-op:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.modo-op b { display: block; font-size: 14px; font-weight: 600; }
+.modo-op span.sub { display: block; margin-top: 2px; font-size: 12.5px; line-height: 1.45; color: var(--ink-3); }
+.int-radio { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--line-strong); box-sizing: border-box; }
+.int-radio.on { border: 5px solid var(--action); }
+.int-titulo { display: flex; align-items: baseline; justify-content: space-between; margin-top: 4px; padding: 0 4px; font-size: 12px; color: var(--ink-3); }
+.int-titulo b { font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
+.int-lista { display: flex; flex-direction: column; gap: 8px; }
+.int-ia { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); overflow: hidden; transition: box-shadow .12s, opacity .12s; }
+.int-ia.alvo { box-shadow: 0 -3px 0 0 var(--action); }
+.int-ia.apagada .int-linha { opacity: .6; }
+.int-linha { display: flex; align-items: center; gap: 10px; padding: 8px; }
+.int-linha .int-radio { border-width: 1.5px; padding: 0; background: none; cursor: pointer; margin: 0 2px 0 4px; }
+.int-linha .int-radio.on { border-width: 5px; }
+.int-linha .int-radio:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.int-ia .ia-logo { width: 26px; height: 26px; border-radius: 50%; }
+.int-ia .ia-logo svg { width: 14px; height: 14px; }
+.int-nome { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; font-weight: 500; font-size: 13.5px; }
+.int-uso { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+.int-escolha { flex: none; display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 9px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--surface); font: inherit; font-size: 12px; color: var(--ink-2); cursor: pointer; }
+.int-escolha:hover { border-color: var(--line-strong); color: var(--ink); }
+.int-escolha:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.int-escolha[aria-expanded="true"] svg { transform: rotate(180deg); }
+.int-painel { padding: 4px 12px 12px; border-top: 1px solid var(--line); background: var(--surface-side); }
+.int-rotulo { margin: 10px 0 6px; font-size: 11.5px; color: var(--ink-3); }
+.int-modelos { display: flex; flex-direction: column; }
+.int-mod { display: flex; align-items: flex-start; gap: 10px; padding: 6px 2px; border: 0; background: none; font: inherit; color: var(--ink); text-align: left; cursor: pointer; }
+.int-mod:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; border-radius: 6px; }
+.int-mod b { display: block; font-size: 13px; font-weight: 500; }
+.int-mod small { display: block; font-size: 11.5px; color: var(--ink-3); }
+.int-mod .int-radio { width: 14px; height: 14px; margin-top: 2px; }
+.int-mod .int-radio.on { border-width: 4px; }
+.int-niveis { display: flex; flex-wrap: wrap; gap: 4px; padding: 3px; border-radius: 10px; background: var(--surface-raised); width: fit-content; }
+.int-nivel { height: 28px; padding: 0 10px; border: 0; border-radius: 8px; background: none; font: inherit; font-size: 12px; color: var(--ink-2); cursor: pointer; }
+.int-nivel.on { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-knob), inset 0 0 0 1px var(--line); }
+.int-nivel:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.int-nivel-desc { margin: 8px 0 0; font-size: 12px; line-height: 1.5; color: var(--ink-3); }
+.int-fora { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; padding: 0 4px; font-size: 12.5px; color: var(--ink-3); }
+.int-fora button { border: 0; background: none; padding: 0; font: inherit; color: var(--ink); text-decoration: underline; cursor: pointer; white-space: nowrap; }
+.int-fora button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 4px; }
+.ia-log.ia-detalhe { white-space: normal; overflow-wrap: anywhere; }
+.ia-ajuda-links { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+
+/* ADR-102 (2026-10-13, protótipos G1, G2, CM1-A, CMJ): a lista única de contas de IA e o que Máquinas mostra delas. */
+/* O ⋯ abre um menu por cima da lista e do cartão da máquina: os dois não cortam o que transborda (.espaco-cartao corta). */
+.cl-lista.espaco-cartao, .maq-cartao.espaco-cartao { overflow: visible; }
+.cl-lista.espaco-cartao > :first-child, .maq-cartao.espaco-cartao > :first-child { border-top-left-radius: 13px; border-top-right-radius: 13px; }
+.cl-lista.espaco-cartao > :last-child, .maq-cartao.espaco-cartao > :last-child,
+.maq-cartao.espaco-cartao > :last-child > summary { border-bottom-left-radius: 13px; border-bottom-right-radius: 13px; }
+.cl-lista { list-style: none; margin: 0; padding: 0; }
+.cl-linha { display: grid; grid-template-columns: 22px 14px 40px minmax(0, 1fr) auto 32px; gap: 10px; align-items: center; padding: 14px 16px; transition: box-shadow .12s, opacity .12s; }
+.cl-linha + .cl-linha { border-top: 1px solid var(--line); }
+.cl-linha.arrastando { opacity: .45; }
+.cl-linha.alvo { box-shadow: inset 0 3px 0 0 var(--action); }
+.cl-linha.entrando { background: var(--surface-side); align-items: start; }
+/* QA do PR 306 (ISSUE-005): com detalhes ou renomear abertos, a linha cresce para baixo e o resto fica no alto, com o nome. */
+.cl-linha:has(.cl-detalhes, .cl-renomear) { align-items: start; }
+.cl-linha.fora .cl-nome, .cl-linha.fora .cl-ident, .cl-linha.fora .cl-logo { opacity: .55; }
+.cl-alca { width: 22px; height: 32px; padding: 0; border: 0; border-radius: 6px; background: none; display: grid; place-items: center; color: var(--ink-3); cursor: grab; touch-action: none; }
+.cl-alca:hover { color: var(--ink); background: var(--surface-raised); }
+.cl-alca:focus-visible, .cl-mais-bt:focus-visible, .cl-pil:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.cl-pos { font-size: 12px; color: var(--ink-3); text-align: center; font-variant-numeric: tabular-nums; }
+.cl-logo { width: 40px; height: 40px; box-sizing: border-box; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); display: grid; place-items: center; color: var(--ink); }
+.cl-logo svg { width: 22px; height: 22px; }
+.cl-logo.mini { width: 22px; height: 22px; display: inline-grid; margin-right: -6px; }
+.cl-logo.mini svg { width: 12px; height: 12px; }
+.cl-corpo { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.cl-nome { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 15px; }
+.cl-nome b { font-weight: 600; }
+.cl-plano { font-size: 11.5px; padding: 1px 7px; border-radius: 6px; background: var(--surface-raised); color: var(--ink-2); }
+.cl-nome .selo { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line-strong); color: var(--ink-2); }
+.cl-ident { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-3); min-width: 0; }
+.cl-ident span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* NOD-12 (2026-10-22, protótipo do Gil no PR 414): o uso do plano da conta, 5 h e Semana em barras; âmbar a partir de 90%,
+   nunca vermelho. No celular as barras empilham (regra no @media abaixo). */
+.cl-uso { display: grid; grid-template-columns: repeat(2, minmax(0, 200px)); gap: 6px 20px; margin-top: 6px; }
+.cu-jan { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.cu-cab { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; color: var(--ink-3); }
+.cu-cab b { font-weight: 500; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.cu-barra { height: 4px; border-radius: 999px; background: var(--surface-raised); overflow: hidden; }
+.cu-barra > span { display: block; height: 100%; border-radius: inherit; background: var(--line-strong); }
+.cu-sub { margin: 0; font-size: 11.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.f-perto .cu-cab b { color: var(--ink); }
+.f-perto .cu-barra > span { background: var(--ink-2); }
+.f-alerta .cu-cab b, .f-limite .cu-cab b, .f-limite .cu-sub { color: var(--warning); }
+.f-alerta .cu-barra > span, .f-limite .cu-barra > span { background: var(--warning); }
+.f-limite .cu-cab b { font-weight: 600; }
+.f-renovado .cu-sub { color: var(--ink-2); }
+.cu-pe { margin: 0; font-size: 11.5px; color: var(--ink-3); }
+.cu-pe.velho { font-style: italic; }
+.cu-fila { margin: 2px 0 0; font-size: 12px; color: var(--ink-2); }
+.cu-nada { margin: 6px 0 0; font-size: 12px; color: var(--ink-3); }
+@media (prefers-reduced-motion: no-preference) { .cu-barra > span { transition: width .3s; } }
+.cl-maqs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.cl-pil { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font: inherit; font-size: 12px; color: var(--ink-2); }
+.cl-pil svg { width: 13px; height: 13px; }
+.cl-pil.tracejada { border-style: dashed; border-color: var(--line-strong); color: var(--ink); cursor: pointer; }
+.cl-pil.tracejada:hover { background: var(--surface-raised); }
+.cl-pil.tracejada.mudo { color: var(--ink-3); cursor: default; background: none; }
+.cl-ponto { width: 6px; height: 6px; border-radius: 50%; background: var(--success); display: inline-block; }
+.cl-ponto.fora { background: var(--line-strong); }
+.cl-dir { display: flex; justify-content: flex-end; }
+.cl-mais { position: relative; }
+.cl-mais-bt { width: 30px; height: 30px; border: 0; border-radius: 8px; background: none; color: var(--ink-2); cursor: pointer; display: grid; place-items: center; }
+.cl-mais-bt:hover, .cl-mais-bt[aria-expanded="true"] { background: var(--surface-raised); color: var(--ink); }
+/* Plano "tela limpa" (2026-10-16, T8): em Provedores o ⋯ da conta só aparece no hover ou foco da linha, no foco do próprio
+   botão e com o menu aberto; no toque (sem hover) fica sempre à vista. O ⋯ da máquina (.maq-cab) não muda. */
+.cl-linha .cl-mais-bt { opacity: 0; }
+.cl-linha:hover .cl-mais-bt, .cl-linha:focus-within .cl-mais-bt, .cl-linha .cl-mais-bt:focus-visible, .cl-linha .cl-mais-bt[aria-expanded="true"] { opacity: 1; }
+@media (hover: none) { .cl-linha .cl-mais-bt { opacity: 1; } }
+.cl-menu { position: absolute; right: 0; top: 36px; z-index: 30; width: 280px; padding: 6px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow-pop); display: flex; flex-direction: column; }
+.cl-menu-tit { margin: 6px 10px 4px; font-size: 12px; color: var(--ink-3); }
+.cl-menu button { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 8px 10px; border: 0; border-radius: 9px; background: none; text-align: left; color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; }
+.cl-menu button svg { margin-top: 2px; flex: none; color: var(--ink-3); }
+.cl-menu button small { display: block; font-size: 12px; color: var(--ink-3); }
+.cl-menu button:hover, .cl-menu button:focus-visible { background: var(--surface-raised); }
+.cl-menu button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+.cl-menu button.perigo, .cl-menu button.perigo svg { color: var(--danger); }
+.cl-menu hr { border: 0; border-top: 1px solid var(--line); margin: 5px 8px; align-self: stretch; }
+.cl-renomear { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+.cl-renomear input { flex: 1; min-width: 0; padding: 7px 10px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; }
+.maq-renomear { flex: 1; margin-top: 0; }
+.cl-detalhes { margin-top: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-side); font-size: 13px; }
+.cl-detalhes dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 0 0 6px; }
+.cl-detalhes dt { color: var(--ink-3); }
+.cl-detalhes dd { margin: 0; color: var(--ink); }
+.cl-detalhes ul { margin: 0; padding-left: 16px; }
+.cl-login { margin-top: 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); font-size: 13.5px; }
+.cl-login.erro { border-color: var(--danger-line); }
+.cl-login-cab { display: flex; align-items: center; gap: 8px; }
+.cl-login-cab b { font-weight: 500; flex: 1; }
+.cl-login-cab svg { color: var(--ink-3); }
+.cl-ok { color: var(--success); }
+.cl-passos { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.cl-passos li { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; }
+.cl-passos li > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.cl-n { width: 22px; height: 22px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid var(--ink); display: grid; place-items: center; font-size: 12px; }
+.cl-passos li.feito .cl-n { background: var(--success); border-color: var(--success); color: var(--surface); }
+.cl-link { color: var(--ink); text-decoration: underline; font-size: 13px; align-self: flex-start; }
+.cl-codigo { display: flex; gap: 8px; }
+.cl-codigo input { flex: 1; min-width: 0; padding: 9px 12px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); color: var(--ink); font: 13px var(--font-mono); }
+.cl-cadeado { display: flex; gap: 8px; align-items: flex-start; margin: 2px 0 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 12px; color: var(--ink-3); }
+.cl-cadeado svg { flex: none; margin-top: 1px; }
+.cl-passo-txt { display: flex; align-items: center; gap: 8px; margin: 8px 0 0; color: var(--ink-2); }
+.cl-erro { margin: 8px 0 0; color: var(--danger); }
+.cl-aviso { margin: 8px 0 0; color: var(--warning); }
+.cl-login-acoes { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
+.cl-terminal-link { margin-top: 10px; padding: 0; border: 0; background: none; font: inherit; font-size: 11.5px; color: var(--ink-3); cursor: pointer; text-decoration: underline dotted; }
+.cl-terminal { margin: 10px 0 0; font-size: 12px; color: var(--ink-3); }
+.cl-terminal code { font: 12px var(--font-mono); }
+.ia-terminal > summary { list-style: none; display: inline-block; }
+.ia-terminal > summary::-webkit-details-marker { display: none; }
+.cl-adicionar { display: inline-flex; align-items: center; gap: 8px; margin-top: 12px; }
+.cl-nova { margin-top: 12px; padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+.cl-nova-tit { font-size: 15px; }
+.cl-sem-maquina p { margin: 0; font-size: 13.5px; color: var(--ink-2); line-height: 1.5; }
+.cl-sem-maquina .bt.pri { display: inline-flex; align-items: center; gap: 8px; }
+.cl-provs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cl-prov { display: flex; align-items: center; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; cursor: pointer; }
+.cl-prov.ativo { border: 1.5px solid var(--ink); }
+.cl-prov span { display: flex; flex-direction: column; }
+.cl-prov small, .cl-maq small { font-size: 12px; color: var(--ink-3); }
+.cl-campo { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--ink-2); }
+.cl-campo input { padding: 9px 12px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; }
+.cl-campo-tit { font-size: 13px; color: var(--ink-2); margin-top: 4px; }
+.cl-maqs-form { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.cl-maq { display: flex; align-items: center; gap: 10px; padding: 10px 14px; }
+.cl-maq + .cl-maq { border-top: 1px solid var(--line); }
+.cl-maq span { display: flex; flex-direction: column; }
+.cl-maq.mudo { color: var(--ink-3); }
+.cl-nova-acoes { display: flex; justify-content: flex-end; gap: 10px; }
+/* ADR-108 (R8): a fila — o liga/desliga na linha e as três regras do Nod no lugar do "Perguntar antes / Trocar sozinho". */
+.cl-dir { gap: 10px; align-items: center; }
+.contas-estado.e-fora { color: var(--ink-3); }
+.cl-regras { margin-top: 16px; padding: 14px 18px; }
+.cl-regras b { display: block; font-size: 14px; font-weight: 500; }
+.cl-regras small { display: block; font-size: 12.5px; color: var(--ink-3); margin-top: 2px; }
+.cl-regras ul { margin: 8px 0 0; padding-left: 18px; font-size: 13px; color: var(--ink-2); display: grid; gap: 4px; }
+.cl-regras li b { display: inline; font-weight: 500; color: var(--ink); }
+.cl-filtro { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+.cl-vazio p { margin: 0; padding: 16px 18px; font-size: 14px; color: var(--ink-3); }
+.cl-nota { margin: 10px 2px 0; font-size: 13px; color: var(--warning); }
+.cl-faixa { margin: 0 0 12px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--warning-line); background: var(--warning-soft); color: var(--warning); font-size: 13px; }
+.cl-fundo { position: fixed; inset: 0; z-index: 40; background: var(--backdrop); }
+.cl-dialogo { position: fixed; z-index: 41; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(460px, calc(100vw - 32px)); box-sizing: border-box; padding: 22px 24px; border-radius: 18px; background: var(--surface); box-shadow: var(--shadow-pop); color: var(--ink); }
+.cl-dialogo h3 { margin: 0 0 8px; font-size: 18px; }
+.cl-dialogo p { margin: 0 0 10px; color: var(--ink-2); line-height: 1.55; font-size: 14px; }
+.cl-dialogo-acoes { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+.cl-dialogo .bt.perigo { background: var(--danger); border-color: var(--danger); color: var(--surface); }
+.cl-caixa { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-side); font-size: 13px; color: var(--ink-2); line-height: 1.5; }
+.cl-caixa-aviso { color: var(--warning); border-color: var(--warning); }
+.cl-check { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.cl-check small { display: block; color: var(--ink-3); font-size: 12px; }
+.cl-na-maquina { margin: 12px 0; }
+.cl-na-maquina .cl-linha { grid-template-columns: 40px minmax(0, 1fr) auto; }
+.cl-na-maquina .cl-vazia { display: block; }
+.cx-segue { font-size: 12.5px; color: var(--ink-3); }
+.cl-atalhos { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.cl-atalhos .bt { display: inline-flex; align-items: center; gap: 10px; }
+.cl-novas .cl-login { margin: 0 0 10px; }
+.maq-contas { display: flex; align-items: center; gap: 12px; padding: 12px 18px 12px 66px; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink-2); }
+.maq-contas-logos { display: inline-flex; padding-right: 6px; }
+.maq-contas-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.cl-aviso-txt { color: var(--warning); font-size: 12px; }
+.maq-cab .cl-mais { margin-left: 4px; }
+.cx-espera { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; font-size: 13px; color: var(--ink-2); }
+.cx-espera small { margin-left: auto; color: var(--ink-3); font-size: 12px; }
+.linha-link.forte { font-weight: 600; }
+@media (max-width: 640px) {
+  .cl-linha { grid-template-columns: 32px 40px minmax(0, 1fr) 40px; padding: 12px; }
+  .cl-alca, .cl-mais-bt { width: 40px; height: 44px; }
+  .cl-pil { padding: 8px 12px; }
+  .cl-pos { display: none; }
+  .cl-dir { grid-column: 3; justify-content: flex-start; }
+  .cl-mais { grid-row: 1; grid-column: 4; }
+  .cl-provs { grid-template-columns: 1fr; }
+  .cl-uso { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .cl-regras ul { padding-left: 16px; }
+  .maq-contas { padding-left: 18px; flex-wrap: wrap; }
+  /* NOD-92 PR 2: no celular o "Conectar uma máquina" vira uma coluna, com a trilha de passos em linha no topo. */
+  .cx-painel { grid-template-columns: minmax(0, 1fr); }
+  .cx-trilha { flex-direction: row; overflow-x: auto; padding: 12px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .cx-trilha li { flex: none; }
+  .cx-corpo { padding: 18px 16px; }
+  .nv-criar { padding: 16px; }
+  .nv-opcoes, .nv-provedores { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Chat limpo (ADR-114, PR 2): "Fazer aqui" e "Fazer depois da …" embaixo da linha da task em Trabalhos. */
+.gv-cartao .tr-item { display: flex; flex-direction: column; }
+.gv-cartao .tr-item .linha-acoes { justify-content: flex-start; padding: 0 14px 12px 38px; }
+
+/* A Atividade do bot (ADR-114, chat limpo, PR 2; protótipo "Atividade aberta no drawer"): filtros em pílula, a lista do dia
+   com a hora à esquerda, o título e o detalhe em cinza, e "Dia anterior ›" no fim. */
+.atv { display: flex; flex-direction: column; gap: 12px; }
+.atv-filtros { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 4px; }
+.atv-filtro { min-height: 28px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); font: inherit; font-size: 12.5px; cursor: pointer; }
+.atv-filtro:hover { border-color: var(--line-strong); }
+.atv-filtro[aria-pressed="true"] { border-color: var(--action); background: var(--action); color: var(--on-action); }
+.atv .atv-dia-titulo { margin: 0; padding: 4px 8px 0; font-size: 12px; font-weight: 600; color: var(--ink-3); }
+.atv-lista { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; font-size: 13.5px; }
+.atv-botao { display: flex; gap: 10px; width: 100%; padding: 8px; border: 0; border-radius: 10px; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.atv-botao:hover, .atv-botao:focus-visible { background: var(--surface-raised); }
+.atv-botao.estatico { cursor: default; }
+.atv-botao.estatico:hover { background: none; }
+.atv-agora { display: flex; gap: 10px; padding: 8px; }
+.atv-hora { flex: none; width: 38px; font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.atv-texto { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
+.atv-titulo { color: var(--ink); }
+.atv-vezes { color: var(--ink-3); font-size: 12.5px; }
+.atv-detalhe { font-size: 12.5px; color: var(--ink-2); }
+/* PR 6 dos modos de aprovação (tela Y3): o comando ou o caminho do que rodou sem aprovação, em fonte de código, numa
+   linha só e cortado com "…" como no protótipo (o texto inteiro fica no title). */
+.atv-detalhe.atv-codigo { font-family: var(--font-mono); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.atv-agora .atv-hora { color: var(--ink-2); }
+.atv-link { padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; text-decoration: underline; text-decoration-color: var(--line-strong); cursor: pointer; }
+.atv-link:hover { color: var(--ink); }
+/* PR 4 dos modos de aprovação: embaixo da ação que o revisor liberou, o motivo dele e "Devia ter perguntado" (56 px =
+   o recuo da hora, como o .atv-inteiro). */
+.atv-revisor { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; padding: 0 8px 8px 56px; margin-top: -4px; font-size: 12.5px; color: var(--ink-2); }
+.atv-revisor-motivo b { font-weight: 600; }
+.atv-contestada { color: var(--ink-3); }
+.atv-inteiro { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 0 8px 10px 56px; font-size: 13px; color: var(--ink-2); }
+.atv-inteiro p { margin: 0; white-space: pre-wrap; }
+.atv .atv-vazio, .atv .atv-mais { margin: 0; padding: 4px 8px; font-size: 13px; }
+.atv-navegacao { display: flex; justify-content: space-between; padding: 0 4px; }
+.atv-dia { min-height: 32px; padding: 4px 8px; border: 0; border-radius: 8px; background: none; color: var(--ink-2); font: inherit; font-size: 13px; cursor: pointer; }
+.atv-dia:hover, .atv-dia:focus-visible { background: var(--surface-raised); color: var(--ink); }
+/* NOD-70 (protótipo v2, W2): as abas Atividade | Decisões e a aba Decisões. O desfecho fica à direita em tinta, sem cor
+   própria (✕ na tinta forte, ✓ na tinta 3, ◇ na tinta 2); o vermelho só no ícone pequeno do erro. */
+.atv-abas { display: flex; gap: 4px; padding: 0 4px; border-bottom: 1px solid var(--line); }
+.atv-aba { min-height: 32px; padding: 6px 10px; margin-bottom: -1px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--ink-2); font: inherit; font-size: 13px; cursor: pointer; }
+.atv-aba:hover { color: var(--ink); }
+.atv-aba[aria-selected="true"] { border-bottom-color: var(--ink); color: var(--ink); font-weight: 600; }
+.dec { display: flex; flex-direction: column; gap: 12px; }
+.dec-n { color: inherit; opacity: .7; font-variant-numeric: tabular-nums; }
+.dec-item .atv-texto { flex: 1; }
+.dec-desfecho { flex: none; margin-left: auto; font-size: 12px; white-space: nowrap; }
+.dec-desfecho.dec-negada { color: var(--ink); font-weight: 600; }
+.dec-desfecho.dec-permitida { color: var(--ink-3); }
+.dec-desfecho.dec-cartao { color: var(--ink-2); }
+.dec-detalhe p { white-space: normal; }
+.dec-regra { font-family: var(--font-mono); font-size: 12px; color: var(--ink); overflow-wrap: anywhere; }
+.dec-mais { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 0 8px; font-size: 13px; }
+.dec-erro { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 6px; margin: 0; padding: 4px 8px; font-size: 13px; color: var(--ink-2); }
+.dec-erro-icone { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: var(--danger); color: var(--surface); font-size: 11px; font-weight: 700; }
+.dec-primeira { margin: 0; padding: 8px; font-size: 13.5px; color: var(--ink-2); }
+.dec-csv-linha { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 4px 8px 0; border-top: 1px solid var(--line); padding-top: 10px; font-size: 13px; }
+.dec-csv { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 0 8px 8px; font-size: 13px; }
+.dec-csv .dec-periodos { padding: 0; }
+.dec-csv .atv-filtro[aria-checked="true"] { border-color: var(--action); background: var(--action); color: var(--on-action); }
+.dec-csv-arquivo { margin: 0; overflow-wrap: anywhere; }
+.dec-csv-arquivo code { font-family: var(--font-mono); font-size: 12px; }
+.dec-baixar { min-height: 32px; padding: 6px 14px; border: 0; border-radius: 999px; background: var(--action); color: var(--on-action); font: inherit; font-size: 13px; cursor: pointer; }
+.dec-baixar[aria-busy="true"] { opacity: .7; cursor: progress; }
+.dec-baixado { color: var(--ink-3); }
+
+/* ADR-125 (NOD-349; protótipo prot/nod-349): a gaveta do bot minimalista. No topo, só compartilhar e fechar (ícones
+   redondos de contorno); no centro, o avatar, o nome e o subtítulo, editáveis ali; embaixo, as abas de texto da NOD-326.
+   Só tokens: nenhum cartão colorido nem botão cheio. Os erros são linha neutra com o ícone na cor (--danger, --warning). */
+.gvn-topo { justify-content: space-between; }
+.gvn-redondo { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink-2); }
+.gvn-redondo:hover, .gvn-redondo:focus-visible, .gvn-redondo[aria-expanded="true"] { background: var(--surface-raised); color: var(--ink); }
+.gvn-redondo:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.bot-menu.menu-compartilhar { width: 232px; }
+
+.gv-identidade.gvn-id { padding-top: 2px; text-align: center; }
+.gvn-avatar-wrap { position: relative; display: flex; justify-content: center; }
+.gvn-avatar { position: relative; display: grid; place-items: center; width: 84px; height: 84px; padding: 0; border: 0; border-radius: 999px; background: none; cursor: pointer; }
+.gvn-avatar:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.gvn-lapis { position: absolute; right: 2px; bottom: 2px; display: grid; place-items: center; width: 26px; height: 26px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); box-shadow: var(--shadow-pop); opacity: 0; transition: opacity .12s; }
+.gvn-avatar:hover .gvn-lapis, .gvn-avatar:focus-visible .gvn-lapis, .gvn-avatar[aria-expanded="true"] .gvn-lapis { opacity: 1; }
+.gvn-dica { position: absolute; z-index: 4; top: 50%; left: calc(50% + 50px); transform: translateY(-50%); padding: 4px 8px; border-radius: 6px; background: var(--ink); color: var(--surface); font-size: 12px; font-weight: 500; line-height: 16px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity .12s; }
+.gvn-avatar:hover + .gvn-dica, .gvn-avatar:focus-visible + .gvn-dica { opacity: 1; transition-delay: .25s; }
+.gvn-avatar[aria-expanded="true"] + .gvn-dica { opacity: 0; }
+@media (hover: none) { .gvn-lapis { opacity: 1; } .gvn-dica { display: none; } }
+@media (prefers-reduced-motion: reduce) { .gvn-lapis, .gvn-dica { transition: none; } }
+
+.gvn-nome, .gvn-sub { display: block; box-sizing: border-box; width: 100%; max-width: 300px; margin: 0 auto; border: 0; border-radius: 8px; background: transparent; font: inherit; color: var(--ink); text-align: center; text-overflow: ellipsis; cursor: text; }
+.gvn-nome, .gvn-nome-fixo { margin-top: 10px; padding: 2px 8px; font-size: 20px; font-weight: 600; line-height: 28px; letter-spacing: -.3px; }
+.gvn-nome-fixo { margin-bottom: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gvn-sub, .gvn-sub-fixo { margin-top: 1px; padding: 1px 8px; font-size: 13px; line-height: 20px; color: var(--ink-3); }
+.gvn-sub-fixo { display: block; }
+.gvn-sub::placeholder { color: var(--ink-3); opacity: .75; }
+.gvn-nome:hover, .gvn-sub:hover { background: var(--surface-side); }
+.gvn-nome:focus, .gvn-sub:focus { outline: none; border-radius: 6px; background: var(--surface-raised); }
+@media (forced-colors: active) { .gvn-nome:focus, .gvn-sub:focus { outline: 2px solid CanvasText; } }
+.gvn-nome:focus-visible, .gvn-sub:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.gvn-erro-linha { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 4px; font-size: 12px; line-height: 16px; color: var(--ink-2); }
+.gvn-erro-linha:has(> .gvn-erro:empty) { display: none; }
+.gvn-erro-icone { flex: none; display: grid; color: var(--danger); }
+
+.gvn-pop { position: absolute; z-index: 12; top: calc(100% + 10px); left: 50%; transform: translateX(-50%); box-sizing: border-box; width: 300px; max-width: calc(100vw - 32px); padding: 10px 12px 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-pop); text-align: left; }
+.gvn-pop-titulo { display: block; margin: 12px 2px 6px; font-size: 12px; font-weight: 400; color: var(--ink-3); }
+.gvn-redefinir { margin-top: 8px; font-size: 12.5px; color: var(--ink-2); }
+.gvn-formas { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.gvn-forma { display: grid; place-items: center; height: 50px; padding: 0; border: 1px solid transparent; border-radius: 12px; background: none; cursor: pointer; }
+.gvn-forma .icon.mascote { width: 32px; height: 32px; min-width: 32px; pointer-events: none; }
+.gvn-forma:hover { background: var(--surface-raised); }
+.gvn-forma[aria-checked="true"] { border-color: var(--line-strong); box-shadow: 0 0 0 3px var(--surface-raised); }
+.gvn-cores { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; justify-items: center; }
+.gvn-cor { display: grid; place-items: center; width: 38px; height: 38px; padding: 0; border: 0; border-radius: 999px; background: none; cursor: pointer; }
+.gvn-cor .cor-amostra { width: 26px; height: 26px; }
+.gvn-cor[aria-checked="true"] .cor-amostra { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ink); }
+.gvn-forma:focus-visible, .gvn-cor:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+/* Revisão da NOD-349: em forced-colors a sombra some; a amostra mantém a cor (é o conteúdo) e o marcado ganha borda do sistema. */
+@media (forced-colors: active) {
+  .gvn-cor .cor-amostra { forced-color-adjust: none; }
+  .gvn-forma[aria-checked="true"], .gvn-cor[aria-checked="true"] { outline: 3px solid Highlight; outline-offset: 1px; }
+}
+
+/* As abas (texto discreto, a ativa num fundo um tom acima; NOD-326). */
+.gv-abas { display: flex; justify-content: center; gap: 2px; }
+.gv-aba { position: relative; flex: none; margin: 0; padding: 4px 10px; border: 0; border-radius: 999px; background: none; font: inherit; font-size: 13px; line-height: 18px; color: var(--ink-2); white-space: nowrap; cursor: pointer; }
+.gv-aba:hover { color: var(--ink); }
+.gv-aba[aria-selected="true"] { background: var(--surface-raised); color: var(--ink); }
+.gv-aba:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+@media (forced-colors: active) { .gv-aba[aria-selected="true"] { text-decoration: underline 2px; text-underline-offset: 5px; } }
+.gv-aba-painel { display: flex; flex-direction: column; gap: 22px; border-radius: 10px; }
+.gv-aba-painel:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 4px; }
+.gvn-ponto { display: inline-block; width: 6px; height: 6px; margin: 0 0 1px 5px; border-radius: 50%; background: var(--danger); vertical-align: middle; }
+/* Revisão da NOD-349: em forced-colors o fundo some; o ponto e os campos editáveis ganham cor e borda do sistema. */
+@media (forced-colors: active) {
+  .gvn-ponto { forced-color-adjust: none; background: CanvasText; }
+  .gvn-nome, .gvn-sub { border: 1px solid ButtonText; }
+}
+
+.gvn-vazio { margin: 0; padding: 0 4px; font-size: 13px; color: var(--ink-3); }
+.gvn-estado { color: var(--ink-2); }
+.rotina-pausada .gvn-estado { color: var(--ink-3); }
+.gv-linha.gvn-alerta { align-items: flex-start; cursor: default; }
+.gv-linha.gvn-alerta:hover, .gv-linha.gvn-alerta:focus-within { background: none; }
+.gvn-alerta-icone { flex: none; display: grid; margin-top: 1px; color: var(--ink-2); }
+.gvn-danger > .gvn-alerta-icone { color: var(--danger); }
+.gvn-alerta .gv-linha-txt b { color: var(--ink); }
+.gvn-alerta .gv-linha-txt small { color: var(--ink-2); white-space: normal; }
+.gvn-acoes-texto { display: flex; flex-wrap: wrap; gap: 2px 14px; margin: 6px 0 0 -4px; }
+/* Botão de texto: sem fundo nem borda; sublinha só no hover (é ação, não campo). */
+.gvn-acao-texto { padding: 2px 4px; border: 0; border-radius: 6px; background: none; font: inherit; font-size: 13px; font-weight: 500; color: var(--ink); cursor: pointer; }
+.gvn-acao-texto:hover { text-decoration: underline; text-underline-offset: 3px; }
+.gvn-acao-texto:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.gvn-acao-texto:disabled { color: var(--ink-3); cursor: default; text-decoration: none; }
+/* A rotina parada (ADR-044): o aviso na linha de baixo, neutro; só o ícone em --warning (é espera, não erro). */
+.gvn-parada { display: grid; grid-template-columns: 14px 1fr; align-items: start; gap: 2px 6px; flex-basis: 100%; box-sizing: border-box; margin: -4px 0 0; padding: 0 14px 10px; font-size: 12px; line-height: 16px; color: var(--ink-2); background: none; border: 0; }
+.gvn-parada-icone { display: grid; margin-top: 1px; color: var(--warning); }
+.gvn-parada > .gvn-acao-texto { grid-column: 2; justify-self: start; margin-left: -4px; font-size: 12.5px; }
+
+.gvn-comp-linha { margin: -2px 0 0; text-align: center; font-size: 12px; color: var(--ink-3); }
+.gvn-comp-sem { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink-2); }
+.gvn-sono { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.gvn-sono small { color: var(--ink-3); font-size: 12.5px; }
+.gvn-sono .bt { margin-top: 6px; }
+.tela-preview.gvn-tela-fora { display: grid; place-items: center; cursor: default; color: #8e8e93; font-size: 13px; } /* cor-fixa: texto sobre o monitor apagado */
+
+/* O ⋯ da linha do bot na lista (ADR-125): à vista só no toque, onde não há clique direito. */
+.bot-mais { display: none; }
+@media (hover: none) and (pointer: coarse) {
+  .bot-mais { display: grid; place-items: center; flex: none; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 12px; background: none; color: var(--ink-2); font: inherit; font-size: 18px; cursor: pointer; }
+  .bot-mais-fixado { position: absolute; top: 0; right: 0; }
+}
+
+/* NOD-326: a aba Biblioteca da gaveta (protótipo v1.1) — a Pasta no topo (só a dona), os arquivos em Hoje, Últimos 7 dias
+   e Mais antigos, cada grupo num cartão. A lista é um .msg-midias (a tela cheia lê o data-luz dele); aqui ela deixa de ser
+   a coluna estreita da conversa. */
+.gvb-lista.msg-midias { display: flex; flex-direction: column; align-items: stretch; gap: 22px; width: 100%; margin: 0; }
+.gvb-item { position: relative; display: flex; align-items: center; min-width: 0; }
+.gvb-item:hover, .gvb-item:focus-within { background: var(--surface-side); }
+.gvb-abrir { flex: 1; min-width: 0; padding: 8px 6px 8px 12px; text-decoration: none; }
+.gvb-abrir:hover, .gvb-abrir:focus-visible { background: transparent; }
+.gvb-abrir:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; border-radius: 0; }
+.gvb-ic { flex: none; display: grid; place-items: center; width: 32px; height: 32px; }
+.gvb-ic .arq-ic { width: auto; height: 32px; }
+.gvb-mini { position: relative; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; overflow: hidden; background: var(--surface-raised); }
+.gvb-mini img { display: block; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+.gvb-mini::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px var(--line); }
+.gvb-video { color: var(--ink-2); }
+.gvb-nome { display: flex; min-width: 0; font-size: 13.5px; line-height: 1.35; }
+.gvb-base { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gvb-ext { flex: none; white-space: nowrap; }
+.gvb-menu { flex: none; display: grid; place-items: center; width: 32px; height: 32px; margin-right: 6px; padding: 0; border: 0; border-radius: 8px;
+  background: none; color: var(--ink-2); cursor: pointer; opacity: 0; }
+.gvb-menu:hover, .gvb-menu[aria-expanded="true"] { background: var(--surface-raised); color: var(--ink); }
+.gvb-item:hover .gvb-menu, .gvb-item:focus-within .gvb-menu, .gvb-menu[aria-expanded="true"] { opacity: 1; }
+@media (hover: none) { .gvb-menu { opacity: 1; } }
+.gvb-rodape { display: flex; }
+.gvb-mostrar { flex: 1; min-height: 40px; padding: 8px 14px; border: 0; background: none; font: inherit; font-size: 13px; font-weight: 500;
+  color: var(--ink-2); text-align: center; cursor: pointer; }
+.gvb-mostrar:hover { background: var(--surface-side); color: var(--ink); }
+.gvb-mostrar:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+.gvb-mostrar:disabled { cursor: default; }
+/* Revisão 2: a falha do "Mostrar mais" à vista, acima do botão (que vira Tentar de novo). */
+.gvb-rodape:has(.gvb-falhou) { flex-direction: column; }
+.gvb-falhou { padding: 8px 14px 0; font-size: 12px; color: var(--ink-3); text-align: center; }
+/* Revisão 2: toque de 44 px em qualquer tela de toque (o tablet com a gaveta sobreposta também). */
+@media (pointer: coarse) {
+  .gvb-menu { width: 44px; height: 44px; opacity: 1; }
+  .gvb-mostrar { min-height: 44px; }
+}
+.gvb-inerte { cursor: default; }
+.gvb-ic-mudo { color: var(--ink-3); opacity: .6; }
+.gvb-nome-2 { display: block; }
+.gvb-nome-l { display: flex; min-width: 0; color: var(--ink-3); }
+.gvb-nome-2 small { margin-top: 2px; }
+.gvb-erro p { margin: 0 0 12px; }
+.gvb-esq-rot { display: block; width: 64px; height: 10px; margin: 4px 4px 13px; border-radius: 5px; background: var(--surface-raised); animation: pulsa 1.4s ease-in-out infinite; }
+.gvb-esq { animation: pulsa 1.4s ease-in-out infinite; }
+.gvb-esq-linha { display: flex; align-items: center; gap: 12px; padding: 8px 12px; }
+.gvb-esq-linha i { flex: none; width: 32px; height: 32px; border-radius: 8px; background: var(--surface-raised); }
+.gvb-esq-linha b { width: 60%; height: 10px; border-radius: 5px; background: var(--surface-raised); }
+@media (prefers-reduced-motion: reduce) { .gvb-esq-rot, .gvb-esq { animation: none; } }
+@media (forced-colors: active) { .gvb-menu { opacity: 1; } }
+
+/* NOD-382: sem movimento para quem pediu (o @media do celular em mobile.css é um só; esta regra mora aqui). */
+@media (prefers-reduced-motion: reduce) { .detalhes:has(.pfc-corpo), dialog.pfc-folha { animation: none !important; } }
+
+/* NOD-58 · diário da memória (protótipo v2, Editar opção A): só tokens do nod, sem fundo chapado, sem vermelho.
+   No toque o "…" fica sempre à vista (no lugar do toque longo do protótipo). */
+.mem-abas { justify-content: flex-start; }
+.mem-conta { color: var(--ink-3); }
+.mem-painel { gap: 18px; }
+.mem-meta { margin: 0; color: var(--ink-3); font-size: 12.5px; }
+.mem-hist-cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; }
+.mem-dia { display: flex; flex-direction: column; gap: 6px; }
+.mem-dia-titulo { margin: 0; color: var(--ink-3); font-size: 12px; font-weight: 600; }
+.mem-entradas { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+.mem-entrada { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 10px 6px 8px 14px; border-bottom: 1px solid var(--line); border-radius: 2px; }
+.mem-entrada.mem-realce { box-shadow: 0 0 0 2px var(--ink); transition: box-shadow .2s ease; }
+.mem-ponto { position: absolute; left: 2px; top: 17px; width: 6px; height: 6px; border-radius: 50%; background: var(--ink); }
+.mem-quem { margin: 0; color: var(--ink-2); font-size: 13px; line-height: 18px; }
+.mem-quem b { color: var(--ink); font-weight: 600; }
+.mem-texto { display: flex; flex-direction: column; gap: 2px; margin: 0; color: var(--ink); font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
+.mem-texto del { color: var(--ink-3); text-decoration-color: var(--ink-3); }
+.mem-texto ins { text-decoration: none; }
+.mem-desfeita .mem-texto { color: var(--ink-3); text-decoration: line-through; }
+.mem-desfeita .mem-quem, .mem-desfeita .mem-quem b { color: var(--ink-3); }
+.mem-pe { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 12px; min-height: 32px; }
+.mem-acoes { display: inline-flex; align-items: center; gap: 0 16px; }
+.mem-acao { display: inline-flex; align-items: center; min-height: 32px; padding: 0; border: 0; background: none; font: inherit; font-size: 13px; color: var(--ink-3); cursor: pointer; border-radius: 6px; white-space: nowrap; }
+.mem-desfazer, .mem-link, .mem-marcar { color: var(--ink); text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
+.mem-acao:hover { color: var(--ink); text-decoration-color: currentColor; }
+.mem-acao:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.mem-acao[aria-busy="true"] { color: var(--ink-3); cursor: progress; text-decoration: none; }
+.mem-aviso { margin: 0; color: var(--ink-2); font-size: 12.5px; line-height: 18px; }
+.mem-aviso .mem-acao { min-height: 0; font-size: inherit; }
+.mem-vazio { margin: 4px 0 0; }
+.mem-mais { display: flex; align-items: center; gap: 12px; }
+/* Apagada, na aba Memórias: o cartão vira uma linha com Desfazer, no mesmo lugar. */
+.mem-apagada-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; margin: 0; color: var(--ink-2); font-size: 13px; }
+.mem-apagada-txt .mem-meta { overflow-wrap: anywhere; }
+.gv-meta.mem-conta-meta { margin-left: auto; }
+@media (prefers-reduced-motion: reduce) { .mem-entrada.mem-realce { transition: none; } }
+@media (forced-colors: active) { .mem-ponto { background: CanvasText; } .mem-entrada.mem-realce { outline: 2px solid Highlight; } }
+@media (hover: none) and (pointer: coarse) and (max-width: 600px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  .mem-acoes { gap: 0 24px; }
+  .mem-acao, .mem-aviso .mem-acao { min-height: 44px; min-width: 44px; }
+  .mem-pe { min-height: 44px; }
+}
+/* ---------- v2 · o Editar da memória (opção A, no lugar): lê por padrão, edita onde está, Apagar fora do Salvar ---------- */
+.mem-mems { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+.mem-mem { position: relative; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.mem-mem-corpo { display: flex; flex-direction: column; gap: 3px; width: 100%; margin: 0; padding: 6px 40px 6px 8px; border: 0; border-radius: 8px;
+  background: none; font: inherit; text-align: left; color: var(--ink); cursor: text; box-sizing: border-box; }
+.mem-mem-corpo:hover, .mem-com-menu .mem-mem-corpo { background: var(--surface-raised); }
+.mem-mem-corpo:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+.mem-mem-texto { display: block; font-size: 14px; line-height: 20px; color: var(--ink); overflow-wrap: anywhere; }
+.mem-mem-meta { display: block; margin: 0; font-size: 12.5px; line-height: 17px; color: var(--ink-3); }
+.mem-mem-tipo { color: var(--ink-2); }
+.mem-mem-mais { position: absolute; top: 10px; right: 6px; display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 8px;
+  background: none; color: var(--ink-3); cursor: pointer; opacity: 0; }
+.mem-mem:hover .mem-mem-mais, .mem-mem-mais:focus-visible, .mem-mem-mais[aria-expanded="true"] { opacity: 1; }
+.mem-mem-mais:hover, .mem-mem-mais[aria-expanded="true"] { background: var(--surface-selected); color: var(--ink); }
+.mem-mem-mais:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 0; }
+
+/* O menu do "…": Editar em cima, Apagar no fim, separado por uma linha. */
+.mem-menu { position: absolute; z-index: 6; top: 42px; right: 4px; display: flex; flex-direction: column; min-width: 196px; padding: 4px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--surface); box-shadow: var(--shadow-pop); }
+.mem-menu-cab { display: none; }
+.mem-menu-item { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 32px; padding: 0 10px; border: 0; border-radius: 8px;
+  background: none; font: inherit; font-size: 13.5px; color: var(--ink); text-align: left; cursor: pointer; white-space: nowrap; }
+.mem-menu-item:hover, .mem-menu-item:focus-visible { background: var(--surface-raised); }
+.mem-menu-item:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+.mem-menu-item kbd { font: inherit; font-size: 12px; color: var(--ink-3); }
+.mem-menu-sep { width: 100%; height: 0; margin: 4px 0; border: 0; border-top: 1px solid var(--line); }
+.mem-menu-perigo { color: var(--danger); }
+.mem-menu-perigo:hover, .mem-menu-perigo:focus-visible { background: var(--danger-soft); }
+
+/* Editando: uma caixa só (texto em cima, tipo e ações embaixo), como o composer. */
+.mem-editor { display: flex; flex-direction: column; gap: 4px; margin: 2px 0; padding: 8px 8px 8px 12px; border: 1px solid var(--line-strong);
+  border-radius: 12px; background: var(--surface); }
+.mem-editor:focus-within { border-color: var(--ink); }
+.mem-editor-texto { display: block; width: 100%; min-height: 40px; margin: 0; padding: 2px 4px 2px 0; border: 0; outline: none; resize: none;
+  background: none; font: inherit; font-size: 14px; line-height: 20px; color: var(--ink); field-sizing: content; box-sizing: border-box; }
+.mem-editor-texto::placeholder { color: var(--ink-3); }
+.mem-editor-pe { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.mem-tipo { position: relative; display: inline-flex; }
+.mem-tipo select { appearance: none; -webkit-appearance: none; height: 28px; margin: 0; padding: 0 26px 0 10px; border: 0; border-radius: 999px;
+  background: var(--surface-raised); font: inherit; font-size: 12.5px; color: var(--ink-2); cursor: pointer; }
+.mem-tipo select:hover { color: var(--ink); }
+.mem-tipo select:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.mem-tipo::after { content: ""; position: absolute; top: 50%; right: 11px; width: 5px; height: 5px; margin-top: -4px; border-right: 1.5px solid var(--ink-3);
+  border-bottom: 1.5px solid var(--ink-3); transform: rotate(45deg); pointer-events: none; }
+.mem-editor-acoes { display: inline-flex; align-items: center; gap: 2px; }
+.mem-cancelar, .mem-salvar { display: inline-flex; align-items: center; justify-content: center; height: 28px; margin: 0; border: 0; font: inherit;
+  font-size: 13px; cursor: pointer; white-space: nowrap; }
+.mem-cancelar { padding: 0 10px; border-radius: 8px; background: none; color: var(--ink-2); }
+.mem-cancelar:hover { background: var(--surface-raised); color: var(--ink); }
+.mem-salvar { padding: 0 14px; border-radius: 999px; background: var(--action); color: var(--on-action); font-weight: 550; }
+.mem-salvar:hover { opacity: .88; }
+.mem-cancelar:focus-visible, .mem-salvar:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.mem-editor-meta { padding: 2px 0 2px 12px; }
+
+/* Anotar: a mesma caixa, com o tipo e o Anotar sempre à vista. Recolher o pé ao sair do campo mudava a altura no meio do
+   toque e o primeiro toque no "…" de baixo caía fora do botão (QA do NOD-58). */
+.mem-anotar { padding: 6px 8px 6px 12px; }
+.mem-anotar .mem-editor-texto { min-height: 24px; padding: 2px 0; }
+
+/* Apagada: a linha fica no lugar, com Desfazer à direita. */
+.mem-mem.mem-apagada { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 6px 8px 8px; }
+.mem-mem.mem-apagada .mem-apagada-txt .mem-meta { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+@media (forced-colors: active) { .mem-editor { border-color: CanvasText; } .mem-menu { border-color: CanvasText; } .mem-editor-texto { outline: 2px solid transparent; } .mem-editor-texto:focus { outline-color: Highlight; } }
+@media (hover: none) and (pointer: coarse) and (max-width: 600px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  .mem-mem-corpo { padding: 8px 52px 8px 8px; min-height: 44px; cursor: default; }
+  /* ADR-094: o "…" é a via de toque do menu (no lugar do toque longo); 44×44 de área real. */
+  .mem-mem-mais { top: 6px; right: 0; width: 44px; height: 44px; opacity: 1; }
+  .mem-mem-corpo:hover { background: none; }
+  .mem-com-menu .mem-mem-corpo { background: var(--surface-selected); }
+  .mem-menu { position: fixed; top: auto; left: 0; right: 0; bottom: 0; min-width: 0; padding: 22px 12px calc(14px + env(safe-area-inset-bottom)); border: 0; border-radius: 18px 18px 0 0; box-shadow: 0 0 0 100vmax var(--backdrop), var(--shadow-pop); }
+  .mem-menu::before { content: ""; position: absolute; top: 8px; left: 50%; width: 36px; height: 4px; margin-left: -18px; border-radius: 2px; background: var(--line-strong); }
+  .mem-menu-cab { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin: 0 0 6px; padding: 0 10px 12px; border-bottom: 1px solid var(--line); font-size: 13.5px; line-height: 19px; color: var(--ink-2); }
+  .mem-menu-item { height: 52px; font-size: 16px; }
+  .mem-menu-item kbd { display: none; }
+  .mem-editor { padding: 10px 6px 6px 12px; }
+  .mem-editor-texto { font-size: 16px; line-height: 22px; }
+  .mem-tipo select { height: 44px; font-size: 14px; }
+  .mem-anotar .mem-editor-texto { min-height: 44px; }
+  .mem-cancelar, .mem-salvar { min-height: 44px; font-size: 15px; }
+  .mem-salvar { padding: 0 18px; }
+  .mem-mem.mem-apagada .mem-acao { min-height: 44px; min-width: 44px; }
+}
+
+/* NOD-84 (ADR-139, protótipo v3 do Gil): o endereço do webhook (no card encolhido e na gaveta), as últimas chamadas e o
+   "!" da recusada. Só tokens; o vermelho é só o "!". O mesmo bloco vai para o componente comum da NOD-399 quando entrar. */
+.wh-endereco { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.wh-end-campo { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 4px 4px 4px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-raised); }
+.wh-url { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: 12.5px; color: var(--ink-2); }
+.wh-copiar { position: relative; display: grid; place-items: center; flex-shrink: 0; width: 32px; height: 32px; min-height: 0; padding: 0; border-radius: 8px; color: var(--ink-2); }
+.wh-copiar:hover { color: var(--ink); background: var(--surface-selected); }
+.wh-copiar svg { grid-area: 1 / 1; transition: opacity .14s ease, transform .14s ease; }
+.wh-copiar .wh-cp-b { opacity: 0; transform: scale(.7); color: var(--success); }
+.wh-copiar.wh-ok .wh-cp-a { opacity: 0; transform: scale(.7); }
+.wh-copiar.wh-ok .wh-cp-b { opacity: 1; transform: none; }
+.wh-copiar.wh-falhou { color: var(--danger); }
+.wh-excl { display: inline-grid; place-items: center; flex-shrink: 0; width: 13px; height: 13px; font-size: 13px; font-weight: 700; line-height: 1; color: var(--danger); }
+.wh-gv-resumo { padding: 0 4px 8px; font-size: 13px; color: var(--ink-2); }
+.wh-ch { flex-wrap: wrap; }
+.wh-motivo { flex-basis: 100%; padding-left: 23px; font-size: 12px; line-height: 1.5; color: var(--ink-3); }
+.wh-acoes { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 6px 4px 0; }
+.wh-acoes .bt.link { min-height: 0; padding: 0; font-size: 13px; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 2px; }
+.wh-confirma { margin-top: 8px; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); font-size: 13px; color: var(--ink); }
+.wh-confirma .acoes { display: flex; gap: 8px; margin-top: 8px; }
+@media (prefers-reduced-motion: reduce) { .wh-copiar svg { transition: none; } }
+@media (max-width: 640px) {
+  .wh-copiar { width: 44px; height: 44px; }
+  .wh-acoes .bt.link, .wh-confirma .bt { min-height: 44px; }
+}
+
+/* ---- Times de bots (NOD-437, protótipo aprovado) ------------------------------------------------------------------------
+   O cabeçalho do time é o título que recolhe (como as seções de antes) mais o ⋯, que aparece no hover e no foco. O foco no
+   cabeçalho é um fundo tonal. O "+ Novo time" fica sempre à vista, discreto, no fim; arrastando um bot, vira o alvo
+   tracejado de antes. Time vazio diz o que fazer; a multisseleção tem fundo de destaque suave e um rodapé fixo. */
+.time-cab { display: flex; align-items: center; gap: 2px; }
+.time-cab[draggable="true"] { cursor: grab; }
+.time-cab .secao-cab { border-radius: 8px; padding: 2px 6px; margin: 0 -6px; }
+.time-cab .secao-cab:focus-visible { outline: none; background: var(--surface-selected, var(--surface-raised)); color: var(--ink); box-shadow: 0 0 0 2px var(--focus-ring); }
+.time-mais { flex: none; width: 24px; height: 24px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 6px; background: none;
+  color: var(--ink-3); font: inherit; font-size: 15px; line-height: 1; cursor: pointer; opacity: 0; }
+.time-cab:hover .time-mais, .time-cab:focus-within .time-mais, .time-mais[aria-expanded="true"] { opacity: 1; }
+.time-mais:hover, .time-mais:focus-visible { color: var(--ink); background: var(--surface-raised); }
+@media (hover: none) { .time-mais { opacity: .7; width: 44px; height: 44px; } }
+#sidebar[data-buscando] .time-mais { display: none; }
+.time-vazio { margin: 2px 8px 6px; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 10px; font-size: 12.5px; color: var(--ink-3); }
+.section[data-recolhida] > .time-vazio, #sidebar[data-buscando] .time-vazio { display: none; }
+.time-editando { margin-bottom: 4px; }
+.time-nome-campo { flex: 1; min-width: 0; height: 30px; padding: 0 8px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface);
+  color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; }
+.time-nome-campo:focus { outline: none; border-color: var(--ink-3); box-shadow: 0 0 0 2px var(--focus-ring); }
+@media (forced-colors: active) { .time-cab .secao-cab:focus-visible, .time-nome-campo:focus { outline: 2px solid Highlight; } }
+.time-nome-aviso { margin: 0 8px 6px; font-size: 12px; color: var(--ink-3); }
+.time-nome-aviso:empty { display: none; }
+.novo-time.nova-secao-alvo { display: block; width: calc(100% - 8px); margin: 2px 4px 10px; padding: 6px 8px; border: 0; border-radius: 8px; background: none;
+  text-align: left; font: inherit; font-size: 12.5px; color: var(--ink-3); cursor: pointer; }
+.novo-time.nova-secao-alvo[hidden] { display: none; }
+.novo-time:hover, .novo-time:focus-visible { color: var(--ink); background: var(--surface-raised); }
+.arrastando-bot .novo-time.nova-secao-alvo { display: block; padding: 12px; border: 1.5px dashed var(--line-strong); border-radius: 12px; text-align: center; }
+.bot-row.selecionado { border-radius: 10px; background: color-mix(in srgb, var(--action) 12%, transparent); }
+.selecao-rodape { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; gap: 8px; margin: 8px 0 0; padding: 8px 10px; border: 1px solid var(--line);
+  border-radius: 12px; background: var(--surface-raised); box-shadow: var(--shadow-pop); font-size: 12.5px; color: var(--ink-2); }
+.selecao-rodape > span { flex: 1; }
+.selecao-rodape button { padding: 4px 8px; border: 0; border-radius: 8px; background: none; color: var(--ink); font: inherit; cursor: pointer; }
+.selecao-rodape button:hover, .selecao-rodape button:focus-visible { background: var(--surface); }
+.linha-time { margin: 2px 6px; }
+.time.origem-arrasto { opacity: .4; }
+@media (prefers-reduced-motion: no-preference) {
+  .bot-row.recem-movido { animation: time-recem-movido 1.6s ease-out; }
+}
+@media (prefers-reduced-motion: reduce) { .bot-row.recem-movido { background: color-mix(in srgb, var(--action) 10%, transparent); } }
+@keyframes time-recem-movido { from { background: color-mix(in srgb, var(--action) 22%, transparent); } to { background: transparent; } }

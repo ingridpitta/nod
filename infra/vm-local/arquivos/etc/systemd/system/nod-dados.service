@@ -1,0 +1,11 @@
+# NOD-93 (ADR-127 §6): /var/lib/nod-computador mora no disco de dados `nod-dados`, que o Lima monta durante o boot.
+[Unit]
+Description=nod: dados do computador no disco nod-dados
+After=local-fs.target
+Before=nod-computador.service nod-computador-terminal.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/lib/nod/esperar-dados.sh
+RemainAfterExit=yes
+[Install]
+WantedBy=multi-user.target

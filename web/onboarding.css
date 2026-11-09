@@ -1,0 +1,247 @@
+/* =====================================================================================
+   Onboarding por ligação (definido em 2026-10-04, ADR-077; protótipo "HiFiMac" da Proposta 2), web/telas/onboarding.ts.
+   Só var(--…) de web/tokens.css (tests/unit/web/cores-por-token.test.ts lê este arquivo). As cores de marca de terceiros
+   (logos das IAs e a cor do app do modelo) vêm no HTML, nunca daqui. Minimalista: superfície lisa, um foco por tela.
+   ===================================================================================== */
+
+#onboarding[hidden] { display: none; }
+
+/* ---- 1. "olá" ---- */
+.ob-ola { position: fixed; inset: 0; z-index: 80; border: 0; background: var(--surface); color: var(--ink); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; font: inherit; }
+.ob-ola span { font-size: 120px; font-weight: 300; letter-spacing: -.04em; animation: ob-ola 3.2s ease both; }
+.ob-ola:focus-visible { outline: none; }
+
+/* ---- telas de tela cheia (a IA dos bots, "está te ligando") ---- */
+.ob-tela { position: fixed; inset: 0; z-index: 80; background: var(--surface-side); color: var(--ink); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 36px; padding: 24px; animation: ob-aparece .6s ease both; overflow: auto; }
+
+/* ---- 2. a IA dos bots ---- */
+.ob-cabeca { display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; max-width: 640px; }
+.ob-cabeca h1 { margin: 0; font-size: 36px; font-weight: 600; letter-spacing: -.025em; }
+.ob-cabeca p { margin: 0; font-size: 17px; line-height: 1.55; color: var(--ink-2); text-wrap: balance; }
+.ob-procurando { display: flex; align-items: center; gap: 12px; font-size: 15px; color: var(--ink-2); }
+.ob-procurando .ob-gira { width: 16px; height: 16px; border-color: var(--line); border-top-color: var(--ink); }
+.ob-cards-ia { display: flex; flex-direction: column; gap: 10px; width: min(520px, 100%); animation: ob-sobe .45s cubic-bezier(.2, .7, .2, 1) both; }
+.ob-cards-ia.largo { width: min(600px, 100%); }
+/* O card é uma coluna: a linha (logo, nome, estado, botão) e, embaixo, a prova do teste ou a explicação do aviso. */
+.ob-card-ia { display: flex; flex-direction: column; gap: 14px; padding: 16px 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; }
+.ob-card-ia.em-breve { opacity: .45; }
+.ob-card-ia.aviso { border-color: var(--warning-line); }
+.ob-card-ia.menor { padding: 14px 18px; }
+.ob-ia-linha { display: flex; align-items: center; gap: 16px; }
+.ob-logo { width: 44px; height: 44px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); color: var(--ink);
+  display: flex; align-items: center; justify-content: center; flex: none; }
+.ob-card-ia.menor .ob-logo { width: 40px; height: 40px; border-radius: 10px; }
+.ob-ia-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ob-ia-txt b { font-size: 16px; font-weight: 600; }
+.ob-ia-txt span { font-size: 13px; color: var(--ink-3); }
+.ob-ia-txt span.ok, .ob-ia-txt span.aviso { display: flex; align-items: center; gap: 6px; font-weight: 500; }
+.ob-ia-txt span.ok { color: var(--success); }
+.ob-ia-txt span.aviso { color: var(--warning); }
+.ob-ia-txt span svg { flex: none; }
+.ob-nota { margin: 0; font-size: 13px; color: var(--ink-3); min-height: 20px; text-align: center; max-width: 560px; }
+/* foco-ok: recebe o foco só pelo código, quando a tela troca (web/main.ts); não é um controle */
+.ob-cabeca h1:focus { outline: none; }
+
+/* O teste de verdade (definido em 2026-10-05): a pergunta do nod e a resposta da IA, dentro do card. */
+.ob-prova { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 12px; background: var(--surface-side); }
+.ob-prova-linha { display: flex; gap: 8px; align-items: baseline; font-size: 13px; line-height: 1.45; }
+.ob-prova-quem { width: 64px; flex: none; color: var(--ink-3); }
+.ob-prova-linha b { font-size: 15px; font-weight: 500; overflow-wrap: anywhere; }
+.ob-pontos { display: inline-flex; gap: 4px; align-self: center; }
+.ob-pontos i { width: 6px; height: 6px; border-radius: 50%; background: var(--line-strong); animation: ob-ponto 1.2s ease-in-out infinite; }
+.ob-pontos i:nth-child(2) { animation-delay: .2s; }
+.ob-pontos i:nth-child(3) { animation-delay: .4s; }
+.ob-gira.grande { width: 18px; height: 18px; border-color: var(--line); border-top-color: var(--ink); opacity: 1; }
+.ob-gira.passo { width: 24px; height: 24px; border-width: 2.5px; border-color: var(--line); border-top-color: var(--ink); opacity: 1; }
+
+/* A conta sem acesso: o porquê e o "Como liberar", em tom de aviso (o usuário resolve depois). */
+.ob-ia-explica { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 12px; background: var(--warning-soft); font-size: 13px; line-height: 1.45; }
+.ob-ia-explica p { margin: 0; flex: 1; }
+.ob-ia-explica .ob-link { font-weight: 500; white-space: nowrap; flex: none; }
+.ob-ia-atualizar { flex-direction: column; gap: 8px; }
+.ob-comando { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border-radius: 8px; background: var(--surface); border: 1px solid var(--warning-line); }
+.ob-comando code { flex: 1; font-family: var(--font-mono); font-size: 12.5px; overflow-x: auto; white-space: nowrap; }
+
+/* Grok e Gemini, lado a lado e apagados. */
+.ob-breves { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.ob-breve { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; opacity: .5; font-size: 14px; }
+.ob-breve b { font-weight: 500; }
+.ob-breve > span:last-child { margin-left: auto; font-size: 12px; color: var(--ink-2); }
+.ob-breve-logo { display: flex; color: var(--ink); }
+.ob-breve-logo svg { width: 22px; height: 22px; }
+
+/* Conectar em três passos. */
+.ob-conexao { width: min(600px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 16px 18px 18px; display: flex; flex-direction: column;
+  gap: 4px; animation: ob-sobe .45s cubic-bezier(.2, .7, .2, 1) both; }
+.ob-passos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.ob-passo { display: flex; gap: 14px; align-items: flex-start; padding: 12px 0; }
+.ob-passo.ativo { padding: 14px; margin: 0 -6px; border-radius: 14px; background: var(--surface-side); }
+.ob-passo-marca { width: 24px; height: 24px; box-sizing: border-box; flex: none; border-radius: 50%; border: 1px solid var(--line-strong); color: var(--ink-3); display: grid; place-items: center;
+  font-size: 12px; font-weight: 600; }
+.ob-passo-marca.feito { border: 0; background: var(--success); color: var(--on-status); }
+.ob-passo-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; line-height: 1.45; color: var(--ink-3); }
+.ob-passo-txt b { font-size: 14px; font-weight: 500; color: var(--ink); }
+.ob-passo.depois .ob-passo-txt b { color: var(--ink-3); }
+.ob-passo.ativo .ob-passo-txt { color: var(--ink-2); gap: 4px; }
+.ob-passo.ativo .ob-passo-txt b { font-weight: 600; }
+.ob-passo-acoes { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 4px; }
+.ob-passo-acoes .ob-link { display: inline-flex; align-items: center; gap: 5px; font-weight: 500; }
+
+/* "Seus bots já têm uma IA": o Continuar e a nota. */
+.ob-seguir { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+
+/* O botão do onboarding: pílula na cor de ação (o "Conectado" da IA em sucesso). */
+.ob-pilula { border: 0; background: var(--action); color: var(--on-action); border-radius: 999px; padding: 0 18px; height: 40px; font: inherit; font-size: 14px;
+  font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.ob-pilula:hover:not(:disabled) { opacity: .88; }
+.ob-pilula:disabled { cursor: default; }
+.ob-pilula.ok, .ob-pilula.ok:disabled { background: var(--success); color: var(--on-status); }
+/* NOD-171: "Atualizar" do CLI desatualizado — âmbar, como o aviso do card (protótipo do Gil). */
+.ob-pilula.aviso { background: var(--warning); color: var(--on-status); }
+/* O secundário (Cancelar, o outro provedor na tela de sucesso): contorno, um degrau menor. */
+.ob-pilula.contorno { height: 36px; padding: 0 14px; font-size: 13px; background: var(--surface); color: var(--ink); border: 1px solid var(--line-strong); }
+.ob-pilula.contorno:hover:not(:disabled) { background: var(--surface-raised); opacity: 1; }
+.ob-pilula.grande { height: 48px; padding: 0 28px; font-size: 15px; }
+.ob-pilula.grande:disabled { opacity: .7; }
+.ob-pilula:focus-visible, .ob-redondo:focus-visible, .ob-link:focus-visible, .ob-rotina:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.ob-gira { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 2px solid currentColor; border-top-color: transparent; opacity: .8;
+  animation: ob-gira .9s linear infinite; flex: none; }
+
+/* ---- 3. "está te ligando" ---- */
+.ob-chamando { gap: 28px; }
+.ob-toque { position: relative; width: 132px; height: 132px; display: grid; place-items: center; }
+.ob-toque-mascote { position: relative; display: grid; place-items: center; }
+.ob-toque .icon.mascote.xxl { width: 132px; height: 132px; }
+.ob-anel { position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--line-strong); animation: ob-anel 2s ease-out infinite; }
+.ob-anel.b { animation-delay: 1s; }
+.ob-quem { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
+.ob-quem b { font-size: 30px; font-weight: 600; letter-spacing: -.02em; }
+.ob-quem span { font-size: 15px; color: var(--ink-2); }
+/* Com qual conta a guia vai pensar (definido em 2026-10-05). */
+.ob-pensa { margin: 0; display: flex; align-items: center; gap: 8px; padding: 7px 12px 7px 8px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line);
+  font-size: 12px; line-height: 16px; color: var(--ink-2); }
+.ob-pensa-logo { display: flex; color: var(--ink); }
+.ob-pensa-logo svg { width: 16px; height: 16px; }
+.ob-botoes-ligacao { display: flex; gap: 56px; margin-top: 12px; padding-bottom: 48px; }
+.ob-botao-ligacao { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; font-size: 13px; color: var(--ink-2); }
+.ob-botao-ligacao:last-child { color: var(--ink); }
+.ob-redondo { width: 64px; height: 64px; border-radius: 50%; background: var(--surface); border: 1px solid var(--line); color: var(--ink); cursor: pointer;
+  display: grid; place-items: center; padding: 0; transition: background .15s; }
+.ob-redondo:hover:not(:disabled) { background: var(--surface-raised); }
+.ob-redondo.atender { background: var(--success); border-color: var(--success); color: var(--on-status); animation: ob-chama 1.8s ease-in-out infinite; }
+.ob-redondo.atender:hover:not(:disabled) { background: var(--success); opacity: .9; }
+.ob-redondo:disabled { opacity: .6; cursor: default; }
+/* A linha do consentimento fica sob o Atender sem empurrar o "Configurar sem voz" para cima. */
+.ob-aviso-voz { position: absolute; top: calc(100% + 10px); left: 50%; transform: translateX(-50%); width: 300px; margin: 0; font-size: 12px; line-height: 1.45;
+  color: var(--ink-3); text-align: center; }
+.ob-link { border: 0; background: none; padding: 0; font: inherit; color: var(--ink); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.ob-link:hover { color: var(--ink-2); }
+
+/* ---- 4. painel da entrevista, ao lado da tela cheia da ligação ---- */
+.ob-painel-entrevista { position: fixed; top: 96px; right: 28px; z-index: 65; width: 280px; max-height: calc(100vh - 240px); overflow: auto; background: var(--surface);
+  border: 1px solid var(--line); border-radius: 20px; padding: 18px; animation: ob-aparece .4s ease both; }
+@media (max-width: 1240px) { .ob-painel-entrevista { display: none; } }
+.ob-bloco { display: flex; flex-direction: column; gap: 8px; }
+.ob-bloco + .ob-bloco { margin-top: 18px; }
+.ob-bloco h3 { margin: 0; font-size: 13px; font-weight: 400; color: var(--ink-3); }
+.ob-linha { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; animation: ob-sobe .45s cubic-bezier(.2, .7, .2, 1) both; }
+.ob-linha span { color: var(--ink-3); flex: none; }
+.ob-linha b { font-weight: 400; text-align: right; overflow-wrap: anywhere; }
+.ob-vazio { margin: 0; font-size: 14px; color: var(--ink-3); }
+.ob-montado { display: flex; gap: 10px; align-items: center; font-size: 14px; animation: ob-sobe .45s cubic-bezier(.2, .7, .2, 1) both; }
+.ob-check { width: 18px; height: 18px; border-radius: 50%; background: var(--success); color: var(--on-status); font-size: 11px; display: grid; place-items: center; flex: none; }
+.gv-secao.ob-detalhes { padding-top: 4px; }
+
+/* ---- 5. configuração guiada (bloco na conversa da guia) ---- */
+.ob-guia { width: min(720px, 100%); margin: 8px auto 16px; display: flex; flex-direction: column; gap: 16px; }
+.ob-balao { align-self: flex-start; max-width: 88%; background: var(--surface-raised); color: var(--ink); border-radius: 24px; padding: 14px 18px; font-size: 16px;
+  line-height: 1.55; animation: ob-sobe .45s cubic-bezier(.2, .7, .2, 1) both; }
+.ob-card { background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 22px; display: flex; flex-direction: column; gap: 14px;
+  animation: ob-sobe .45s cubic-bezier(.2, .7, .2, 1) both; }
+.ob-card-cab { display: flex; align-items: center; gap: 14px; }
+.ob-card-cab > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ob-card-cab .icon.mascote.lg { width: 48px; height: 48px; }
+.ob-sobre { font-size: 13px; color: var(--ink-3); }
+.ob-titulo { font-size: 18px; font-weight: 600; }
+.ob-campo { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--ink-2); }
+.ob-campo input, .ob-campo textarea { border: 1px solid var(--line-strong); border-radius: 14px; padding: 12px 14px; font: inherit; font-size: 15px; line-height: 1.5;
+  color: var(--ink); background: var(--surface); resize: none; }
+.ob-campo input:focus-visible, .ob-campo textarea:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.ob-card-acoes { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
+.ob-card-acoes .ob-pilula { height: 44px; padding: 0 22px; font-size: 15px; }
+.ob-secundario.bt { border: 0; background: none; color: var(--ink-2); font-size: 14px; padding: 8px 12px; border-radius: 999px; }
+.ob-secundario.bt:hover { background: var(--surface-raised); color: var(--ink); }
+.ob-app { width: 48px; height: 48px; border-radius: 14px; color: #ffffff; font-size: 20px; font-weight: 600; display: grid; place-items: center; flex: none; } /* cor-fixa: a letra branca sobre a cor de marca do app, igual nos dois temas */
+.ob-app.sm { width: 20px; height: 20px; border-radius: 6px; font-size: 11px; }
+.ob-permissoes { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.ob-permissoes li { display: flex; gap: 10px; font-size: 15px; color: var(--ink-2); }
+.ob-sim { color: var(--success); }
+.ob-nao { color: var(--danger); }
+.ob-conectado { font-size: 14px; color: var(--success); font-weight: 500; }
+.ob-card-rotina { padding: 10px; gap: 4px; }
+.ob-sobre-lista { padding: 10px 12px 4px; }
+.ob-rotina { display: flex; align-items: center; gap: 14px; border: 0; border-radius: 16px; background: transparent; padding: 14px 12px; font: inherit; color: var(--ink);
+  cursor: pointer; text-align: left; transition: background .15s; }
+.ob-rotina:hover:not(:disabled), .ob-rotina.proposta { background: var(--surface-raised); }
+.ob-rotina:disabled { cursor: default; opacity: .6; }
+.ob-rotina.proposta { cursor: default; }
+.ob-radio { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line-strong); background: var(--surface); flex: none; }
+.ob-radio.on { border-color: var(--ink); background: var(--ink); box-shadow: inset 0 0 0 3px var(--surface); }
+.ob-oque { flex: 1; font-size: 15px; font-weight: 500; }
+.ob-quando { font-size: 13px; color: var(--ink-3); }
+.ob-pilula.sm.bt { height: 36px; padding: 0 16px; font-size: 13px; }
+.ob-fim { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 8px; font-size: 14px; color: var(--ink-3); text-align: center;
+  animation: ob-sobe .45s cubic-bezier(.2, .7, .2, 1) both; }
+.ob-fim .ob-link { font-size: 13px; padding: 6px; }
+
+/* Sem a conversa da guia (fallback): os cards numa coluna por cima da tela. */
+.ob-guia-solta { position: fixed; inset: 0; z-index: 30; background: var(--surface); overflow: auto; padding: 96px 24px 24px; }
+.ob-depois { display: block; margin: 0 auto; font-size: 13px; padding: 6px; color: var(--ink-2); }
+
+@keyframes ob-ola { 0% { opacity: 0; transform: translateY(8px); filter: blur(8px); } 35% { opacity: 1; transform: none; filter: blur(0); } 80% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes ob-sobe { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes ob-aparece { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ob-anel { 0% { transform: scale(1); opacity: .5; } 100% { transform: scale(1.9); opacity: 0; } }
+@keyframes ob-gira { to { transform: rotate(360deg); } }
+@keyframes ob-chama { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+@keyframes ob-ponto { 0%, 60%, 100% { opacity: .3; } 30% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .ob-ola span, .ob-tela, .ob-cards-ia, .ob-conexao, .ob-linha, .ob-montado, .ob-balao, .ob-card, .ob-fim, .ob-painel-entrevista, .ob-anel, .ob-redondo.atender, .ob-gira, .ob-pontos i { animation: none; }
+  .ob-ola span { opacity: 1; }
+  /* Sem movimento, os três pontinhos ficam em degraus (como no protótipo parado). */
+  .ob-pontos i:nth-child(2) { opacity: .6; }
+  .ob-pontos i:nth-child(3) { opacity: .3; }
+}
+
+/* NOD-122: alto contraste (forced-colors). O sistema troca os fundos pelas cores dele, então o foco que era só fundo some.
+   Aqui o foco ganha contorno em Highlight; nada muda fora deste modo. Gate: tests/unit/web/foco-forced-colors.test.ts. */
+@media (forced-colors: active) {
+  /* O "olá" cobre a janela inteira: o contorno vai para dentro. */
+  .ob-ola:focus-visible { outline: 2px solid Highlight; outline-offset: -4px; }
+}
+
+/* ADA-242 (jornada A, NOD_ONBOARDING_TEXTO): "Este computador" (web/telas/este-computador.ts) e a conversa por texto
+   (web/telas/conversa-texto.ts). Mesmo sistema visual dos cards da IA: superfície, linha, raio 20, cor só com sentido. */
+.ec-tela { gap: 16px; }
+.ec-selo { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); }
+.ec-lista { display: flex; flex-direction: column; gap: 10px; width: min(520px, 100%); }
+.ec-ia { display: grid; grid-template-columns: auto 1fr; gap: 12px 14px; align-items: center; padding: 16px 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; text-align: left; }
+.ec-ia.principal { border-color: var(--ink-2, var(--line)); }
+.ec-ia-txt { display: flex; flex-direction: column; gap: 2px; }
+.ec-ia-txt span { color: var(--ink-2); font-size: 14px; }
+.ec-acoes { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
+.ec-acoes:empty { display: none; }
+.ec-codigo { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; width: 100%; }
+.ec-nota { color: var(--danger, inherit); }
+.ec-pe { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.ct-conversa { display: flex; flex-direction: column; gap: 12px; padding: 16px 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; }
+.ct-topo { display: flex; justify-content: flex-end; }
+.ct-fala b { display: block; font-size: 13px; }
+.ct-fala p { margin: 2px 0 0; }
+.ct-resposta { display: flex; flex-direction: column; gap: 10px; }
+.ct-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.ct-chip { border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 6px 12px; font: inherit; cursor: pointer; }
+.ct-chip:hover, .ct-chip:focus-visible { border-color: var(--ink-2, currentColor); }
+.ct-form { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }

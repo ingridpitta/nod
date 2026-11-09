@@ -1,0 +1,25 @@
+# Ambiente local do nod. UM serviço só: Postgres 16 (desvio do §5 das práticas herdadas registrado no AGENTS.md —
+# o catcher é driver in-process, não serviço). Porta 5434 porque 5432 é de outro projeto nesta máquina.
+services:
+  postgres:
+    image: postgres:16
+    container_name: nod-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "127.0.0.1:5434:5432"
+    volumes:
+      - nod_pgdata:/var/lib/postgresql/data
+      # Cria DOIS roles (nod_dono migra; nod_app é NOBYPASSRLS) e DOIS bancos (nod, nod_test)
+      # ANTES da primeira tabela — senão a RLS nasce não exercitada (Práticas §5).
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nod_dono -d nod"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  nod_pgdata:

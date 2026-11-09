@@ -1,0 +1,19 @@
+node_modules
+backups/local/
+dist/
+.env
+*.log
+!scripts/ensaio-computador/paginas/acessos.log
+.vite/
+coverage/
+.claude/*
+!.claude/skills/
+.gstack/
+release/
+
+# wrangler dev do site (NOD-321)
+.wrangler
+qa-relatorio/
+
+# O deploy.sh grava nod-<cor>.env; o teste dele já roda na pasta temporária, mas um escape não entra no commit (NOD-421).
+nod-*.env

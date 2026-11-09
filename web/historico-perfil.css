@@ -1,0 +1,100 @@
+/* NOD-20: histórico de versões do perfil (Ajustes › Perfil › Histórico). Veio do protótipo da issue. */
+/* NOD-20 · histórico do perfil: só tokens do nod, sem fundo chapado, sem botão cheio, sem verde nem vermelho. */
+.p20-intro { line-height: 1.5; }
+.p20-dia { gap: 0; }
+.p20-versao .gv-linha-txt b { font-weight: 500; }
+.p20-atual { font-size: 12px; color: var(--ink-2); }
+.p20-acao { margin-left: -4px; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
+.p20-acao:hover { text-decoration-color: currentColor; }
+.p20-status { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; margin: 10px 4px 0; font-size: 13px; line-height: 1.45; color: var(--ink-2); }
+.p20-status .p20-acao { margin-left: 0; }
+.gv-corpo > .p20-status { margin: 0 4px; }
+.p20-nota { margin-top: 2px; }
+
+/* O detalhe de uma versão. v5 (#207): hierarquia em 3 segundos. Título (o que a versão é em relação a agora) > quem e quando em cinza >
+   orientação > comparação por campo com "Nesta versão" e "Agora" > campos iguais e perfil completo, recolhidos > Restaurar fixo no rodapé. */
+.p20-cab-versao { display: flex; flex-direction: column; gap: 4px; padding: 2px 4px 0; }
+.p20-cab-versao p { margin: 0; }
+.detalhes .p20-titulo { margin: 0; font-size: 18px; line-height: 1.3; font-weight: 600; letter-spacing: -.01em; color: var(--ink); text-wrap: balance; }
+.p20-meta { font-size: 13px; color: var(--ink-3); }
+.p20-orienta { margin-top: 8px !important; font-size: 13.5px; line-height: 1.5; color: var(--ink-2); }
+.p20-comp { display: flex; flex-direction: column; gap: 18px; }
+.p20-bloco { display: flex; flex-direction: column; gap: 8px; }
+.detalhes .p20-bloco-t { margin: 0; padding: 0 4px; font-size: 14px; font-weight: 600; color: var(--ink); }
+.p20-linha { padding: 12px 14px; }
+.p20-linha + .p20-linha { border-top: 1px solid var(--line); }
+.p20-rot { display: block; margin-bottom: 4px; font-size: 12px; font-weight: 500; color: var(--ink-3); }
+.p20-par .p20-texto { font-size: 14px; }
+.p20-agora .p20-texto, .p20-agora b { color: var(--ink-2); }
+.p20-curto { display: flex; align-items: flex-start; gap: 14px; margin: 0; padding: 12px 14px; }
+.p20-lado { display: flex; flex-direction: column; gap: 2px; }
+.p20-lado b { font-size: 15px; font-weight: 500; color: var(--ink); }
+.p20-lado small { font-size: 12px; color: var(--ink-3); }
+.p20-seta { font-size: 15px; line-height: 22px; color: var(--ink-3); }
+.p20-fim { display: flex; flex-direction: column; gap: 0; margin-top: -6px; }
+.p20-iguais > summary, .p20-completo > summary { display: inline-flex; align-items: center; min-height: 32px; padding: 0 4px; font-size: 13px; color: var(--ink-3); cursor: pointer; border-radius: 6px; list-style: none; }
+.p20-iguais > summary::-webkit-details-marker { display: none; }
+.p20-iguais > summary::after { content: "›"; margin-left: 6px; }
+.p20-iguais[open] > summary::after { transform: rotate(90deg); }
+.p20-iguais > summary:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.p20-iguais > p { margin: 2px 4px 8px; font-size: 13px; line-height: 1.5; color: var(--ink-2); }
+.p20-completo > summary { color: var(--ink-2); text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
+.p20-completo > summary:hover { text-decoration-color: currentColor; }
+/* O rodapé da versão: a ação principal sempre à vista, de contorno claro (como o card de proposta), sem botão cheio. */
+.p20-rodape .gv-bt.p20-restaurar-bt { flex: 1 1 auto; }
+.p20-rodape > .p20-confirma { flex: 1 1 auto; min-width: 0; }
+.p20-diff > .p20-campo { padding: 12px 14px; }
+.p20-campo-nome { display: block; margin-bottom: 4px; font-size: 12px; color: var(--ink-3); }
+.p20-texto { margin: 0; font-size: 13.5px; line-height: 1.6; color: var(--ink); overflow-wrap: anywhere; }
+.p20-texto del { color: var(--ink-3); text-decoration: line-through; text-decoration-color: var(--ink-3); }
+.p20-texto ins { color: var(--ink); text-decoration: underline; text-decoration-color: var(--line-strong); text-decoration-thickness: 1.5px; text-underline-offset: 3px; }
+.p20-redigido { font-family: var(--font-mono); font-size: .92em; color: var(--ink-2); white-space: nowrap; }
+.p20-campo-linha { display: grid; grid-template-columns: 76px 1fr; gap: 10px; align-items: baseline; }
+.p20-campo-linha .p20-campo-nome { margin: 0; }
+.p20-campo-linha .icon.sm { width: 24px; height: 24px; min-width: 24px; vertical-align: middle; }
+.p20-completo > summary::-webkit-details-marker { display: none; }
+.p20-completo > summary::after { content: "›"; margin-left: 6px; color: var(--ink-3); text-decoration: none; display: inline-block; }
+.p20-completo[open] > summary::after { transform: rotate(90deg); }
+.p20-completo > summary:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.p20-completo > .gv-cartao { margin-top: 6px; }
+.p20-mais-bt, .p20-tentar { align-self: flex-start; }
+.p20-aviso { margin: 0; padding: 12px 14px; font-size: 13px; line-height: 1.5; color: var(--ink-2); }
+.p20-diff > .p20-aviso, .p20-par > .p20-aviso { border-top: 1px solid var(--line); }
+
+/* A confirmação em linha. v3 (#157): sem contorno escuro; a borda clara e o fundo cinza bem leve do card de proposta do nod (.card-prop .ft), no claro e no escuro. */
+.p20-confirma { display: flex; flex-direction: column; gap: 8px; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-side); font-size: 13.5px; color: var(--ink); }
+.p20-confirma p { margin: 0; }
+.p20-conf-t { font-size: 14.5px; font-weight: 600; }
+.p20-conf-sub { color: var(--ink-2); }
+.p20-muda { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.p20-muda li { display: grid; grid-template-columns: 58px 1fr; gap: 8px; align-items: baseline; line-height: 1.45; }
+.p20-muda .p20-campo-nome { margin: 0; }
+.p20-confirma .p20-aviso { padding: 0; }
+.p20-rodape > .p20-confirma { padding: 12px 14px; }
+.p20-conf-nota { font-size: 12.5px; line-height: 1.5; }
+.p20-erro { margin: 0; font-size: 13px; color: var(--ink); }
+.p20-confirma-bts { display: flex; gap: 8px; margin-top: 4px; }
+.gv-bt.p20-bt-contorno { border: 1px solid var(--line); background: var(--surface); font-weight: 600; }
+.gv-bt.p20-bt-contorno:hover, .gv-bt.p20-bt-contorno:focus-visible { background: var(--surface-selected); }
+.p20-confirma .gv-bt:focus-visible, .p20-acao:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+/* Estados */
+.p20-esqueleto > li { display: flex; flex-direction: column; gap: 8px; padding: 14px; }
+.p20-barra { display: block; width: 62%; height: 10px; border-radius: 5px; background: var(--surface-selected); animation: p20-pulso 1.4s ease-in-out infinite; }
+.p20-barra.p20-curta { width: 34%; height: 8px; }
+@keyframes p20-pulso { 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .p20-barra { animation: none; } }
+.p20-falha, .p20-mais { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 0 4px; }
+.p20-mais .gv-nota { margin: 0; }
+
+@media (hover: none) and (pointer: coarse) and (max-width: 600px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  .p20-acao, .p20-completo > summary, .p20-iguais > summary { min-height: 44px; min-width: 44px; }
+  .p20-versao, .p20-hist { min-height: 56px; }
+  .gv-bt.p20-bt-contorno, .p20-confirma .gv-bt { height: 44px; }
+}
+/* Celular (390): a mesma ordem; o rodapé com Restaurar fica fixo embaixo e todo alvo tem 44 px. */
+@media (max-width: 760px) {
+  .p20-rodape .gv-bt, .p20-confirma .gv-bt { min-height: 44px; }
+  .p20-completo > summary, .p20-iguais > summary { min-height: 44px; }
+  .detalhes .p20-titulo { font-size: 20px; }
+}

@@ -1,0 +1,79 @@
+/* ADA-18 (celular F3, protótipo nod-prototipos/ada-2 v2, jornada 3): o quadro no celular — a lista agrupada sem fundo,
+   a visão no título, as colunas de 280 px com snap e as folhas (visão, toque longo, Mover, ⋯ do topo). Toda regra fica na
+   consulta canônica (web/lib/celular.ts): o computador, mesmo com a janela estreita, não vê nada daqui (critério 13).
+   O HTML só existe no celular (quadroDaMeta com `celular`); cor só por var(--…) (ADR-070). */
+@media (hover: none) and (pointer: coarse) and (max-width: 600px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+
+  /* O bloco do celular aparece também deitado (a container query da lista estreita para em 700 px). */
+  .qd-cel.qd-so-estreito { display: block; }
+
+  /* ---------- Lista agrupada (passo 2) ---------- */
+  .qd-cel-lista { padding: 0 0 24px; }
+  /* O divisor só entre os grupos (nada entre as linhas). */
+  .qd-cg + .qd-cg { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 2px; }
+  .qd-cg-cab { display: flex; align-items: center; height: 44px; margin: 0; padding: 0 8px 0 20px; font-size: 13px; font-weight: 600; line-height: 1.2; color: var(--ink-2); }
+  .qd-cg-bt { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 44px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; }
+  .qd-cg-nome { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .qd-cg-n { font-weight: 400; color: var(--ink-3); }
+  .qd-cg-mais { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 12px; background: none; color: var(--ink-3); }
+  .qd-cg-lista { list-style: none; margin: 0; padding: 0; }
+
+  /* A linha: título na linha toda (até 2 linhas), o ID embaixo e o avatar à direita. Segurar não seleciona texto. */
+  .qd-cl { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0 12px; min-height: 52px; padding: 6px 16px 6px 20px;
+    -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+  /* Revisão do PR 700: o botão Ações da linha é do leitor de tela; com o foco do teclado, aparece sobre o avatar. */
+  .qd-cl-acoes:focus-visible { top: 50%; right: 8px; width: 44px; height: 44px; clip: auto; overflow: visible; transform: translateY(-50%); display: inline-flex; align-items: center;
+    justify-content: center; padding: 0; border: 0; border-radius: 10px; background: var(--surface-raised, var(--surface)); color: var(--ink);
+    outline: 2px solid var(--focus-ring, var(--signal)); outline-offset: 0; }
+  .qd-cl-bt { display: grid; gap: 2px; min-width: 0; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; }
+  .qd-cl-tit { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: 16px; line-height: 1.3; }
+  .qd-cl-sub { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12.5px; line-height: 1.3; color: var(--ink-3); }
+  .qd-cl-sub .qd-id { font-size: inherit; color: inherit; }
+  .qd-cl-est { display: inline-flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .qd-cl-av { display: inline-flex; align-items: center; justify-content: center; min-width: 26px; height: 26px; }
+  .qd-cl-av-vazio { width: 26px; border: 1.5px dashed var(--line-strong); border-radius: 50%; }
+  .qd-cl > .qd-card-resp, .qd-cl > .qd-menu, .qd-cl > .qd-aviso { grid-column: 1 / -1; }
+  .qd-cl-vazio { padding: 8px 20px 14px; font-size: 14px; color: var(--ink-3); }
+
+  /* ---------- Visão no título (passo 3) ---------- */
+  .qd-cel-topo { display: flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 4px 0 16px; }
+  .qd-cel-titulo { flex: 1; display: inline-flex; align-items: center; gap: 6px; min-width: 0; min-height: 44px; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; }
+  .qd-cel-titulo b { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 20px; font-weight: 700; line-height: 1.2; }
+  .qd-cel-titulo .qd-ic { flex: none; color: var(--ink-3); }
+  .qd-cel-mais { display: grid; flex: none; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 12px; background: none; color: var(--ink-2); }
+
+  /* As folhas do celular: de baixo, até 85% da tela, com a área segura embaixo; os itens de 56 px. */
+  .qd-cel-folha { gap: 0; max-height: 85dvh; padding: 8px 0 calc(env(safe-area-inset-bottom) + 12px); border-radius: 16px 16px 0 0; }
+  /* foco-ok: a folha recebe o foco só pelo código, ao abrir (tabindex=-1); não é um controle, os itens dela têm contorno */
+  .qd-cel-folha:focus { outline: none; }
+  .qd-cel-menu { display: flex; flex-direction: column; }
+  .qd-cel-it { display: flex; align-items: center; gap: 14px; min-height: 56px; padding: 0 20px; border: 0; background: none; color: var(--ink); font: inherit; font-size: 16px; text-align: left; }
+  .qd-cel-it[aria-disabled="true"] { color: var(--ink-3); }
+  .qd-cel-ok { margin-left: auto; color: var(--action); }
+  .qd-cel-sep { border-top: 6px solid var(--surface-side); }
+  .qd-cel-vazio { margin: 0; padding: 24px 20px; }
+
+  /* ---------- Colunas (passo 5): 280 px, a próxima espiando, snap; a rolagem lateral fica só no carrossel ---------- */
+  .qd-cel[data-visao="colunas"] { overflow-x: clip; }
+  .qd-cel-cols { display: flex; gap: 12px; overflow-x: auto; overflow-y: visible; padding: 0 16px 8px; scroll-padding-inline: 16px;
+    scroll-snap-type: x mandatory; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .qd-cel-cols::-webkit-scrollbar { display: none; }
+  .qd-cel-cols:focus-visible { outline: 2px solid var(--action); outline-offset: -2px; }
+  .qd-cc { flex: 0 0 280px; min-width: 0; scroll-snap-align: start; scroll-snap-stop: always; border-radius: 16px; background: var(--surface-side); padding-bottom: 8px; }
+  .qd-cc .qd-cg-cab { padding: 0 4px 0 14px; }
+  .qd-cc .qd-cg-bt { min-height: 44px; }
+  .qd-cc .qd-cl { padding-inline: 14px 12px; }
+  .qd-cc .qd-cl-vazio { padding-inline: 14px; }
+  .qd-cel-pontos { display: flex; justify-content: center; align-items: center; gap: 6px; height: 24px; }
+  .qd-cel-ponto { width: 6px; height: 6px; border-radius: 50%; background: var(--line-strong); }
+  .qd-cel-ponto-on { background: var(--ink-2); }
+  .qd-cel-contador { font-size: 12.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+  /* ---------- Toque longo (passo 6): o título da tarefa no alto do menu ---------- */
+  .qd-cel-folha-tit { margin: 0; padding: 8px 20px 10px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; font-weight: 600; color: var(--ink-3); }
+
+  /* ---------- O ⋯ do topo (passo 7) ---------- */
+  .qd-cel-it-sub { margin-left: auto; font-size: 14px; color: var(--ink-3); }
+  .qd-cel-perigo { color: var(--danger, var(--ink)); }
+  .qd-cel-data input { margin-left: auto; min-height: 44px; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: 16px; }
+}

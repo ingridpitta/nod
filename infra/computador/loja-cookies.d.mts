@@ -1,0 +1,15 @@
+export type Cookie = { name: string; value?: string; domain: string; path: string; expires?: number; partitionKey?: string; [k: string]: unknown };
+export type IdCookie = { name: string; domain: string; path: string; partitionKey?: string };
+export type Diff = { postos: Cookie[]; removidos: IdCookie[] };
+export type Entrada = { cookie?: Cookie; removido?: boolean; id?: IdCookie; em: number; seq: number };
+export type Loja = { versao: 1; seq: number; entradas: Record<string, Entrada> };
+export const VIDA_DA_LAPIDE_MS: number;
+export function lojaVazia(): Loja;
+export function chaveDoCookie(c: IdCookie): string;
+export function diffDeCookies(antes: Cookie[], depois: Cookie[]): Diff;
+export function fundir(loja: Loja, diff: Partial<Diff>, em: number, agora?: number): { loja: Loja; efetivo: Diff };
+export function cookiesVivos(loja: Loja, agora?: number): Cookie[];
+export function zerar(loja: Loja, em: number, agora?: number): { loja: Loja; efetivo: Diff };
+export function lerLoja(arquivo: string, chave: Buffer): Promise<Loja>;
+export function gravarLoja(arquivo: string, chave: Buffer, loja: Loja): Promise<void>;
+export function atualizarLoja(arquivo: string, chave: Buffer, mudar: (l: Loja) => { loja: Loja; efetivo: Diff }): Promise<{ loja: Loja; efetivo: Diff }>;

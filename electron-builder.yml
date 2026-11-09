@@ -1,0 +1,69 @@
+appId: app.nod.desktop
+productName: nod
+copyright: Copyright © 2026 nod
+directories:
+  output: release
+  buildResources: desktop/resources
+files:
+  - dist/desktop/**
+  - package.json
+  - '!node_modules/**'
+extraMetadata:
+  main: dist/desktop/main.mjs
+asar: true
+asarUnpack:
+  - dist/desktop/proxy.mjs
+  - dist/desktop/hook-nativas.mjs
+# definido em 2026-10-09 (plano "IAs", PR 1): o npm que instala o Claude Code e o Codex com o Node do próprio app
+# (desktop/instalar-ia.ts). Vai fora do asar, em Contents/Resources/npm: o Electron o roda como script
+# (ELECTRON_RUN_AS_NODE) e ele lê os próprios arquivos e os de node_modules/npm/node_modules. Medido no
+# electron-builder 26.16.1: a pasta `node_modules` logo abaixo do `from` é sempre descartada (util/filter.js),
+# então as dependências do npm vão numa segunda entrada, com o próprio node_modules como `from`.
+extraResources:
+  - from: node_modules/npm
+    to: npm
+    filter:
+      - '**/*'
+  - from: node_modules/npm/node_modules
+    to: npm/node_modules
+    filter:
+      - '**/*'
+  # NOD-93 (ADR-123): limactl, guest agent e lima.yaml da VM local, montados por
+  # scripts/desktop/vm-local-binarios.ts só quando NOD_VM_LOCAL=1 no release; sem a pasta, o app sai sem a VM.
+  - from: dist/vm-local/${arch}
+    to: vm-local
+    filter:
+      - '**/*'
+npmRebuild: false
+artifactName: nod-${version}-${os}-${arch}.${ext}
+mac:
+  icon: desktop/resources/icon.png
+  category: public.app-category.productivity
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    # NOD-132 (ADR-149): o Squirrel.Mac só instala de ZIP; o ZIP leva o .app já notarizado e grampeado.
+    - target: zip
+      arch: [arm64, x64]
+  hardenedRuntime: true
+  notarize: true
+  entitlements: desktop/entitlements.mac.plist
+  entitlementsInherit: desktop/entitlements.mac.plist
+  minimumSystemVersion: '12.0'
+  # NOD-136: o esquema `nod://` (CFBundleURLTypes no Info.plist); o app trata o link em desktop/deep-link.ts.
+  protocols:
+    - name: nod
+      schemes: [nod]
+  # Modo ligação (2026-10-04, ADR-071): o texto que o macOS mostra ao pedir o microfone.
+  extendInfo:
+    NSMicrophoneUsageDescription: O nod usa o microfone quando você dita uma mensagem ou liga para um bot.
+dmg:
+  sign: true
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+publish: null

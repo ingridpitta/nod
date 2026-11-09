@@ -1,0 +1,5 @@
+nome=painel-vendas
+porta=3000
+modo=producao
+limite_conexoes=50
+idioma=pt-BR

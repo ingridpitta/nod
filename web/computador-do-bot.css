@@ -1,0 +1,342 @@
+/* Computador do bot v2 (NOD-96, PR 6). Portado de proto/_nod/computador-do-bot.css (o protótipo aprovado), sem a moldura
+   do protótipo e sem as cenas do primeiro uso. Só vale com NOD_COMPUTADORES=motor: as classes cb-* e pc-* só aparecem
+   quando GET /computador responde (web/lib/computador-pessoa.ts). Só tokens do nod; a tela do computador é escura nos
+   dois temas, como um monitor (cor-fixa). Com prefers-reduced-motion nada se mexe; em forced-colors o progresso não some. */
+
+/* ---------- Ícone "Computador do bot" (monitor + rosto do mascote) ---------- */
+.cb-ic-pc { flex: none; display: block; }
+
+/* ---------- Links e botão ghost (ações de card: nunca botão cheio) ---------- */
+.cb-link { display: inline; margin: 0; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; font-weight: 500; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; cursor: pointer; }
+.cb-link:hover { color: var(--ink); text-decoration-color: currentColor; }
+.cb-link:focus-visible, .cb-bt-ghost:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 4px; }
+.cb-sep { margin: 0 2px; color: var(--ink-3); }
+.cb-bt-ghost { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 28px; margin: 0; padding: 0 10px; border: 0; border-radius: 8px; background: none; color: var(--ink-2); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
+.cb-bt-ghost:hover { background: var(--surface-selected); color: var(--ink); }
+.cb-bt-ghost svg { flex: none; width: 15px; height: 15px; }
+
+/* ---------- Card sutil (o erro com cara de mensagem): balão normal do bot, ponto pequeno, título, apoio e links ---------- */
+.message.bot .bubble.cb-aviso, .bubble.cb-aviso { padding: 10px 14px; font-size: 14px; line-height: 1.5; }
+.cb-aviso p { margin: 0; }
+.cb-aviso-tit { display: flex; align-items: flex-start; gap: 8px; font-weight: 500; color: var(--ink); }
+.cb-ponto { flex: none; display: inline-block; width: 6px; height: 6px; margin-top: calc(.75em - 3px); border-radius: 50%; background: var(--danger); }
+.cb-ponto.aviso { background: var(--warning); }
+.cb-ponto.neutro { background: var(--ink-3); }
+.cb-aviso-sub { padding-left: 14px; color: var(--ink-3); font-size: 13.5px; }
+.cb-acoes { margin-top: 4px !important; padding-left: 14px; font-size: 13.5px; }
+.cb-acoes .cb-link, .cb-linha .cb-link { white-space: nowrap; }
+
+/* ---------- Estado de espera e ✓: uma linha cinza, sem caixa ---------- */
+.cb-linha { display: flex; align-items: flex-start; gap: 7px; width: fit-content; max-width: 100%; box-sizing: border-box; margin: 6px 0 0; padding: 0; color: var(--ink-3); font-size: 13px; line-height: 1.5; }
+.cb-linha-ic { flex: none; display: grid; place-items: center; width: 15px; height: 1.5em; color: var(--ink-3); }
+.cb-linha-txt { min-width: 0; clip-path: inset(-24px -24px -24px 0); } /* corta só à esquerda: o "·" de quem abre linha */
+.cb-segs { display: flex; flex-wrap: wrap; margin-left: -15px; }
+.cb-seg { position: relative; min-width: 0; padding-left: 15px; }
+.cb-seg::before { content: "·" / ""; position: absolute; left: 0; top: 0; width: 15px; text-align: center; color: var(--ink-3); }
+.cb-linha-ic svg { width: 15px; height: 15px; }
+.cb-linha-ic .ob-gira { width: 10px; height: 10px; border-width: 1.5px; }
+.cb-linha.cb-ok .cb-linha-ic { color: var(--success); }
+.cb-linha.centro { margin: 4px auto 12px; }
+.msg-linha > .cb-linha.centro { max-width: 620px; }
+/* Sozinha numa mensagem do bot: no meio do mascote. Depois de um balão: logo abaixo dele. */
+.bubble-wrap > .cb-linha { margin: 13px 0 0; }
+.bubble-wrap > .bubble ~ .cb-linha { margin: 6px 0 0; }
+
+/* ---------- O anel de progresso (o estado da máquina em Máquinas) ---------- */
+.cb-anel { display: block; width: 12px; height: 12px; overflow: visible; }
+.cb-anel circle { fill: none; stroke-width: 2; }
+.cb-anel .cb-anel-trilho { stroke: var(--line-strong); }
+.cb-anel .cb-anel-valor { stroke: var(--signal); stroke-linecap: round; transition: stroke-dasharray .3s ease; }
+
+/* ---------- A linha de 2 px no cabeçalho do chat (o progresso, em segundo plano) ---------- */
+/* Vai dentro do button.pilula-bot. No computador, a pílula é o cabeçalho: a linha acende a borda de baixo dela, na
+   parte reta. No celular, a pílula não é posicionada e a linha cai na borda de baixo do .cabecalho inteiro. */
+.cb-fio { position: absolute; left: 0; right: 0; bottom: -1px; z-index: 1; display: block; height: 2px; overflow: hidden; background: transparent; pointer-events: none; }
+.cb-fio > i { display: block; height: 100%; background: var(--signal); transition: width .3s ease; }
+.cb-fio.cb-fio-fim > i { animation: cb-fio-some .6s 1.2s both; }
+@keyframes cb-fio-some { to { opacity: 0; } }
+.pilula-bot:has(> .cb-fio) { position: relative; }
+.pilula-bot > .cb-fio { left: 19px; right: 19px; bottom: -1px; border-radius: 2px; }
+.pilula-bot > .cb-fio > i { border-radius: inherit; }
+/* A mesma condição do mobile.css do nod (onde a pílula vira a faixa do ☰). */
+@media (hover: none) and (pointer: coarse) and (max-width: 600px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  .pilula-bot:has(> .cb-fio) { position: static; }
+  .pilula-bot > .cb-fio { left: 0; right: 0; border-radius: 0; }
+}
+
+/* ---------- A miniatura da tela: "Abrir" no centro, leve escurecimento, sem pílula ---------- */
+.tela-preview.cb-mini .tela-abrir, .tela-preview.com-imagem.cb-mini .tela-abrir { opacity: 1; background: #00000033; transition: background .15s ease; } /* cor-fixa: véu sobre o monitor */
+.tela-preview.cb-mini:hover .tela-abrir, .tela-preview.cb-mini:focus-visible .tela-abrir { background: #00000073; } /* cor-fixa: a tela do bot é sempre escura */
+.cb-abrir { display: inline-flex; align-items: center; gap: 6px; color: #fff; font-size: 13.5px; font-weight: 500; text-shadow: 0 1px 8px #000a; } /* cor-fixa: texto sobre o monitor */
+.cb-abrir svg { width: 16px; height: 16px; filter: drop-shadow(0 1px 4px #0009); } /* cor-fixa: a tela do bot é sempre escura */
+.tela-preview.cb-mini:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.cb-ao-vivo { position: absolute; top: 8px; left: 8px; z-index: 1; display: inline-flex; align-items: center; gap: 5px; padding: 2px 7px 2px 6px; border-radius: 999px; background: #00000080; color: #fff; font-size: 11px; font-weight: 500; line-height: 1.4; } /* cor-fixa: selo sobre o monitor */
+.cb-ao-vivo i { width: 6px; height: 6px; border-radius: 50%; background: #3ecf8e; animation: cb-pulsa 2.4s ease-in-out infinite; } /* cor-fixa: o --agent-vert */
+
+/* ---------- Sem tela: uma linha discreta, sem caixa ---------- */
+.cb-gv-linha { display: flex; align-items: center; justify-content: center; gap: 7px; margin: 2px 0 4px; color: var(--ink-3); font-size: 13px; line-height: 1.45; text-align: center; }
+.cb-gv-linha svg { flex: none; width: 15px; height: 15px; }
+
+/* ---------- O mascote (htmlMascote do nod, estado "pausado" = dormindo) ---------- */
+.cb-sono { --mascote-cor: var(--agent-bleu); }
+/* ---------- Dormindo: fundo sutil com estrelas, mascote respirando, z z z, Acordar ---------- */
+.cb-sono { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; width: 100%; aspect-ratio: 1.6; box-sizing: border-box; padding: 12px 16px; overflow: hidden; border-radius: 16px; background: var(--surface-raised); color: var(--ink); text-align: center; }
+.cb-sono p { margin: 0; }
+.cb-estrelas { position: absolute; inset: 0; pointer-events: none; }
+.cb-estrelas i { position: absolute; width: 3px; height: 3px; border-radius: 50%; background: var(--ink-3); opacity: .35; animation: cb-brilha 3.2s ease-in-out infinite; }
+.cb-estrelas i:nth-child(1) { left: 12%; top: 18%; }
+.cb-estrelas i:nth-child(2) { left: 26%; top: 9%; width: 2px; height: 2px; animation-delay: -1.1s; }
+.cb-estrelas i:nth-child(3) { left: 78%; top: 14%; animation-delay: -2.3s; }
+.cb-estrelas i:nth-child(4) { left: 88%; top: 34%; width: 2px; height: 2px; animation-delay: -.6s; }
+.cb-estrelas i:nth-child(5) { left: 8%; top: 52%; width: 2px; height: 2px; animation-delay: -1.8s; }
+.cb-estrelas i:nth-child(6) { left: 66%; top: 6%; width: 2px; height: 2px; animation-delay: -2.8s; }
+.cb-sono-masc { position: relative; display: grid; margin-bottom: 4px; }
+.cb-sono-masc > .mascote { grid-area: 1 / 1; transform-origin: 50% 90%; }
+.cb-sono .cb-respira { animation: cb-respira 4s ease-in-out infinite; }
+.cb-zzz { position: absolute; left: 80%; bottom: 62%; display: flex; gap: 1px; color: var(--ink-3); font-size: 11px; font-weight: 600; line-height: 1; pointer-events: none; }
+.cb-zzz i { font-style: normal; opacity: 0; animation: cb-zzz 3s ease-in-out infinite; }
+.cb-zzz i:nth-child(2) { font-size: 13px; animation-delay: .5s; }
+.cb-zzz i:nth-child(3) { font-size: 15px; animation-delay: 1s; }
+.cb-sono-tit { font-size: 13.5px; font-weight: 500; line-height: 1.35; }
+.cb-sono-sub { font-size: 12.5px; line-height: 1.4; color: var(--ink-3); }
+.cb-sono .cb-bt-ghost { margin-top: 4px; }
+.cb-sono .cb-bt-ghost:hover { background: var(--surface); }
+@keyframes cb-respira { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.035, .965); } }
+@keyframes cb-zzz { 0% { opacity: 0; transform: translate(0, 4px); } 25%, 60% { opacity: .9; } 100% { opacity: 0; transform: translate(6px, -10px); } }
+@keyframes cb-brilha { 0%, 100% { opacity: .15; } 50% { opacity: .6; } }
+@keyframes cb-pulsa { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+
+/* ---------- Acordando: abre os olhos (dormindo → meio → acordado), espreguiça, e a tela entra ---------- */
+.cb-acordando { display: grid; }
+.cb-acordando > * { grid-area: 1 / 1; }
+/* 29/10: o "Acordando…" fica à vista enquanto o computador liga (a VM do Mac leva minutos); antes sumia em 2 s e deixava a aba vazia. */
+.cb-acordando .cb-zzz { animation: cb-sai .3s both; }
+.cb-acordando .cb-sono-masc { animation: cb-espreguica 1.9s ease-in-out both; }
+.cb-acordando .tela-preview { animation: cb-entra .45s 2s both; }
+@keyframes cb-espreguica { 0%, 62% { transform: none; } 76% { transform: translateY(-3px) scale(.9, 1.14); } 88% { transform: scale(1.05, .95); } 100% { transform: none; } }
+@keyframes cb-sai { to { opacity: 0; visibility: hidden; } }
+@keyframes cb-entra { from { opacity: 0; transform: scale(.97); } to { opacity: 1; transform: none; } }
+
+/* ---------- Tela cheia: quase a janela toda, imagem inteira, título pequeno, ✕ discreto, pílula sutil ---------- */
+/* No protótipo é um véu dentro do palco (a moldura usa transform); no nod, o <dialog> em tela cheia. */
+/* No protótipo era um véu absoluto; no nod é um <dialog> modal (foco preso, Esc fecha, o resto fica inerte). */
+dialog.cb-veu { position: fixed; inset: 0; width: auto; height: auto; max-width: none; max-height: none; margin: 0; padding: 20px; border: 0; box-sizing: border-box; background: transparent; color: inherit; overflow: hidden; }
+dialog.cb-veu[open] { display: flex; align-items: center; justify-content: center; }
+dialog.cb-veu::backdrop { background: var(--backdrop); }
+.cb-tela-vista > img.controlavel { cursor: default; }
+.cb-tela-vista > img:focus-visible { outline: 2px solid #fff; outline-offset: -5px; } /* cor-fixa: WCAG 2.4.7, dentro da borda azul do controle */
+.cb-tela { position: relative; flex: none; width: 100%; max-height: 100%; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; border-radius: 14px; background: #111113; color: #e4e4e7; box-shadow: 0 24px 64px #0007; } /* cor-fixa: a moldura do monitor, escura nos dois temas */
+.cb-tela-cab { flex: none; display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 6px 0 14px; box-sizing: border-box; font-size: 13px; }
+.cb-tela-tit { flex: none; margin: 0; font-size: 13px; font-weight: 500; color: #e4e4e7; } /* cor-fixa: a tela do bot é sempre escura */
+.cb-tela-pedido { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #a1a1aa; } /* cor-fixa: 7,6:1 sobre #111113 */
+.cb-tela-cab .cb-tela-x { flex: none; display: grid; place-items: center; width: 32px; height: 32px; margin: 0 0 0 auto; padding: 0; border: 0; border-radius: 8px; background: none; color: #a1a1aa; cursor: pointer; } /* cor-fixa: a tela do bot é sempre escura */
+.cb-tela-cab .cb-tela-x:hover { background: #ffffff14; color: #fff; } /* cor-fixa: a tela do bot é sempre escura */
+.cb-tela-x:focus-visible { outline: 2px solid #4ea3f0; outline-offset: 0; } /* cor-fixa: o --focus-ring do escuro */
+/* A moldura abraça a tela (16:10, a resolução do computador): sobra fundo escurecido em volta, não faixa preta. Se não couber na altura, encolhe e a imagem fica inteira (contain). */
+.cb-tela-vista { position: relative; flex: 0 1 auto; min-height: 0; aspect-ratio: 16 / 10; display: grid; place-items: center; background: #000; } /* cor-fixa: a tela do bot é sempre escura */
+.cb-tela-vista > img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: contain; } /* a imagem inteira, na proporção */
+/* NOD-95: a tela ao vivo (noVNC) ocupa o mesmo lugar da imagem; o cliente escala o canvas para caber inteiro. */
+.cb-tela-vista > .cb-tela-vivo { position: absolute; inset: 0; z-index: 1; overflow: hidden; }
+.cb-tela-vista > .cb-tela-vivo[hidden] { display: none; }
+.cb-tela-vista.no-controle::after { content: ""; position: absolute; inset: 0; z-index: 2; border: 3px solid #4ea3f0; pointer-events: none; } /* cor-fixa: a borda do controle, como na v1 */
+/* A pílula: estado + ação em link, embaixo e no meio, translúcida. */
+.cb-pilula { position: absolute; z-index: 3; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; width: max-content; max-width: calc(100% - 24px); box-sizing: border-box; padding: 7px 14px; border: 1px solid #ffffff1f; border-radius: 999px; background: #1c1c1ecc; color: #d4d4d8; font-size: 13px; line-height: 1.35; box-shadow: 0 6px 20px #0005; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); } /* cor-fixa: sobre a tela */
+.cb-pilula svg { flex: none; width: 15px; height: 15px; }
+.cb-pilula .ob-gira { flex: none; width: 10px; height: 10px; border-width: 1.5px; }
+.cb-pilula-est { display: inline-flex; align-items: center; gap: 7px; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.cb-pilula .cb-sep { color: #71717a; } /* cor-fixa: a tela do bot é sempre escura */
+.cb-pilula .cb-link { flex: none; color: #fff; text-decoration-color: #ffffff59; } /* cor-fixa: a tela do bot é sempre escura */
+.cb-pilula .cb-link:focus-visible { outline-color: #4ea3f0; } /* cor-fixa: a tela do bot é sempre escura */
+.cb-pilula.cb-controle svg { color: #4ea3f0; } /* cor-fixa: o azul do controle */
+
+/* ---------- Card de login leve: miniatura do site, título, ponto âmbar, dica; sem caixa ---------- */
+.cb-login { display: flex; align-items: center; gap: 12px; max-width: 520px; padding: 2px 0; }
+.cb-login p { margin: 0; }
+.cb-login-mini { position: relative; flex: none; display: block; width: 72px; height: 48px; margin: 0; padding: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 8px; background: #1c1c1e; cursor: pointer; } /* cor-fixa: monitor */
+.cb-login-mini img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top left; }
+/* 72 × 48 é pouco para texto por cima: o site e o favicon ficam à vista, e "Abrir" só aparece no hover e no foco. */
+.cb-login-mini .cb-abrir { position: absolute; inset: 0; justify-content: center; gap: 4px; background: #00000080; font-size: 12px; opacity: 0; transition: opacity .15s ease; } /* cor-fixa: a tela do bot é sempre escura */
+.cb-login-mini .cb-abrir svg { width: 13px; height: 13px; }
+.cb-login-mini:hover .cb-abrir, .cb-login-mini:focus-visible .cb-abrir, .cb-login-mini.sem-imagem .cb-abrir { opacity: 1; }
+.cb-login-mini:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.cb-login-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.cb-login-tit { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; font-size: 14px; font-weight: 600; line-height: 1.4; color: var(--ink); }
+.cb-aguarda { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 400; color: var(--ink-3); }
+.cb-aguarda .cb-ponto { margin-top: 0; background: var(--warning); animation: cb-pulsa 2.4s ease-in-out infinite; }
+.cb-login-sub { font-size: 13px; line-height: 1.4; color: var(--ink-3); }
+.cb-login-dica { font-size: 12px; line-height: 1.4; color: var(--ink-3); }
+
+/* ---------- Seu espaço › Computador do bot (o painel das duas issues) ---------- */
+.seu-pc .pc-cartao { overflow: visible; }
+.pc-memoria { padding: 12px 18px 16px; border-top: 1px solid var(--line); }
+.pc-mem-cab { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 8px; font-size: 13px; color: var(--ink-2); }
+.pc-mem-cab span:last-child { font-variant-numeric: tabular-nums; text-align: right; }
+.pc-barra { height: 6px; border-radius: 999px; background: var(--surface-raised); overflow: hidden; }
+.pc-barra i { display: block; height: 100%; border-radius: inherit; background: var(--ink-2); transition: width .3s ease; }
+.pc-barra.cheia i { background: var(--warning); }
+.pc-cartao:has(.pc-barra.cheia) .pc-mem-cab span:last-child { color: var(--warning); font-weight: 500; }
+.pc-barra.grande { height: 6px; margin: 10px 0 4px; }
+.pc-barra.grande i { background: var(--signal); }
+.maq-estado .ob-gira { width: 10px; height: 10px; }
+.maq-estado .cb-anel { flex: none; }
+.maq-estado.pc-dorme svg { flex: none; color: var(--ink-3); }
+.pc-telas .pc-tela { gap: 12px; }
+.pc-tela .mascote { flex: none; }
+.pc-vazio { margin: 0; padding: 16px 18px; font-size: 13.5px; line-height: 1.5; color: var(--ink-3); }
+.pc-acao { display: flex; align-items: center; gap: 16px; padding: 14px 18px; }
+.pc-acao + .pc-acao { border-top: 1px solid var(--line); }
+.pc-acao-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pc-acao-txt b { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 8px; font-size: 14px; font-weight: 500; }
+.pc-acao-txt > span { font-size: 13px; line-height: 1.45; color: var(--ink-3); }
+.pc-acao > .bt { flex: none; }
+.espaco-conteudo .bt.sm.perigo { color: var(--danger); border-color: var(--danger-line); }
+/* Vindo de um aviso: a ação sugerida só com o foco e a palavra "sugerido", sem fundo. */
+.pc-acao.realce > .bt, .pc-lugar.realce > .bt { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.pc-sugerido { font-size: 12.5px; font-weight: 400; color: var(--signal); }
+.pc-atividade { list-style: none; margin: 0; padding: 0; }
+.pc-atividade li { display: flex; align-items: center; gap: 12px; padding: 10px 18px; font-size: 13.5px; }
+.pc-atividade li + li { border-top: 1px solid var(--line); }
+.pc-atividade li > span:not(.av-me) { flex: 1; min-width: 0; color: var(--ink-2); }
+.pc-atividade li b { font-weight: 500; color: var(--ink); }
+.pc-atividade time { flex: none; font-size: 12.5px; color: var(--ink-3); white-space: nowrap; }
+.pc-atividade .mascote { flex: none; }
+.pc-atividade .av-me.pc-eu { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--surface-raised); color: var(--ink-2); font-size: 10px; }
+/* A faixa no topo do painel: sutil, só a borda; .alerta quando algo impede. */
+.pc-faixa { display: flex; align-items: flex-start; gap: 12px; margin: 0 0 24px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: none; }
+.pc-faixa > svg { flex: none; margin-top: 2px; color: var(--ink-3); }
+.pc-faixa > div { flex: 1; min-width: 0; }
+.pc-faixa b { font-size: 14px; font-weight: 500; }
+.pc-faixa p { margin: 2px 0 0; font-size: 13px; line-height: 1.5; color: var(--ink-3); }
+.pc-faixa > .bt, .pc-faixa > .cb-bt-ghost { flex: none; }
+.pc-faixa.alerta { border-color: var(--warning-line); }
+.pc-faixa.alerta > svg { color: var(--warning); }
+/* Etapas (redefinir, primeiro uso, mover): a atual com o giro e o %. */
+.pc-progresso h3 { margin-bottom: 0; }
+.pc-lead { margin: 6px 0 0; font-size: 14px; line-height: 1.5; color: var(--ink-2); }
+.pc-etapas { list-style: none; display: grid; gap: 8px; margin: 12px 0 0; padding: 0; }
+.pc-etapas li { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--ink-3); }
+.pc-etapas li.feita { color: var(--ink-2); }
+.pc-etapas li.atual { color: var(--ink); font-weight: 500; }
+.pc-et-nome { display: flex; flex-direction: column; min-width: 0; }
+.pc-et-sub { font-size: 12.5px; font-weight: 400; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.pc-et-ic { flex: none; display: grid; place-items: center; width: 18px; height: 18px; }
+.pc-et-ic i { width: 8px; height: 8px; box-sizing: border-box; border: 1.5px solid var(--line-strong); border-radius: 50%; }
+.feita .pc-et-ic { color: var(--success); }
+.pc-et-ic .ob-gira { width: 11px; height: 11px; border-width: 1.5px; }
+.pc-pct { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 400; color: var(--ink-2); }
+.cl-dialogo .pc-obs { margin: 14px 0 0; font-size: 13px; color: var(--ink-3); }
+/* O progresso dentro do cartão do painel (sem modal). */
+.pc-prog-inline { padding: 12px 18px 16px; border-top: 1px solid var(--line); }
+.pc-prog-inline .pc-mem-cab { margin-bottom: 0; }
+
+/* ---------- Celular ---------- */
+@media (max-width: 640px) {
+  .cb-veu { padding: 0; }
+  .cb-tela { align-self: stretch; max-height: none; border-radius: 0; }
+  .cb-tela-vista { flex: 1; aspect-ratio: auto; }
+  .cb-tela-cab { min-height: 48px; padding-top: env(safe-area-inset-top); }
+  .cb-tela-cab .cb-tela-x { width: 44px; height: 44px; }
+  .cb-pilula { bottom: calc(16px + env(safe-area-inset-bottom)); padding: 4px 6px 4px 14px; }
+  .cb-pilula .cb-link { display: inline-flex; align-items: center; min-height: 40px; padding: 0 8px; }
+  /* Links no meio do texto: a área de toque cresce para 44 px sem mudar a linha. */
+  .cb-acoes .cb-link, .cb-linha .cb-link { position: relative; }
+  .cb-acoes .cb-link::after, .cb-linha .cb-link::after { content: ""; position: absolute; inset: -12px -6px; }
+  .cb-acoes { margin-top: 8px !important; line-height: 1.9; }
+  .cb-bt-ghost { min-height: 44px; padding: 0 12px; }
+  .cb-login-mini { width: 72px; height: 48px; }
+  .pc-acao { flex-wrap: wrap; gap: 10px 16px; }
+  .pc-acao > .bt { min-height: 44px; }
+  .pc-faixa { flex-wrap: wrap; }
+  .pc-faixa > .bt, .pc-faixa > .cb-bt-ghost { margin-left: 24px; min-height: 44px; }
+  .pc-atividade li { padding: 10px 14px; align-items: flex-start; }
+  .pc-atividade li > span:not(.av-me) { line-height: 1.4; }
+  .cl-dialogo-acoes .bt { min-height: 44px; }
+}
+
+/* ---------- Preparando o computador (NOD-93): o mascote monta o computador, uma cena por etapa ---------- */
+/* Portado de _nod/computador-do-bot.css do protótipo v2 (nod-prototipos b605727); o mascote é o <nod-mascote> real. */
+.cb-cena { position: relative; width: min(100%, 300px); aspect-ratio: 300 / 150; margin: 0 auto 8px; overflow: hidden; --mascote-cor: var(--agent-bleu); }
+.cb-cena > svg.cb-cena-fundo { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.cb-cena .cb-cena-mon { fill: var(--surface); stroke: var(--ink-2); stroke-width: 2.5; stroke-linejoin: round; }
+.cb-cena .cb-cena-pe { fill: none; stroke: var(--ink-2); stroke-width: 2.5; stroke-linecap: round; }
+.cb-cena .cb-cena-chao { stroke: var(--line); stroke-width: 2; stroke-linecap: round; }
+.cb-cena .cb-cena-tela { fill: var(--surface-raised); }
+.cb-cena .cb-cena-enche { fill: var(--signal-soft); }
+.cb-cena .cb-cena-enche-borda { fill: var(--signal); }
+.cb-cena .cb-cena-luz { fill: var(--signal-soft); opacity: 0; }
+.cb-cena .cb-cena-botao { fill: var(--ink-3); }
+.cb-cena .cb-cena-nav { opacity: 0; }
+.cb-cena .cb-cena-nav rect.janela { fill: var(--surface); stroke: var(--line-strong); stroke-width: 1.5; }
+.cb-cena .cb-cena-nav .barra { fill: var(--surface-raised); }
+.cb-cena .cb-cena-nav .linha { fill: var(--line-strong); }
+.cb-cena .cb-cena-nav .ponto { fill: var(--ink-3); }
+.cb-cena .cb-peca { opacity: 0; }
+.cb-cena .cb-peca.p1 { fill: var(--agent-turquoise); }
+.cb-cena .cb-peca.p2 { fill: var(--agent-violet); }
+.cb-cena .cb-peca.p3 { fill: var(--agent-ambre); }
+.cb-cena-masc { position: absolute; left: 12%; bottom: 12%; display: grid; width: 23%; aspect-ratio: 1; }
+.cb-cena-masc > nod-mascote { grid-area: 1 / 1; width: 100%; height: 100%; transform-origin: 50% 95%; }
+.cb-cena-caixa { position: absolute; left: 24%; top: -20%; width: 52%; height: 32%; box-sizing: border-box; border: 2px solid var(--ink-2); border-radius: 4px; background: var(--warning-soft); }
+.cb-cena-caixa::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: var(--ink-2); opacity: .5; }
+.cb-cena-mao { position: absolute; right: -4%; top: -10%; width: 15%; height: 46%; border-radius: 999px; background: var(--mascote-cor); opacity: 0; transform: rotate(24deg); transform-origin: 50% 92%; }
+/* Baixando: anda carregando a caixa; as peças caem no monitor, que enche com o progresso. */
+.cb-cena[data-etapa="baixando"] .cb-cena-masc > nod-mascote, .cb-cena[data-etapa="baixando"] .cb-cena-caixa { animation: cb-passo .8s ease-in-out infinite; }
+.cb-cena[data-etapa="baixando"] .cb-peca { animation: cb-cai 2.4s ease-in infinite; }
+.cb-cena[data-etapa="baixando"] .cb-peca.p2 { animation-delay: .8s; }
+.cb-cena[data-etapa="baixando"] .cb-peca.p3 { animation-delay: 1.6s; }
+/* Ligando: aperta o botão, o monitor acende e ele se anima. */
+.cb-cena[data-etapa="ligando"] .cb-cena-masc { animation: cb-aperta 2.8s ease-in-out infinite; }
+.cb-cena[data-etapa="ligando"] .cb-cena-botao { animation: cb-botao 2.8s ease-in-out infinite; }
+.cb-cena[data-etapa="ligando"] .cb-cena-luz { animation: cb-acende 2.8s ease-in-out infinite; }
+.cb-cena[data-etapa="ligando"] .cb-cena-masc > nod-mascote { animation: cb-pulo 2.8s ease-in-out infinite; }
+/* Abrindo a tela: um navegador abre no monitor e ele acena. */
+.cb-cena[data-etapa="abrindo"] .cb-cena-luz { opacity: 1; }
+.cb-cena[data-etapa="abrindo"] .cb-cena-nav { animation: cb-abre 2.6s ease-out infinite; transform-box: fill-box; transform-origin: 50% 50%; }
+.cb-cena[data-etapa="abrindo"] .cb-cena-mao { opacity: 1; animation: cb-aceno 1.3s ease-in-out infinite; }
+@keyframes cb-passo { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4%); } }
+@keyframes cb-cai { 0% { opacity: 0; transform: translateY(-40px); } 15% { opacity: 1; } 70% { opacity: 1; transform: translateY(18px); } 85%, 100% { opacity: 0; transform: translateY(22px); } }
+@keyframes cb-aperta { 0%, 20% { transform: none; } 34%, 42% { transform: translateX(26%); } 56%, 100% { transform: none; } }
+@keyframes cb-botao { 0%, 34% { fill: var(--ink-3); } 38%, 100% { fill: var(--success); } }
+@keyframes cb-acende { 0%, 38% { opacity: 0; } 52%, 92% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes cb-pulo { 0%, 56% { transform: none; } 64% { transform: translateY(-12%) scale(.94, 1.08); } 72% { transform: scale(1.06, .94); } 80%, 100% { transform: none; } }
+@keyframes cb-abre { 0%, 8% { opacity: 0; transform: scale(.6); } 26%, 90% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+@keyframes cb-aceno { 0%, 100% { transform: rotate(12deg); } 50% { transform: rotate(38deg); } }
+.pc-primeiro-uso h3 { text-align: center; }
+.pc-primeiro-uso .pc-lead { text-align: center; }
+.pc-primeiro-uso .cl-dialogo-acoes { justify-content: center; }
+.pc-et-sub { color: var(--ink-3); font-size: 12px; }
+
+/* ---------- Movimento reduzido: tudo parado ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .cb-sono .cb-respira, .cb-zzz i, .cb-estrelas i, .cb-ao-vivo i, .cb-aguarda .cb-ponto { animation: none; }
+  .cb-zzz i { opacity: .8; }
+  .cb-estrelas i { opacity: .4; }
+  /* Acordar: o fim, direto (a tela no lugar do mascote). */
+  .cb-acordando .cb-sono { animation: none; opacity: 0; visibility: hidden; }
+  .cb-acordando .tela-preview, .cb-acordando .cb-sono-masc { animation: none; }
+  /* Cenas: uma imagem parada por etapa. */
+  .cb-cena *, .cb-cena-masc > nod-mascote { animation: none !important; }
+  .cb-cena[data-etapa="baixando"] .cb-peca.p1 { opacity: 1; transform: translateY(6px); }
+  .cb-cena[data-etapa="ligando"] .cb-cena-luz, .cb-cena[data-etapa="abrindo"] .cb-cena-luz, .cb-cena[data-etapa="abrindo"] .cb-cena-nav, .cb-cena[data-etapa="abrindo"] .cb-cena-mao { opacity: 1; }
+  .cb-cena[data-etapa="ligando"] .cb-cena-botao { fill: var(--success); }
+  .cb-item-ok .cb-ok-v, .cb-item-ok .cb-ic-pc, .cb-fio.cb-fio-fim > i { animation-duration: .01s; }
+  .cb-dica, .tela-preview.cb-mini .tela-abrir, .cb-login-mini .cb-abrir, .cb-anel .cb-anel-valor, .cb-fio > i, .pc-barra i { transition: none; }
+  .cb-linha-ic .ob-gira, .cb-pilula .ob-gira, .pc-et-ic .ob-gira, .maq-estado .ob-gira { animation-duration: 2.4s; }
+}
+
+/* ---------- Alto contraste (forced-colors): o progresso, o ponto e o tooltip não somem ---------- */
+/* Sem isso o Windows troca os fundos por Canvas e a barra, a linha de 2 px e o ponto do card ficam invisíveis. */
+@media (forced-colors: active) {
+  .cb-tela-vista > img:focus-visible { outline: 2px solid Highlight; outline-offset: -2px; }
+  .pc-barra { border: 1px solid CanvasText; }
+  .pc-barra i, .cb-fio > i { forced-color-adjust: none; background: Highlight; }
+  .cb-anel .cb-anel-trilho { stroke: GrayText; }
+  .cb-anel .cb-anel-valor { stroke: Highlight; }
+  .cb-ponto { forced-color-adjust: none; background: CanvasText; }
+  .cb-dica { border: 1px solid CanvasText; }
+  .cb-bt-ghost { border: 1px solid ButtonText; }
+}
+
+/* NOD-97 PR 5: o selo do cadeado na linha "Entrou de novo com a senha salva" ("‹bot› não vê a senha"). */
+.at-sigilo { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: var(--surface-selected); color: var(--ink-3); font-style: normal; font-size: 11px; white-space: nowrap; vertical-align: 1px; }
+.at-sigilo svg { flex: none; }

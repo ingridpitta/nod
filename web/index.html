@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- ADR-094 (celular): viewport-fit=cover para desenhar sob o entalhe com as margens de env(safe-area-inset-*); no Android
+         o teclado encolhe a página (interactive-widget), no iPhone a altura vem do visualViewport (web/lib/gaveta-bots.ts). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+    <title>nod</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#131315" media="(prefers-color-scheme: dark)" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Nod" />
+    <!-- Tema escolhido em Preferências (web/lib/tema.ts, mesma chave): aplicado antes do primeiro quadro, senão o app pisca claro. -->
+    <script>try { var t = localStorage.getItem("nod.tema"); if (t === "claro" || t === "escuro") document.documentElement.dataset.theme = t === "claro" ? "light" : "dark"; } catch (e) {}</script>
+    <!-- NOD-119: densidade e largura da barra (web/lib/densidade.ts, mesma chave, valores e consulta do celular): aplicadas antes do primeiro quadro, senão a barra abre larga e encolhe. -->
+    <script>try { var d = localStorage.getItem("nod.densidade"), px = { "compacta": 200, "compacta:recolhida": 56, "compacta:larga": 340, "confortavel:recolhida": 72 }; if (Object.prototype.hasOwnProperty.call(px, d) && !matchMedia("(hover: none) and (pointer: coarse) and (max-width: 600px), (hover: none) and (pointer: coarse) and (max-height: 500px)").matches) { var h = document.documentElement, p = d.split(":"); h.dataset.densidade = p[0]; if (p[1]) h.dataset.largura = p[1]; h.style.setProperty("--largura-barra", px[d] + "px"); } } catch (e) {}</script>
+    <!-- A Geist pedida já com o HTML, sem esperar o tokens.css: menos tempo com a fonte do sistema e o texto mudando de largura. -->
+    <link rel="preload" href="/fontes/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="/tokens.css" />
+    <link rel="stylesheet" href="/estilos.css" />
+    <link rel="stylesheet" href="/interface.css" />
+    <link rel="stylesheet" href="/navegacao.css" />
+    <link rel="stylesheet" href="/ligacao.css" />
+    <link rel="stylesheet" href="/onboarding.css" />
+    <link rel="stylesheet" href="/computador-do-bot.css" />
+    <link rel="stylesheet" href="/conta.css" />
+    <link rel="stylesheet" href="/configuracoes.css" />
+    <link rel="stylesheet" href="/agentes-lote.css" />
+    <link rel="stylesheet" href="/agenda.css" />
+    <link rel="stylesheet" href="/busca-celular.css" />
+    <link rel="stylesheet" href="/card-proposta.css" />
+    <link rel="stylesheet" href="/densidade.css" />
+    <link rel="stylesheet" href="/quadro.css" />
+    <link rel="stylesheet" href="/paginas.css" />
+    <link rel="stylesheet" href="/canvas.css" />
+    <link rel="stylesheet" href="/historico-perfil.css" />
+    <link rel="stylesheet" href="/quadro-celular.css" />
+    <link rel="stylesheet" href="/mobile.css" />
+    <link rel="stylesheet" href="/celular-base.css" />
+    <link rel="stylesheet" href="/tab-bar-celular.css" />
+  </head>
+  <body>
+    <!-- Regiões fixas (web/lib/render.ts): cada uma só é regravada quando o HTML muda; o composer nunca é regravado dentro da mesma conversa. -->
+    <!-- NOD-106: o leitor de tela ouve quando a leitura de uma resposta começa, para ou termina. -->
+    <div id="anuncio-leitura" class="sr-only" aria-live="polite"></div>
+    <!-- NOD-367: a contagem da busca de Agentes. Fora da .app (inerte com as Configurações abertas) e fora do #espaco (regravado). -->
+    <div id="anuncio-config" class="sr-only" role="status" aria-live="polite"></div>
+    <div id="anuncio-subagentes" class="sr-only" aria-live="polite"></div>
+    <div id="anuncio-gestao" class="sr-only" aria-live="polite"></div>
+    <!-- NOD-119: a etiqueta do "só avatares" (nome e título no mouse e no foco); visual, o leitor de tela já ouve o aria-label. -->
+    <div class="etiqueta-barra" id="etiqueta-barra" aria-hidden="true" hidden></div>
+    <div class="app">
+      <aside class="sidebar" id="sidebar" aria-label="Bots e salas"></aside>
+      <main class="stage">
+        <header class="cabecalho" id="cabecalho"></header>
+        <div id="erro"></div>
+        <!-- Plano "pergunta com botões" (2026-10-18): o que a resposta ou o × da pergunta fez, para o leitor de tela. -->
+        <div class="sr-only" id="anuncio-pergunta" aria-live="polite"></div>
+        <!-- NOD-348: o estado do turno (1 s estável) e "‹bot› respondeu", para o leitor de tela; a linha viva não é região viva. -->
+        <div class="sr-only" id="anuncio-turno" aria-live="polite"></div>
+        <section class="timeline-wrap" id="timeline"></section>
+        <!-- A pílula da base da conversa (2026-10-05, web/lib/rolagem.ts): sobe para a primeira não lida. -->
+        <div class="lugar-pilula-novas" id="pilula-novas" aria-live="polite"></div>
+        <!-- ADR-083 (2026-10-07, #195): a faixa de Trabalhos do bot (ou a pílula "● N trabalhando"), colada em cima do campo. -->
+        <div class="lugar-faixa-trabalhos" id="faixa-trabalhos"></div>
+        <footer class="composer-wrap" id="composer"></footer>
+        <section class="qd-vista" id="quadro" role="tabpanel" aria-labelledby="qd-aba-quadro" hidden></section>
+      </main>
+      <aside class="detalhes" id="detalhes" aria-label="Detalhes do bot"></aside>
+      <!-- NOD-119: a borda da barra (web/lib/borda-barra.ts), fora do #sidebar regravado; encaixa nas larguras de web/lib/densidade.ts. -->
+      <div class="borda-barra" id="borda-barra" role="separator" aria-orientation="vertical" aria-controls="sidebar" aria-label="Largura da barra lateral" aria-valuemin="0" aria-valuemax="100" tabindex="0"></div>
+    </div>
+    <!-- Seu espaço (2026-09-30): camada de tela cheia por cima do app; a tela de baixo continua montada. -->
+    <div id="espaco" hidden></div>
+    <!-- Modo ligação (2026-10-04, ADR-071): tela cheia por cima de tudo (a .app fica inerte) ou pílula no alto (a .app segue viva). -->
+    <div id="ligacao" hidden></div>
+    <!-- Onboarding por ligação (2026-10-04, ADR-077): olá, a IA do Mac, "está te ligando" e o painel da entrevista. -->
+    <div id="onboarding" hidden></div>
+    <script type="module" src="/main.ts"></script>
+  </body>
+</html>

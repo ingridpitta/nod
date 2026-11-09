@@ -1,0 +1,858 @@
+/* =====================================================================================
+   O Nod no celular (definido em 2026-10-10, ADR-094). Vem por último: só reorganiza o que já existe.
+   Celular = toque sem hover E tela de telefone (CONSULTA_CELULAR em web/lib/celular.ts; o teste confere que é a mesma).
+   A barra de bots vira a tela inicial (NOD-379: o app abre nela e o ‹ do cabeçalho volta a ela), a conversa ocupa a tela,
+   a gaveta do bot cobre a tela inteira, o campo fica colado no teclado e nada rola de lado entre 320 e 430 px.
+   ===================================================================================== */
+
+/* NOD-379: as animações da inicial do celular (usadas só dentro da consulta abaixo; com movimento reduzido, nada anima). */
+@keyframes inicio-chat-entra { from { transform: translateX(100%); box-shadow: -10px 0 30px rgba(0, 0, 0, .12); } to { transform: none; box-shadow: none; } } /* cor-fixa: a sombra da borda do chat que entra */
+@keyframes inicio-pulso { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+@keyframes inicio-segurar { from { transform: none; } to { transform: scale(1.02); } }
+@keyframes inicio-folha { from { transform: translateY(100%); } to { transform: none; } }
+
+/* Fora do celular o ‹ da inicial não existe e a faixa que só o teria também não. */
+.abrir-bots { display: none; }
+.cabecalho.so-menu { display: none; }
+/* NOD-381: o que só o celular desenha (o + do campo, a presença dentro da pílula e o esqueleto do carregando) não existe no
+   computador; lá a pílula segue com o nome e o ponto, como antes. */
+.mais-campo, .pilula-presenca, .esqueleto-conversa { display: none; }
+.pilula-txt { display: contents; }
+
+@media (hover: none) and (pointer: coarse) and (max-width: 600px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  /* NOD-119: no celular a barra não tem borda nem densidade — a gaveta de hoje. */
+  .borda-barra, .etiqueta-barra { display: none !important; }
+  /* ADR-125 (NOD-349): a gaveta do bot com alvos de 44 px no toque. */
+  .gvn-redondo, .gvn-cor { width: 44px; height: 44px; }
+  .gvn-cores { gap: 0; }
+  .gvn-forma { height: 52px; }
+  .gvn-acao-texto, .gv-aba { min-height: 44px; }
+  .gvn-nome { min-height: 44px; }
+  .gvn-sub { min-height: 44px; }
+  /* Revisão da NOD-349: a chave da rotina (30×18) ganha área de toque de 44 px sem mudar o desenho; + Nova também. */
+  .detalhe-rotina .chave::after { content: ""; position: absolute; inset: -13px -7px; }
+  .gv-secao-cab .gv-link { min-height: 44px; }
+  .composer-chip { min-height: 44px; }
+
+  html, body { width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none; }
+  /* O cinza do toque do iOS por cima de cada botão: o :active de cada controle já responde. */
+  body { -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%; }
+
+  /* ---- A tela: uma coluna, da altura que sobra acima do teclado ---- */
+  .app, .app.com-detalhes, .app.com-detalhes.detalhes-ocultos, body.com-raio-x .app.com-detalhes {
+    display: flex; flex-direction: column; width: 100%; padding: 0;
+    height: var(--altura-visivel, 100dvh); position: relative; top: var(--topo-visivel, 0px); overflow: hidden; }
+  .stage { flex: 1; width: 100%; min-width: 0; min-height: 0; margin: 0; border: 0; border-radius: 0; }
+
+  /* ---- NOD-379 (protótipo nod-379 v3): a tela inicial — a mesma barra de bots, em tela cheia por cima da conversa.
+     Escondida, ela continua montada (a rolagem fica); o chat entra da direita por cima dela em 280 ms. ---- */
+  .sidebar { display: flex; flex-direction: column; position: fixed; z-index: 20; inset: 0; width: 100%; height: var(--altura-visivel, 100dvh);
+    top: var(--topo-visivel, 0px); box-sizing: border-box; padding: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left);
+    border: 0; background: var(--surface); box-shadow: none; visibility: hidden; overscroll-behavior: contain; }
+  .app.bots-abertos .sidebar, .app.chat-entrando .sidebar { visibility: visible; }
+  .app.chat-entrando .stage { position: relative; z-index: 21; animation: inicio-chat-entra .28s cubic-bezier(.2, .8, .2, 1) both; }
+  .sidebar .list { flex: 1; min-height: 0; padding: 0 0 calc(env(safe-area-inset-bottom) + 92px); overflow-y: auto; overscroll-behavior: contain; }
+  .sidebar .rodape { display: none; }
+  .search kbd { display: none; }
+
+  /* O topo do web: o avatar da conta à esquerda; não lidos, Trabalhos e Sua vez só quando há algo; o + à direita.
+     Alvos de 44, vão de 8, ícones de 24 e retorno no toque. */
+  .inicio-topo { display: flex; flex: none; align-items: center; gap: 8px; min-height: 52px; box-sizing: border-box;
+    padding: calc(4px + env(safe-area-inset-top)) 8px 4px 14px; }
+  .me.me-topo { position: relative; display: grid; place-items: center; width: 44px; height: 44px; margin: 0 auto 0 0; padding: 0; border: 0;
+    border-radius: 50%; background: none; }
+  .me-topo .av-me { width: 36px; height: 36px; font-size: 14px; }
+  .me-topo .me-ponto { top: 4px; right: 4px; }
+  .inicio-topo-acoes { display: flex; align-items: center; gap: 8px; }
+  .inicio-topo-acoes > button, .inicio-topo-acoes > .icone-topo { position: relative; display: grid; place-items: center; width: 44px; height: 44px;
+    min-width: 44px; min-height: 44px; margin: 0; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--ink); font-size: 0;
+    -webkit-tap-highlight-color: transparent; transition: background-color .12s ease; }
+  .inicio-topo-acoes > button svg { width: 24px; height: 24px; }
+  .inicio-topo-acoes > button:active, .me.me-topo:active { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+  .inicio-topo-acoes .contagem-topo, .inicio-topo-acoes .sino-cont { font-size: 11px; }
+
+  /* Favoritos: o rótulo, "Ver todos" acima de 8 e a grade de 4 com mascote de 60. */
+  .inicio-rotulo { display: flex; align-items: center; justify-content: space-between; min-height: 32px; padding: 0 12px 0 20px; }
+  .inicio-rotulo h2 { margin: 0; font-size: 13px; font-weight: 600; color: var(--ink-3); }
+  .inicio-ver { min-width: 44px; min-height: 44px; padding: 0 8px; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: 13px; font-weight: 500; }
+  #sidebar:not([data-buscando]) .fixado.alem-dos-visiveis { display: none; }
+  .sidebar .fixados { gap: 4px 0; margin: 0; padding: 4px 12px 12px; border: 0; }
+  .sidebar .fixado-bt, .bot-menu .segurado-copia .fixado-bt { min-height: 92px; padding: 6px 2px 4px; border-radius: 16px; }
+  .sidebar .fixado-bt .icon.lg, .bot-menu .segurado-copia .fixado-bt .icon.lg { width: 60px; height: 60px; border-radius: 22px; }
+  .sidebar .fixado-bt b, .bot-menu .segurado-copia .fixado-bt b { max-width: 78px; font-size: 12.5px; }
+  .sidebar .fixado-bt .chip, .bot-menu .segurado-copia .fixado-bt .chip { display: none; }
+  .sidebar .fixado-bt[aria-current="true"], .sidebar .bot-row:has(> .row[aria-current="true"]) { background: none; }
+  .sidebar .fixado-bt:active, .sidebar .bot-row:active { background: var(--surface-raised); }
+
+  /* As conversas, como num mensageiro: linha de 72, mascote de 48, nome e título, a hora à direita e a prévia embaixo.
+     O ⋯ fica só para o leitor de tela: o menu abre no toque longo (o iOS não mostra o próprio menu de link). */
+  .sidebar .section { margin: 0; padding: 0; }
+  .sidebar .section > h3 { min-height: 44px; margin: 0; padding: 0 20px; box-sizing: border-box; font-size: 13px; }
+  .sidebar .secao-cab { min-height: 44px; }
+  .sidebar .bot-row, .sidebar .fixado { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+  .sidebar .bot-row { margin: 0; border-radius: 0; }
+  .sidebar .bot-row > .row, .bot-menu .bot-row.segurado-copia > .row { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 12px; align-items: center; min-height: 72px;
+    padding: 10px 16px 10px 20px; border-radius: 0; position: relative; }
+  .sidebar .bot-row > .row::after { content: ""; position: absolute; left: 80px; right: 0; bottom: 0; border-bottom: 1px solid var(--line); opacity: .7; }
+  .sidebar .bot-row > .row > .icon, .bot-menu .bot-row.segurado-copia > .row > .icon { width: 48px; height: 48px; min-width: 48px; border-radius: 18px; }
+  .inicio-linha .nome-linha { align-items: baseline; }
+  .inicio-linha .nome-linha b { max-width: none; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 16px; font-weight: 600; }
+  .inicio-linha .nome-linha .chip { flex: 0 1 auto; }
+  .inicio-hora { flex: none; margin-left: auto; padding-left: 8px; font-size: 13px; color: var(--ink-3); }
+  .inicio-linha .txt > span:last-child { display: block; margin-top: 3px; font-size: 14px; line-height: 1.35; color: var(--ink-2);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .inicio-linha.pede .inicio-hora, .inicio-linha.nao-lida .inicio-hora { color: var(--ink); font-weight: 600; }
+  .inicio-linha.pede .inicio-previa { color: var(--ink); font-weight: 500; }
+  .inicio-previa i { font-style: normal; font-weight: 400; color: var(--ink-3); }
+  .inicio-linha.nao-lida .inicio-previa { color: var(--ink); }
+  .sidebar .bot-mais { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  /* O bot segurado: a linha fica no lugar (por baixo do fundo) e uma cópia sem foco sobe por cima do desfoque, com o menu
+     logo abaixo. */
+  .sidebar .bot-row.segurado, .sidebar .fixado.segurado { visibility: hidden; }
+  /* flow-root: as margens do nome e da nota ficam dentro da lista, e a altura medida é a de verdade. */
+  .bot-menu.menu-segurado { overflow: visible; }
+  .bot-menu.menu-segurado [role="menu"] { display: flow-root; }
+  .bot-menu.menu-segurado::backdrop { background: color-mix(in srgb, var(--backdrop) 60%, transparent);
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+  .bot-menu .segurado-copia { position: fixed; box-sizing: border-box; margin: 0; border-radius: 16px; background: var(--surface);
+    box-shadow: var(--shadow-pop); transform: scale(1.02); pointer-events: none; animation: inicio-segurar .18s cubic-bezier(.2, .8, .2, 1); }
+  .bot-menu .segurado-copia .row, .bot-menu .segurado-copia .fixado-bt { width: 100%; }
+  /* O menu dá 20 px a todo span filho de botão (o ícone dos itens); na cópia, o texto da linha volta ao tamanho dela. */
+  .bot-menu .segurado-copia button > span { width: auto; font-size: inherit; }
+  /* Com a inicial à vista, nada da conversa de baixo (a pílula aberta, o fundo dela, a gaveta do bot) pinta por cima. */
+  .app.bots-abertos .stage { isolation: isolate; }
+  /* O ⋯ escondido aparece se alguém chegar nele pelo teclado. */
+  .sidebar .bot-mais:focus-visible { width: 44px; height: 44px; clip-path: none; right: 8px; top: 50%; transform: translateY(-50%); z-index: 1; }
+  .bot-menu.menu-segurado button[role="menuitem"] { min-height: 48px; font-size: 16px; }
+
+  /* O menu da conta vira folha de baixo (protótipo v3): o avatar no topo não tem barra embaixo para o menu nascer acima. */
+  .bot-menu.menu-conta.folha { left: 0 !important; right: 0; top: auto !important; bottom: 0; width: 100%; max-width: none; max-height: 85vh;
+    box-sizing: border-box; padding: 8px 8px calc(12px + env(safe-area-inset-bottom)); border-radius: 24px 24px 0 0; border-bottom: 0;
+    animation: inicio-folha .24s cubic-bezier(.2, .8, .2, 1); }
+  .bot-menu.menu-conta.folha::before { content: ""; display: block; width: 36px; height: 4px; margin: 0 auto 10px; border-radius: 2px; background: var(--line-strong); }
+  .bot-menu.menu-conta.folha::backdrop { background: var(--backdrop); }
+  .bot-menu.menu-conta.folha button { min-height: 52px; font-size: 16px; }
+
+  /* Carregando, erro e vazio (protótipo v3). */
+  .inicio-aviso { display: flex; flex-wrap: wrap; align-items: center; gap: 0 6px; margin: 0; padding: 4px 20px; font-size: 14px; color: var(--ink-2); }
+  .inicio-link { min-height: 44px; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; font-weight: 500;
+    text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-strong); }
+  .inicio-esqueleto .esq-grade { display: grid; grid-template-columns: repeat(4, 1fr); justify-items: center; padding: 36px 12px 20px; }
+  .inicio-esqueleto .esq { display: block; border-radius: 6px; background: var(--surface-raised); animation: inicio-pulso 1.2s ease-in-out infinite; }
+  .inicio-esqueleto .esq.redondo { width: 60px; height: 60px; border-radius: 50%; }
+  .inicio-esqueleto .esq-linha { display: grid; grid-template-columns: 48px 1fr; gap: 12px; align-items: center; min-height: 72px; padding: 10px 16px 10px 20px; }
+  .inicio-esqueleto .esq-linha .esq.redondo { width: 48px; height: 48px; }
+  .inicio-esqueleto .esq-txt { display: grid; gap: 8px; }
+  .inicio-esqueleto .esq-txt .esq { height: 12px; width: 40%; }
+  .inicio-esqueleto .esq-txt .esq + .esq { width: 75%; }
+  .inicio-vazio { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 60%;
+    padding: 64px 40px 80px; text-align: center; }
+  .inicio-vazio .icon.lg { width: 76px; height: 76px; margin-bottom: 10px; }
+  .inicio-vazio h2 { margin: 0; font-size: 18px; font-weight: 600; }
+  .inicio-vazio p { margin: 0 0 14px; font-size: 15px; color: var(--ink-2); }
+  .bt.inicio-contorno { min-height: 44px; padding: 0 20px; border: 1px solid var(--line-strong); border-radius: 999px; background: none;
+    color: var(--ink); font-size: 15px; font-weight: 500; }
+
+  /* A barra flutuante: só Buscar, em vidro, acima da barra de gestos (e do teclado, pela altura visível). */
+  .inicio-barra { position: absolute; z-index: 2; left: 16px; right: 16px; bottom: calc(max(8px, env(safe-area-inset-bottom)) + 8px); display: flex; }
+  .search.inicio-busca { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; height: 52px; min-height: 52px; margin: 0; padding: 0 18px;
+    box-sizing: border-box; border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); border-radius: 26px;
+    background: color-mix(in srgb, var(--surface) 86%, transparent); -webkit-backdrop-filter: blur(24px) saturate(1.8); backdrop-filter: blur(24px) saturate(1.8);
+    box-shadow: var(--shadow-composer); color: var(--ink-2); }
+  .inicio-busca svg { flex: none; width: 20px; height: 20px; }
+  .inicio-busca input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; background: none; color: var(--ink); font-size: 16px; }
+  /* foco-ok: o contorno fica no .inicio-busca:focus-within, em volta da pílula inteira */
+  .inicio-busca input:focus { outline: none; }
+  .inicio-busca:focus-within { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  .inicio-busca input::placeholder { color: var(--ink-3); }
+  .busca-nada { padding: 56px 32px; text-align: center; font-size: 15px; }
+
+  /* A dica do toque longo: uma vez só, acima da barra; some no ✕, em 6 s ou no primeiro toque longo. */
+  .dica-toque-longo { position: fixed; z-index: 25; left: 0; right: 0; bottom: calc(max(8px, env(safe-area-inset-bottom)) + 72px); width: max-content;
+    max-width: calc(100% - 32px); margin: 0 auto; display: flex; align-items: center; gap: 2px; padding: 0 0 0 16px; border-radius: 22px;
+    border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); background: color-mix(in srgb, var(--surface) 86%, transparent);
+    -webkit-backdrop-filter: blur(24px) saturate(1.8); backdrop-filter: blur(24px) saturate(1.8); box-shadow: var(--shadow-composer);
+    font-size: 14px; color: var(--ink); }
+  .dica-toque-longo button { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; background: none; color: var(--ink-3); font-size: 16px; }
+
+  /* ---- Um cabeçalho só: o ‹ que volta à inicial entra no da tela ---- */
+  .abrir-bots { display: grid; place-items: center; flex: none; width: 44px; height: 44px; margin: 0 -4px 0 -6px; padding: 0;
+    border: 0; border-radius: 12px; background: none; color: var(--ink); cursor: pointer; }
+  .abrir-bots:active { background: var(--surface-raised); }
+  .cabecalho, .cabecalho.so-menu { display: flex; flex-wrap: nowrap; align-items: center; justify-content: flex-start; gap: 8px;
+    min-height: 56px; box-sizing: border-box;
+    padding: calc(6px + env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) 6px max(10px, env(safe-area-inset-left)); }
+  .cabecalho.so-menu { border-bottom: 0; }
+  .cab-esq { flex: 1; min-width: 0; gap: 10px; }
+  .cab-esq > .icon.lg { width: 34px; height: 34px; min-width: 34px; border-radius: 12px; }
+  .cab-identidade { min-width: 0; }
+  .cab-identidade > div { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+  .cab-esq .nome { font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cab-identidade p { margin: 0; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .presenca { display: none; }
+  .cab-acoes { flex: none; flex-wrap: nowrap; gap: 4px; margin-left: 0; }
+  .cab-acoes .bt { min-width: 44px; min-height: 44px; padding: 8px 10px; }
+  /* NOD-381 (protótipo nod-381, aprovado em 2026-10-27): o topo da conversa flutua sobre o chat — o ‹ num círculo de vidro
+     à esquerda e a pílula do bot centrada (44 px, avatar 28, nome 15/600 e a presença em 12 px embaixo, sem ponto nem ›).
+     Embaixo deles o texto esmaece (--surface sólido até o meio dos botões → transparente em sa+76). Só os botões recebem
+     toque; a faixa deixa a conversa rolar por baixo. O Ligar segue na gaveta do bot (o protótipo o mostra só em ligação). */
+  .cabecalho.cabecalho-pilula { position: absolute; z-index: 4; top: 0; left: 0; right: 0; display: flex; flex-direction: row; align-items: flex-start;
+    justify-content: center; gap: 0; min-height: 0; height: calc(env(safe-area-inset-top) + 76px); box-sizing: border-box;
+    padding: calc(env(safe-area-inset-top) + 4px) 64px 0; border: 0; pointer-events: none;
+    background: linear-gradient(var(--surface) calc(env(safe-area-inset-top) + 36px), color-mix(in srgb, var(--surface) 0%, transparent)); }
+  .cabecalho.cabecalho-pilula > * { pointer-events: auto; }
+  .cabecalho.cabecalho-pilula::before, .cabecalho.cabecalho-pilula .pilula-sub { display: none; }
+  .cabecalho.cabecalho-pilula .voltar-bots { position: absolute; left: max(12px, env(safe-area-inset-left)); top: calc(env(safe-area-inset-top) + 4px);
+    margin: 0; border: 1px solid var(--line); border-radius: 50%; color: var(--ink);
+    background: color-mix(in srgb, var(--surface) 82%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); box-shadow: var(--shadow-pop); }
+  .cabecalho.cabecalho-pilula .pilula-bot { min-height: 44px; height: 44px; max-width: min(254px, 100%); gap: 8px; padding: 0 16px 0 8px; border-radius: 22px;
+    background: color-mix(in srgb, var(--surface) 82%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); box-shadow: var(--shadow-pop); }
+  .cabecalho.cabecalho-pilula .pilula-bot:hover, .cabecalho.cabecalho-pilula .pilula-bot:focus-visible { padding-right: 16px; }
+  .cabecalho.cabecalho-pilula .pilula-bot .pilula-seta { display: none; }
+  .pilula-bot .icon.sm { width: 28px; height: 28px; min-width: 28px; }
+  .pilula-txt { display: flex; flex-direction: column; min-width: 0; text-align: left; }
+  .pilula-nome { font-size: 15px; font-weight: 600; line-height: 1.2; }
+  .pilula-presenca { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 400; line-height: 1.2; color: var(--ink-2); }
+  .pilula-presenca b { font-weight: 600; }
+  /* A linha do computador do bot fica na base da pílula (como no computador), não na base do véu sobre o chat. */
+  .cabecalho.cabecalho-pilula .pilula-bot:has(> .cb-fio) { position: relative; }
+  /* QA: o ponto de presença do computador (interface.css, mais específico) vazava para a pílula do celular; aqui a
+     presença é o texto de 12 px, só quando o bot não está disponível. */
+  .cabecalho.cabecalho-pilula .pilula-bot .presenca { display: none; }
+  .cabecalho.cabecalho-pilula .pilula-bot > .cb-fio { left: 19px; right: 19px; border-radius: 2px; }
+  /* A primeira mensagem começa abaixo da pílula (sa + 52 + 12), e a mensagem destacada também não para embaixo dela. */
+  .cabecalho.cabecalho-pilula ~ .timeline-wrap { padding-top: calc(env(safe-area-inset-top) + 64px); scroll-padding-top: calc(env(safe-area-inset-top) + 64px); }
+  .cabecalho.cabecalho-pilula + #erro:not(:empty) { position: relative; z-index: 5; margin-top: calc(env(safe-area-inset-top) + 56px); }
+  /* Revisão 2: entre o #erro e a lista há os avisos sr-only, então o irmão é `~`, não `+`; e a folga da rolagem segue. */
+  .cabecalho.cabecalho-pilula + #erro:not(:empty) ~ .timeline-wrap { padding-top: 12px; scroll-padding-top: 12px; }
+
+  /* ---- A conversa ---- */
+  .timeline-wrap { padding: 14px max(12px, env(safe-area-inset-right)) 16px max(12px, env(safe-area-inset-left)); overflow-x: hidden;
+    overscroll-behavior: contain; overflow-wrap: anywhere; }
+  .timeline { max-width: 100%; }
+  /* NOD-378: o piso da etiqueta do cabeçalho (interface.css), para "da rotina …" não sumir quando o nome é longo. */
+  .msg-autor .etiqueta-origem:not(.curta) { min-width: 8em; }
+  .message { gap: 8px; }
+  .message > .icon { width: 28px; height: 28px; min-width: 28px; }
+  .bubble-wrap { max-width: calc(100% - 36px); min-width: 0; }
+  /* NOD-106, re-QA de 20/10: a reserva de 216 px do balão ouvível (interface.css) é do desktop, onde a barra fica ao lado.
+     No celular a barra fica dentro da coluna; sem isto o balão encolhia para 150 px em 390 px e o Ouvir e a dica saíam da tela. */
+  .message.bot.ouvivel .bubble-wrap { max-width: calc(100% - 36px); }
+  .bubble { font-size: 15px; }
+  .msg-handoff, .msg-peer, .msg-rotina, .msg-consentimento, .connection-card, .card-pasta, .welcome-options,
+  .liberar-card { margin-left: 0; max-width: 100%; }
+  .bubble pre, .msg-peer pre { max-width: 100%; }
+  /* As ações da fala (reagir, responder, reportar e ⋯; ADR-113) só aparecem depois de um toque nela (web/lib/gaveta-bots.ts),
+     dentro da coluna, nunca ao lado, com alvos de 44 px: no toque, o ⋯ fica sempre à vista junto das outras. */
+  .msg-actions, .message.you .msg-actions, .msg-linha .msg-actions { display: none; opacity: 1; pointer-events: auto; margin: 0; }
+  .message .msg-actions, .bubble-wrap:has(> .msg-autor) > .msg-actions { top: -12px; right: 0; left: auto; transform: none; }
+  .message.you .msg-actions { left: 0; right: auto; }
+  /* Devolução do Revisor (PR 381, 20/10): ancorada à direita, numa resposta CURTA a barra (Ouvir + quatro alvos de 44 px)
+     ficava mais larga que o balão e ia de x=-59 a 123 em 390 px. Na fala do bot ela cresce da esquerda para a direita. */
+  .message.bot .msg-actions, .message.bot .bubble-wrap:has(> .msg-autor) > .msg-actions { left: 0; right: auto; }
+  .msg-linha .msg-actions { top: 50%; right: 0; left: auto; transform: translateY(-50%); }
+  .message.acoes-a-mostra .msg-actions, .msg-linha.acoes-a-mostra .msg-actions { display: flex; }
+  /* NOD-106: com a leitura ativa, o "Parar" fica à vista mesmo sem o toque que mostra as ações. */
+  .message.lendo .msg-actions { display: flex; }
+  .msg-actions button.bt.ouvir-ativo { width: auto; padding: 0 14px 0 12px; }
+  .msg-actions button.bt { width: 44px; height: 44px; background: var(--surface); border-color: var(--line); }
+  /* Devolução do Revisor (PR 381, 20/10): com a ligação viva, o Ouvir desabilitado (opacity .5 e, no toque, sem fundo)
+     ficava translúcido por cima de "Nina 14:00" em 390 px. No celular ele fica opaco: o cinza da cor já diz desabilitado. */
+  .msg-actions button.bt[aria-disabled="true"], .msg-actions button.bt[aria-disabled="true"]:hover { opacity: 1; color: var(--ink-3); background: var(--surface); border-color: var(--line); }
+  /* O Ouvir é o primeiro botão da barra. A dica cresce para a direita dele no telefone; para a esquerda ela começava em
+     x=-16 no viewport de 390 px quando os cinco alvos de 44 px estavam visíveis (re-QA de 20/10). */
+  /* width: max-content: sem ela a dica herdava os 44 px do botão e quebrava uma palavra por linha (76 px). */
+  .ouvir-dica { left: 0; right: auto; width: max-content; max-width: calc(100vw - 24px); white-space: normal; }
+
+  /* ---- O campo: colado embaixo, acima da barra de gestos e do teclado ---- */
+  .composer-wrap { padding: 6px max(10px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); }
+  /* 16 px nos campos: abaixo disso o Safari dá zoom sozinho ao focar (e a pinça continua livre). */
+  .composer textarea, input:not([type="checkbox"]):not([type="radio"]), select, textarea { font-size: 16px; }
+  .composer textarea { max-height: 30vh; }
+  /* NOD-381: o campo vira pílula de vidro de três peças, + | texto | mic, enviar ou parar (46 px, raio 23, 12 px das bordas
+     e 8 px acima da área segura). O texto é 16/22 e cresce até 6 linhas; depois rola dentro. Clipe, modo e IA moram na
+     folha do + (web/telas/folha-mais.ts). A caixa segue no fluxo (não flutua sobre o chat): o teclado já a empurra. */
+  .cabecalho-pilula ~ .composer-wrap, .composer-wrap { padding: 6px max(12px, env(safe-area-inset-right)) calc(env(safe-area-inset-bottom) + 8px) max(12px, env(safe-area-inset-left)); }
+  /* Com o teclado aberto, 8 px acima dele (a área segura de baixo continua valendo 34 no iOS e sobraria um vão). */
+  html.teclado-aberto .cabecalho-pilula ~ .composer-wrap, html.teclado-aberto .composer-wrap { padding-bottom: 8px; }
+  .composer .box { min-height: 46px; gap: 0; padding: 0 1px; border-radius: 23px; align-items: flex-end; border: 1px solid var(--line);
+    background: color-mix(in srgb, var(--surface) 86%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
+  /* Revisão 4: a `.com-anexos` do computador centraliza (interface.css); no celular o + e a ponta ficam embaixo. */
+  .composer .box.com-anexos { padding-left: 1px; align-items: flex-end; }
+  .composer .box.com-anexos:has(.anexos-fila:not([hidden])) { border-radius: 22px; padding-top: 6px; }
+  .composer .box:not(.com-mais), .composer .box:has(> .mais-campo[hidden]) { padding-left: 14px; }
+  .composer textarea { min-height: 44px; max-height: calc(6 * 22px + 22px); padding: 11px 4px; line-height: 22px; overflow-y: auto; }
+  .composer .box.com-mais > .clipe, .composer .box.com-mais > .modo-chip, .composer .box.com-mais > .seletor-ia { display: none; }
+  .composer .mais-campo { display: grid; place-items: center; flex: none; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%;
+    background: transparent; color: var(--ink-2); cursor: pointer; }
+  .composer .mais-campo[aria-expanded="true"], .composer .mais-campo:active { color: var(--ink); background: var(--surface-raised); }
+  /* Revisão 2 (ADR-059, riscos aceitos): com "Ignorar todas as aprovações" o aviso âmbar continua à vista no campo — o +
+     fica em --warning com um ponto, já que o chip do modo saiu daqui. */
+  .composer .mais-campo[data-atencao] { position: relative; color: var(--warning); }
+  /* Sem o + (bot de colega sem anexo), o chip do modo total volta ao campo, só leitura: o aviso nunca some. */
+  .composer .box.com-mais:has(> .mais-campo[hidden]) > .modo-chip[data-modo="total"] { display: inline-grid; width: 44px; height: 44px; }
+  /* Revisão 5: as regras do computador para .com-modo (0,3,0) venciam o padding do celular. */
+  .composer .box.com-mais { padding-left: 1px; }
+  .composer .box.com-mais textarea { padding-left: 4px; }
+  .composer .mais-campo[data-atencao]::after { content: ""; position: absolute; top: 9px; right: 9px; width: 7px; height: 7px; border-radius: 50%; background: var(--warning); }
+  /* A ponta: um botão por vez. Campo vazio com o ditado disponível = mic; com texto ou anexo = enviar; o bot trabalhando
+     = parar (com texto, parar e enviar: o Parar nunca some enquanto ele trabalha, revisão do PR 1). */
+  .composer .box:not(.gravando):has(.mic:not([hidden])):has(textarea:placeholder-shown):not(:has(.anexos-fila:not([hidden]))) .send { display: none; }
+  /* Revisão 1 do PR 545: com o bot trabalhando e o campo vazio o mic continua (+ | campo | mic | parar, três controles):
+     ditar enquanto ele trabalha já existia. */
+  .composer .box:has(textarea:not(:placeholder-shown)) .mic, .composer .box:has(.anexos-fila:not([hidden])) .mic { display: none; }
+  /* Com anexo a fila vai para a primeira linha e o + fica na linha do texto (a fila tem flex-basis 100%). */
+  .composer .box .anexos-fila { order: -1; }
+  /* Revisão 3: o resumo ("1 de 5 · 2,3 MB") sobe junto, numa linha só dele logo abaixo das miniaturas; na linha do texto ele
+     tirava ~80 px do campo (abaixo dos 60%). */
+  .composer .box.com-mais .anexos-resumo { order: -1; flex-basis: 100%; padding: 4px 6px 0; }
+  .composer .box:not(.gravando) .send, .composer .box:not(.gravando) .parar-envio { position: relative; width: 32px; min-width: 32px; height: 32px; min-height: 32px; margin: 6px; border-radius: 50%; font-size: 15px; }
+  .composer .box:not(.gravando) .send::after, .composer .box:not(.gravando) .parar-envio::after { content: ""; position: absolute; inset: -6px; }
+  /* NOD-354 (QA do PR 573): o Parar tem borda de 1 px e o ::after conta da borda para dentro — −6 dava 42 px de toque. */
+  .composer .box:not(.gravando) .parar-envio::after { inset: -7px; }
+  .composer .send, .composer .clipe, .composer .parar-envio { min-width: 44px; min-height: 44px; }
+  /* Revisão do PR 1 (2026-10-16): o seletor de IA também é alvo de toque (44 px). */
+  .composer .seletor-ia { min-height: 44px; margin-bottom: 0; }
+  /* Fase 4, PR 2 (2026-10-18): o botão do modo cresce para 44 px de toque e a pílula de 36 × 32 fica no meio; a dica não
+     aparece no toque (o hover grudaria depois do toque) — o nome segue no aria-label. Os botões da confirmação também 44. */
+  /* QA do PR 401: com 44 px de largura o botão comia o "Mensagem" do campo a 390 px ("Mensage"); ele ocupa 36 px e o
+     ::after estica o toque 4 px para cada lado, dentro do gap de 7 px do campo — 44 px de alvo sem tirar largura. */
+  .composer .modo-chip { width: 36px; height: 44px; }
+  .composer .modo-chip::after { content: ""; position: absolute; inset: 0 -4px; }
+  .modo-chip .modo-dica { display: none; }
+  .modo-confirma { margin-left: 12px; }
+  .modo-confirma-acoes { flex-direction: column; }
+  .bot-menu.modo-menu .modo-confirma-acoes button { min-height: 44px; width: 100%; justify-content: center; }
+  /* ADR-095 (as fotos do Grok no iPhone, docs/referencias/ditado-grok/): gravando, a linha do campo vira três pílulas —
+     ■ (para e põe no campo) | tempo e nível | enviar largo (para e envia direto). O resto do campo some até acabar. */
+  .composer .mic { width: 44px; height: 44px; background: transparent; }
+  .composer .box.gravando { border-radius: 0; -webkit-backdrop-filter: none; backdrop-filter: none; border: 0; background: transparent; box-shadow: none; padding: 0; gap: 10px; min-height: 52px; align-items: stretch; }
+  /* NOD-354: o Parar do bot fica à vista também gravando — é o único Parar da conversa (o aviso do vigia não o repete).
+     Revisão 2 do PR 573: em âmbar (o tom do aviso), para não se confundir com o ■ neutro que para o ditado, e com 44 px,
+     para a linha caber a 320 px; o ■ do ditado e o Enviar nunca ficam abaixo de 44 px. Revisão 3: quem cede são as barras do
+     nível (cortadas), nunca os dígitos do tempo. */
+  .composer .box.gravando > :not(.ditado):not(.send):not(.parar-envio) { display: none; }
+  .composer .box.gravando .parar-envio { flex: none; width: 44px; min-width: 44px; height: 44px; min-height: 44px; margin: 4px 0; border-radius: 50%; border-color: var(--warning); color: var(--warning); }
+  .composer .box.gravando .ditado-parar, .composer .box.gravando .send { min-width: 44px; }
+  .composer .box.gravando .ditado-ouvindo { min-width: 0; overflow: hidden; }
+  .composer .box.gravando:has(.parar-envio:not([hidden])) .ditado-ouvindo { justify-content: flex-start; padding: 0 10px; }
+  .composer .box.gravando .ditado-tempo { flex: none; }
+  .composer .box.gravando .ditado-nivel { min-width: 0; overflow: hidden; }
+  .composer .box.gravando .ditado { display: contents; }
+  .composer .box.gravando .ditado-parar, .composer .box.gravando .ditado-ouvindo { height: 52px; border-radius: 26px; border: 1px solid var(--line); background: var(--surface); }
+  .composer .box.gravando .ditado-parar { flex: 1; width: auto; }
+  .composer .box.gravando .ditado-ouvindo { flex: 1.4; justify-content: center; gap: 12px; padding: 0 14px; }
+  .composer .box.gravando .ditado-tempo { font-size: 20px; font-weight: 600; }
+  .composer .box.gravando .ditado-nivel { height: 22px; gap: 3px; }
+  .composer .box.gravando .ditado-nivel i { width: 3px; height: calc(8px + var(--nivel-ditado, 0) * 14px); }
+  .composer .box.gravando .send { flex: 1; width: auto; height: 52px; border-radius: 26px; }
+  .autocomplete { max-width: calc(100vw - 24px); }
+
+  /* ---- O cartão da pergunta (plano "pergunta com botões", tela "Celular", 2026-10-18): linhas de 52 px, letra de 28,
+     "Recomendo" embaixo do texto da opção, título 17 px e o × com alvo de 44 px ---- */
+  .cartao-pergunta { border-radius: 22px; padding: 16px 14px 14px; }
+  /* O "Trocar" do cartão encolhido (NOD-399: a .cp-linha) ganha alvo de toque de 32 px. */
+  .ce-rodape .bt.link { min-height: 32px; }
+  .pq-titulo { font-size: 17px; }
+  .pq-fechar { width: 44px; height: 44px; margin: -10px -10px -10px 0; }
+  .pq-lista { border-radius: 16px; }
+  .pq-opcao { min-height: 52px; padding: 12px; font-size: 16px; }
+  .pq-letra { width: 28px; height: 28px; border-radius: 7px; font-size: 14px; }
+  .pq-texto { flex-direction: column; align-items: flex-start; justify-content: center; gap: 0; }
+  .pq-recomendo { padding: 0; background: none; color: var(--ink-3); font-size: 12.5px; }
+  .pq-rodape { font-size: 14px; }
+  .rp-fechar { width: 44px; height: 44px; }
+  /* ADR-113: os chips de reação e a citação acima do balão são alvos de toque (44 px); o menu ⋯ também. */
+  .reacao-chip { min-height: 44px; min-width: 44px; justify-content: center; font-size: 15px; }
+  .citacao-da-fala { min-height: 44px; }
+  /* PR 6 dos modos de aprovação: "ver na Atividade" é alvo de toque de 44 px sem engordar a linha (a área sobra para fora). */
+  .linha-modo-ver { display: inline-block; padding: 13px 0; margin: -13px 0; font-size: 13.5px; }
+  /* QA do PR 4 (medido em 2026-10-26, Chrome a 390 px): o "ver" da linha do revisor tinha 19 × 43,6 px de alvo, o "ver
+     detalhes" do cartão 84 × 38 e o "Devia ter perguntado" ~42 de altura. Agora todos ≥ 44 × 44, sem mudar o lugar do
+     texto (a margem negativa devolve o que o enchimento soma). */
+  .linha-revisor .linha-modo-ver { box-sizing: border-box; min-width: 44px; padding: 13px 12px; margin: -13px -12px; text-align: center; }
+  .linha-modo { font-size: 13.5px; }
+  /* O cartão do revisor (PR 4): alvo de 44 px nos botões em pílula (a pergunta quebra em qualquer largura desde o PR 4b). */
+  .cr-acoes .bt { min-height: 44px; padding: 8px 16px; font-size: 14px; }
+  .cr-detalhe > summary { box-sizing: border-box; min-height: 44px; padding: 13px 0; margin: -9px 0; }
+  .atv-contestar { display: inline-block; box-sizing: border-box; min-height: 44px; padding: 13px 0; margin: -13px 0; }
+  .bot-menu.menu-fala button { min-height: 44px; }
+  /* Os emojis do menu também têm 44 de largura (eram ~30): o menu alarga para as cinco rápidas caberem numa linha. */
+  .bot-menu.menu-fala { width: 252px; }
+  .bot-menu.menu-fala .linha-emojis button { min-width: 44px; }
+  .caixa-respondendo .bt.link { min-height: 44px; }
+  .pq-campo .pq-enviar { width: 44px; height: 40px; }
+
+  /* ---- A gaveta do bot: a tela inteira, com o próprio topo (‹, ⋯ e o ícone que fecha) ---- */
+  .com-detalhes.detalhes-abertos .detalhes { inset: 0; width: 100%; max-width: none; z-index: 21; height: var(--altura-visivel, 100dvh);
+    top: var(--topo-visivel, 0px); box-sizing: border-box;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+  .gv-icone { width: 44px; height: 44px; }
+  .gvb-menu { width: 44px; height: 44px; margin-right: 2px; opacity: 1; }
+  .gvb-mostrar { min-height: 44px; }
+  .gv-lado { width: auto; min-width: 92px; }
+
+  /* ---- Seu espaço: a lista de seções em cima, o conteúdo embaixo ---- */
+  #espaco { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+  .espaco { flex-direction: column; }
+  .espaco-nav { width: 100%; max-height: 42%; overflow-y: auto; padding: 10px 10px 6px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .espaco-nav h1 { padding: 12px 12px 6px; font-size: 20px; }
+  .espaco-conteudo { padding: 20px 16px 32px; }
+
+  /* ---- Telas e formulários: uma coluna ---- */
+  .tela { min-width: 0; }
+  .tela-conectores { padding: 4px 0 24px !important; }
+  .tela-nao-lidos, .tela-trabalhos { padding: 4px 0 24px; }
+  /* NOD-449: no celular a prévia tem 2 linhas, a linha vai de ponta a ponta e o aviso fica acima da barra de baixo. */
+  .tela-nao-lidos .nl-topo { padding: 4px 16px 10px; }
+  .tela-nao-lidos .nl-lista { margin: 0; }
+  .nl-item { border-radius: 0; }
+  .nl-abrir { padding: 12px 16px; border-radius: 0; }
+  .nl-previa { -webkit-line-clamp: 2; line-clamp: 2; }
+  .nl-l1 .chip { max-width: 130px; }
+  .nl-check { width: 40px; height: 40px; top: 4px; right: 8px; }
+  .nl-aviso { left: 16px; right: 16px; bottom: calc(max(8px, env(safe-area-inset-bottom)) + 72px); transform: none; max-width: none; justify-content: space-between; font-size: 15px; padding: 6px 6px 6px 16px; animation-name: nl-sobe-c; }
+  .nl-aviso .nl-desfazer { height: 40px; font-size: 15px; }
+  /* A frase da recusa das páginas (revisão 6 do PR 626): ocupa a largura entre as margens e quebra em até três linhas. */
+  .nl-aviso.nl-aviso-frase { width: auto; max-width: none; padding: 12px 16px; line-height: 20px; }
+  .nlc-abrir time { display: none; }
+  .nlc-check { width: 40px; height: 40px; }
+  .tela-formulario { margin: 4px auto; }
+  .tela-volta { margin-bottom: 14px; }
+  .search > span { flex: none; white-space: nowrap; }
+  .form-dupla { grid-template-columns: minmax(0, 1fr); }
+  .apps-grid, .cartoes { grid-template-columns: minmax(0, 1fr); }
+  .mac-agora { grid-template-columns: minmax(0, 1fr); }
+  dialog { max-width: calc(100vw - 20px); max-height: calc(var(--altura-visivel, 100dvh) - 24px); overflow: auto; }
+  .bot-menu, .bot-menu.menu-conta { max-width: calc(100vw - 24px); }
+  .raio-x { width: 100vw; }
+
+  /* ---- Provedores de IA e o cartão de IA (plano das IAs, 2026-10-10): sem hover, o verificar fica à vista; os passos
+     começam embaixo do nome, não da coluna da alça ---- */
+  .ia-verificar { opacity: 1; }
+  .ia-dica .ia-balao { display: none; }
+  .ia-linha { gap: 10px; padding: 14px 12px; }
+  .ia-linha .ob-logo { width: 36px; height: 36px; }
+  .prov-pos { display: none; }
+  /* NOD-373 (critério 5): a alça e a linha da IA com alvo de toque de 44 px (o grid fica no configuracoes.css, ≤ 720px). */
+  .lc-linha.prov-ia { min-height: 60px; }
+  .prov-ia .prov-alca { width: 44px; height: 44px; }
+  .prov-ia .lc-ctrl button { min-height: 44px; }
+  .prov-ia .ia-verificar { min-width: 44px; margin-left: 0; }
+  .ia-linha .ob-pilula { height: 34px; padding: 0 12px; font-size: 13px; }
+  .ia-verificar { width: 28px; margin-left: -4px; }
+  .ia-fluxo, .ia-explica, .ia-aviso-nota { margin-left: 14px; margin-right: 14px; }
+  .ob-card-ia .ia-fluxo, .ob-card-ia .ia-explica, .ob-card-ia .ia-aviso-nota { margin-left: 0; margin-right: 0; }
+  .ia-codigo code { font-size: 18px; }
+  .prov-ordem { flex-direction: column; gap: 2px; }
+  .linha-espera .linha-centro { max-width: 100%; }
+  /* Protótipo NOD-92: a linha da fila ("Acordando …", "Rodar em X desta vez", Cancelar) quebra em vez de vazar em 390 px. */
+  .fila-chip { flex-wrap: wrap; row-gap: 2px; text-align: right; }
+  .nv-sono, .nv-conectar { padding-left: 18px; }
+}
+
+/* A pílula do bot no celular (chat limpo, PR 8): cabe em 390 px (o texto corta com reticências), alvo de 44 px; alargada,
+   vira folha de baixo para cima por cima da conversa, como a linha aberta de antes, com o fundo escurecido que fecha ao
+   toque. A folha sobe com `transform` (não há retângulo da pílula de onde abrir). */
+@media (hover: none) and (pointer: coarse) and (max-width: 600px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  .pf-fechada { height: 44px; max-width: calc(100% - 8px); }
+  .pf-memoria { width: 44px; height: 44px; margin: 0 0 0 -10px; }
+  .pf-moldura { position: fixed; z-index: 41; left: 0; right: 0; bottom: 0; }
+  .pf-painel { max-height: 82dvh; padding: 14px 16px calc(14px + env(safe-area-inset-bottom)); border: 0; border-radius: 18px 18px 0 0; clip-path: none; opacity: 1;
+    transform: translateY(100%); transition: transform .3s cubic-bezier(.4, 0, .2, 1); }
+  .pilula-frentes[data-estado="aberta"] .pf-painel { clip-path: none; transform: none; transition: transform .34s cubic-bezier(.2, .8, .2, 1); }
+  .pilula-frentes[data-estado="aberta"] .pf-fundo { display: block; position: fixed; inset: 0; z-index: 40; width: 100%; height: 100%; padding: 0; border: 0; background: var(--backdrop); }
+  .pf-cab { min-height: 44px; }
+  .pf-fechar { min-height: 44px; padding: 0 14px; }
+  /* NOD-381: as linhas e os botões do painel de frentes com alvo de 44 px (eram 40). */
+  .pf-lista .progresso-item, .pf-item { min-height: 44px; }
+  .pf-ver, .pf-parar { min-height: 44px; min-width: 44px; }
+  /* QA: o chip fechado tinha 42 px de altura dentro da moldura de 44. */
+  .pf-botao { min-height: 44px; }
+  .stage.com-pilula-frentes > .timeline-wrap { padding-bottom: 78px; }
+  .stage.com-pilula-frentes .pilula-novas { bottom: 66px; }
+  /* A Atividade no celular (a gaveta já é folha por cima da conversa): alvos de toque de 44 px. */
+  .atv-filtro { min-height: 40px; padding: 8px 14px; }
+  .atv-botao { min-height: 44px; }
+  .atv-dia { min-height: 44px; }
+  /* NOD-70: abas, Carregar mais, Exportar e Baixar com 44 px; os filtros das Decisões rolam de lado numa linha; a decisão
+     aberta vira um cartão (folha) por cima da linha seguinte. */
+  .atv-aba, .dec-baixar, .dec-mais .atv-link, .dec-exportar, .dec-detalhe .atv-link, .atv-revisor .atv-link[data-act="decisoes-negadas"] { min-height: 44px; }
+  .dec-filtros { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .dec-filtros .atv-filtro { flex: none; }
+  .dec-item.aberto .dec-detalhe { margin: 0 4px 8px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-raised); }
+  .dec-dia { touch-action: pan-y; }
+  .tb-frente-passo { display: none; }
+  .tb-frentes { margin-left: 22px; }
+  .tb-frente { min-height: 40px; }
+}
+
+/* O progresso na fala e a linha do turno vivo no celular (chat limpo, PR 7): alvos de toque de 40 px, sem mudar o desenho. */
+@media (hover: none) and (pointer: coarse) and (max-width: 600px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  .progresso-resumo { min-height: 40px; }
+  .progresso-titulo { min-height: 32px; }
+  .pensar > summary { min-height: 44px; }
+  .message.ao-vivo { padding-left: 35px; }
+  .message.ao-vivo.fala-viva, .message.fala-viva { padding-left: 0; }
+}
+
+/* NOD-327 (j4-10): no celular a prévia sobe da base como folha, com a conversa visível em cima (tocar nela fecha), os
+   botões têm 44 px e a nuvem de Baixar fica sempre à mostra no card. */
+@media (hover: none) and (pointer: coarse) and (max-width: 600px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  .msg-arquivo { width: 100%; }
+  .msg-arquivo-baixar { opacity: 1; width: 44px; height: 44px; right: 4px; }
+  .msg-arquivo-abrir { padding-right: 52px; }
+  .previa-arquivo { width: 100vw; max-width: 100vw; height: 82vh; max-height: 82vh; margin: auto 0 0; border-radius: 18px 18px 0 0; border-bottom: 0; }
+  .previa-bt { width: 44px; height: 44px; }
+  .pv-csv-dica-bt { width: 44px; height: 44px; }
+}
+
+/* NOD-323: no celular a mídia do bot ocupa a coluna do balão, e os controles têm alvo de 44 px. */
+@media (hover: none) and (pointer: coarse) and (max-width: 600px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  .msg-midias { width: 100%; }
+  .msg-midia-img .msg-midia-bt { max-height: 360px; width: min(var(--w), 100%); }
+  .msg-midia-grade { grid-template-columns: repeat(var(--k), 1fr); width: 100%; }
+  .msg-midia-vid, .msg-memo, .msg-midia-linha { width: 100%; }
+  .msg-memo { padding: 5px 10px 5px 5px; border-radius: 27px; }
+  .memo-linha { gap: 6px; }
+  .memo-pilula { height: 44px; }
+  .memo-play { width: 44px; }
+  .memo-pilula .memo-vel { min-width: 44px; }
+  .memo-trilha { height: 44px; }
+  .msg-midia-gif-ctl { height: 36px; }
+  .msg-midias .msg-arquivo { width: 100%; }
+  .msg-arquivo.alto .msg-midia-card-acao { min-height: 44px; }
+}
+
+@media (hover: none) and (pointer: coarse) and (max-width: 600px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  /* NOD-323: a tela cheia de borda a borda no celular, com alvos de 44 px. */
+  .ctl-play { width: 44px; height: 44px; }
+  .ctl .ctl-vel { height: 32px; padding: 0 10px; }
+  .ctl-trilha { height: 32px; }
+  .luz-fig { inset: 60px 0 8px; }
+  img.luz-midia { width: min(var(--w), 100cqw, calc((100cqh - 68px) * var(--ar))); border-radius: 0; }
+  .luz-video { width: min(100cqw, calc((100cqh - 126px) * var(--ar))); }
+  .luz-video video { border-radius: 0; }
+  .luz-video .ctl { padding: 0 8px; }
+  .luz-legenda { padding: 0 16px; }
+  .luz-topo { top: 8px; right: 8px; }
+  .luz-bt { width: 44px; height: 44px; }
+  .luz-seta { display: none; }
+  .luz-minis { gap: 6px; padding: 8px 12px calc(12px + env(safe-area-inset-bottom)); }
+  .luz-mini { width: 44px; height: 44px; }
+  .luz.cem .luz-fig { padding: 60px 0 16px; }
+}
+
+/* NOD-312: no celular, a explicação do recomeço ocupa a largura toda. */
+@media (hover: none) and (pointer: coarse) and (max-width: 600px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  .p312-explica { width: 100%; }
+}
+
+/* ==============================================================================   NOD-382: o perfil do bot no celular, no estilo do iOS (web/telas/perfil-celular.ts). Entra pela direita em 280 ms; o
+   topo só tem o ‹ redondo; avatar 96, nome 22/700, título 15; ações rápidas em círculos de 52; a lista agrupada em
+   --surface-side (raio 12, margem 16, 24 entre grupos), linhas de 52 com divisória recuada 50 px.
+   ===================================================================================== */
+@media (hover: none) and (pointer: coarse) and (max-width: 600px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  .com-detalhes.detalhes-abertos .detalhes:has(.pfc-corpo) { animation: pfc-entra 280ms cubic-bezier(.2, .8, .2, 1); background: var(--surface); }
+  @keyframes pfc-entra { from { transform: translateX(100%); } to { transform: none; } }
+
+  .pfc-topo { display: flex; align-items: center; min-height: 56px; padding: 0 12px; border-bottom: 0; }
+  .pfc-topo .pfc-voltar { width: 44px; height: 44px; border-radius: 50%; background: color-mix(in srgb, var(--surface-side) 80%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+  .pfc-topo-nivel { display: grid; grid-template-columns: 56px 1fr 56px; padding: 0 12px; }
+  .pfc-topo-nivel .gv-lado { min-width: 0; }
+  .pfc-titulo { margin: 0; font-size: 17px; font-weight: 600; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pfc-corpo { padding: 0 0 24px; }
+
+  .pfc-id { display: flex; flex-direction: column; align-items: center; padding: 8px 16px 0; text-align: center; }
+  .pfc-id .icon.mascote.xl { width: 96px; height: 96px; }
+  .pfc-avatar .gvn-avatar { padding: 0; border: 0; background: none; border-radius: 50%; }
+  .pfc-rotina-conserto { list-style: none; padding: 0 16px 12px; }
+  .pfc-rotina-conserto .pfc-contorno { margin: 0; width: 100%; }
+  .pfc-campo { position: relative; display: flex; align-items: center; justify-content: center; width: 100%; max-width: 340px; }
+  .pfc-id .pfc-nome { margin: 12px 0 0; min-height: 44px; padding: 0 44px; font-size: 22px; font-weight: 700; line-height: 28px; max-width: none; }
+  .pfc-id .pfc-sub { margin: 0; min-height: 44px; padding: 0 44px; font-size: 15px; line-height: 20px; color: var(--ink-2); max-width: none; }
+  .pfc-id .pfc-fixo { padding: 0 8px; display: flex; align-items: center; justify-content: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pfc-id h2.pfc-fixo { display: block; line-height: 44px; }
+  .pfc-id .pfc-nome:focus, .pfc-id .pfc-sub:focus { background: var(--surface-side); border-radius: 10px; }
+  .pfc-campo .pfc-nome:not(:focus), .pfc-campo .pfc-sub:not(:focus) { background: transparent; }
+  .pfc-lapis { position: absolute; right: 0; top: 50%; translate: 0 -50%; width: 44px; height: 44px; display: grid; place-items: center; border: 0; background: none; color: var(--ink-3); }
+  .pfc-lapis svg { width: 17px; height: 17px; }
+  .pfc-campo:has(input:focus) .pfc-lapis { visibility: hidden; }
+  .pfc-meta { margin-top: 2px; font-size: 13px; color: var(--ink-3); }
+
+  .pfc-acoes { display: flex; justify-content: center; gap: 28px; margin: 20px 16px 28px; }
+  .pfc-acao { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 64px; border: 0; background: none; padding: 0; color: var(--ink); }
+  .pfc-acao-circulo { width: 52px; height: 52px; display: grid; place-items: center; border: 1px solid var(--line-strong); border-radius: 50%; }
+  .pfc-acao-circulo svg { width: 22px; height: 22px; }
+  .pfc-acao-rotulo { font-size: 12px; font-weight: 500; color: var(--ink-2); }
+
+  .pfc-grupos { display: flex; flex-direction: column; gap: 24px; }
+  .pfc-grupo { margin: 0 16px; padding: 0; list-style: none; border-radius: 12px; background: var(--surface-side); overflow: hidden; }
+  .pfc-linha { position: relative; display: flex; align-items: center; gap: 14px; width: 100%; min-height: 52px; padding: 0 16px; border: 0; background: none; color: var(--ink); font: inherit; font-size: 16px; text-align: left; }
+  .pfc-grupo > :is(.pfc-linha, .pfc-rotina) + :is(.pfc-linha, .pfc-rotina)::before,
+  .pfc-grupo > span[hidden] + .pfc-linha::before { content: ""; position: absolute; left: 50px; right: 0; top: 0; border-top: 1px solid var(--line); }
+  .pfc-icone { display: grid; place-items: center; width: 20px; flex: none; color: var(--ink-2); }
+  .pfc-icone svg { width: 20px; height: 20px; }
+  .pfc-rotulo { flex: none; }
+  .pfc-valor { flex: 1; min-width: 0; text-align: right; font-size: 15px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pfc-seta { display: grid; place-items: center; width: 16px; flex: none; color: var(--ink-3); }
+  .pfc-seta svg { width: 16px; height: 16px; }
+  .pfc-linha:active { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+  .pfc-excluir { justify-content: center; color: var(--danger); font-weight: 500; }
+  .pfc-esqueleto { display: inline-block; width: 40px; height: 12px; border-radius: 6px; background: color-mix(in srgb, var(--ink) 10%, transparent); vertical-align: middle; }
+  .pfc-esqueleto-largo { width: 60%; }
+
+  /* Rotinas: Nova rotina primeiro; linhas de 64 com o interruptor de 51 × 31 numa área de 52 × 44, ligado em --ink. */
+  .pfc-nova { color: var(--ink); margin-bottom: 0; }
+  .pfc-grupo + .pfc-grupo, .pfc-grupo + .pfc-vazio, .pfc-grupo + .pfc-erro { margin-top: 24px; }
+  .pfc-rotina { position: relative; display: flex; align-items: center; min-height: 64px; padding-right: 8px; }
+  .pfc-rotina-abrir { flex: 1; min-width: 0; min-height: 64px; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 0 12px 0 16px; border: 0; background: none; color: var(--ink); text-align: left; font: inherit; }
+  .pfc-rotina-abrir b { font-size: 16px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pfc-rotina-abrir small { font-size: 13px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pfc-rotina-esqueleto { padding: 0 16px; }
+  .pfc-chave { flex: none; width: 52px; height: 44px; display: grid; place-items: center; padding: 0; border: 0; background: none; }
+  .pfc-trilho { position: relative; width: 51px; height: 31px; border-radius: 16px; background: color-mix(in srgb, var(--ink) 16%, transparent); transition: background .2s; }
+  .pfc-trilho::after { content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: var(--surface); box-shadow: var(--shadow-knob); transition: translate .2s; }
+  .pfc-chave[aria-checked="true"] .pfc-trilho { background: var(--ink); }
+  .pfc-chave[aria-checked="true"] .pfc-trilho::after { translate: 20px 0; }
+  .gv-linha:has(> .pfc-chave) { min-height: 52px; }
+  .gv-linha > .pfc-chave { margin-left: auto; }
+
+  .pfc-vazio { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 40px 32px 0; text-align: center; }
+  .pfc-vazio b { font-size: 17px; font-weight: 600; }
+  .pfc-vazio p { margin: 0; font-size: 15px; color: var(--ink-3); }
+  .pfc-vazio .pfc-dica { color: var(--ink-2); } /* NOD-444, emenda da ADR-133: a dica não é nota em cinza */
+  .pfc-erro { margin: 24px 16px 0; font-size: 15px; color: var(--ink-2); text-align: center; }
+  .pfc-link { min-height: 44px; padding: 0 4px; border: 0; background: none; color: var(--ink); font: inherit; text-decoration: underline; }
+  .pfc-nota { margin: 8px 32px 0; font-size: 13px; color: var(--ink-3); }
+  .pfc-linha-fixa { cursor: default; }
+  .pfc-contorno { display: flex; align-items: center; justify-content: center; min-height: 44px; margin: 16px 16px 0; padding: 0 20px; border: 1px solid var(--line-strong); border-radius: 12px; background: none; color: var(--ink); font: inherit; font-size: 16px; font-weight: 500; width: calc(100% - 32px); }
+  .pfc-vazio .pfc-contorno { width: auto; margin: 8px 0 0; }
+
+  /* As folhas (Compartilhar e a confirmação do Excluir) sobem de baixo, na largura da tela. */
+  dialog#gestao-dialogo.pfc-folha { inset: auto 0 0 0; left: 0 !important; top: auto !important; width: 100%; max-width: none; margin: 0; padding: 0; border: 0; border-radius: 16px 16px 0 0; background: var(--surface); box-sizing: border-box; animation: pfc-sobe 240ms cubic-bezier(.2, .8, .2, 1); }
+  /* O respiro fica no filho: tocar dentro da folha nunca cai no próprio <dialog> (que fecha ao toque fora). */
+  dialog#gestao-dialogo.pfc-folha > * { padding-top: 8px; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+  @keyframes pfc-sobe { from { transform: translateY(100%); } to { transform: none; } }
+  .pfc-folha-titulo { margin: 8px 16px; font-size: 13px; color: var(--ink-3); text-align: center; }
+  .pfc-folha-linha { display: flex; align-items: center; width: 100%; min-height: 56px; padding: 0 20px; border: 0; background: none; color: var(--ink); font: inherit; font-size: 17px; }
+  .pfc-folha-linha + .pfc-folha-linha { border-top: 1px solid var(--line); }
+  .pfc-confirma { display: flex; flex-direction: column; text-align: center; }
+  .pfc-confirma h2 { margin: 8px 16px 4px; font-size: 17px; font-weight: 600; }
+  .pfc-confirma p { margin: 0 16px 8px; font-size: 15px; color: var(--ink-2); }
+  .pfc-confirma .dialogo-erro:empty { display: none; }
+  .pfc-confirma .pfc-contorno { margin-top: 8px; }
+  .pfc-perigo { border-color: var(--danger); color: var(--danger); }
+  .pfc-cancelar { border-color: transparent; }
+
+  /* Critério 6 (QA): os itens do menu do toque longo e as linhas de Ajustes no perfil têm alvo de 44 / 52 px. */
+  :where(dialog#gestao-dialogo) [role="menu"] [data-gestao] { min-height: 44px; }
+  .com-detalhes.detalhes-abertos .detalhes:has(.pfc-corpo) .gv-linha { min-height: 52px; }
+  /* Ajustes não tem valor: a seta vai para a borda mesmo assim. */
+  .pfc-seta { margin-left: auto; }
+  .com-detalhes.detalhes-abertos .detalhes:has(.pfc-corpo) :is(.gv-aviso, .ia-comando, .ia-explica) { background: none; border: 0; color: var(--ink-2); }
+
+  /* O toque longo numa linha da lista abre o menu do bot, não a lupa nem o menu do iOS. */
+  [data-bot-contexto] { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+}
+
+/* NOD-383: Configurações e toques de celular. Sem atalho de teclado à vista (crit. 1), sem banco (crit. 6, v2: o regime não
+   aparece em lugar nenhum no celular), Configurações em lista estilo Ajustes com cada seção em tela cheia (crit. 3), detalhe
+   de uma linha com "Saiba mais" (crit. 7), a folha de "Criar um bot agora?" (crit. 5) e alvos de 44 px (crit. 4, a auditoria
+   em scripts/alvos-44px confere). O desktop não lê nada daqui. */
+@media (hover: none) and (pointer: coarse) and (max-width: 600px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  kbd, .cfg-kbd { display: none; }
+  .ambiente-banco { display: none; }
+
+  /* O topo da barra: 44 pt de toque, 8 pt de vão, ícone de 24 px e retorno no toque. */
+  .sh { gap: 8px; }
+  .icone-topo, .create-trigger { width: 44px; height: 44px; border-radius: 12px; }
+  .icone-topo svg { width: 24px; height: 24px; }
+  .create-trigger { font-size: 26px; }
+  .icone-topo:active, .create-trigger:active { background: var(--surface-raised); }
+  .nod-topo { min-height: 44px; }
+  /* O cabeçalho de seção da barra vira linha de 44 px. */
+  .secao-cab { min-height: 44px; }
+
+  /* As Configurações seguem a área acima do teclado, como a .app. */
+  #espaco { inset: auto 0; top: var(--topo-visivel, 0px); height: var(--altura-visivel, 100dvh); padding: 0; }
+  .cfg-celular { flex-direction: column; height: 100%; background: var(--surface-side); }
+  .cfg-topo { flex: none; display: flex; align-items: center; gap: 8px; min-height: 56px; box-sizing: border-box;
+    padding: calc(6px + env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 6px max(12px, env(safe-area-inset-left)); }
+  .cfg-celular .cfg-redondo { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 1px solid var(--line); border-radius: 50%;
+    background: var(--surface); color: var(--ink); }
+  .cfg-celular .cfg-redondo:active { background: var(--surface-raised); }
+  .cfg-celular .cfg-redondo svg { width: 22px; height: 22px; }
+  .cfg-topo-tit { flex: 1; min-width: 0; margin: 0; font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cfg-celular .espaco-conteudo { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+    padding: 4px max(16px, env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+  /* O título da seção já está no topo; o h2 de dentro sairia repetido. */
+  .cfg-celular .cfg-secao > h2, .cfg-celular .cfg-fb-cab h2 { display: none; }
+
+  /* A lista (Gil, itens 2 e 3): grupos em --surface sobre --surface-side, borda --line, raio 12; nada quebra em 2 linhas. */
+  .cfg-titulo-grande { margin: 4px 4px 16px; font-size: 30px; font-weight: 700; letter-spacing: -.02em; }
+  .cfg-grupo { margin-bottom: 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); overflow: hidden; }
+  .cfg-item { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px; box-sizing: border-box; padding: 0 14px;
+    border: 0; border-top: 1px solid var(--line); background: none; color: var(--ink); font: inherit; font-size: 16px; text-align: left; }
+  .cfg-item:first-child { border-top: 0; }
+  .cfg-item:active { background: var(--surface-raised); }
+  .cfg-item-ic { flex: none; display: grid; place-items: center; width: 24px; height: 24px; color: var(--ink-2); }
+  .cfg-item-ic svg { width: 22px; height: 22px; }
+  .cfg-item-nome { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cfg-item-valor { flex: none; max-width: 40%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink-3); font-size: 15px; }
+  .cfg-item-seta { flex: none; display: grid; color: var(--ink-3); }
+  .cfg-item-conta { min-height: 72px; }
+  .cfg-item-conta .mc-av { width: 48px; height: 48px; font-size: 16px; }
+  .cfg-item-conta .cfg-item-nome b { display: block; font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cfg-item-conta .cfg-item-nome small { display: block; font-size: 14px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* Dentro da seção: o detalhe tem 1 linha (14 px, --ink-2); o resto abre no "Saiba mais", na própria linha. */
+  .cfg-celular .lc-txt b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cfg-celular .lc-txt small, .cfg-celular .lc-nota-curta { font-size: 14px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cfg-celular .lc-txt small.lc-aberto, .cfg-celular .lc-nota-curta.lc-aberto { white-space: normal; overflow: visible; }
+  .cfg-celular .lc-grupo-tit { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lc-saiba { position: relative; display: inline-block; margin: 2px 0 0; padding: 0; border: 0; background: none; color: var(--ink-2);
+    font: inherit; font-size: 14px; font-weight: 500; text-decoration: underline; text-underline-offset: 2px; }
+  /* 44 px de toque sem engordar a linha: a área sobra para cima e para baixo, por cima do texto (que não é clicável). */
+  .lc-saiba::after { content: ""; position: absolute; z-index: 1; left: -8px; right: -8px; top: 50%; height: 44px; transform: translateY(-50%); }
+  .lc-grupo > .lc-saiba { margin: 4px 2px 0; }
+  /* Linha que já é um botão (link, recolhe): o "Saiba mais" fica fora dele, logo abaixo, com 44 px reais de altura. */
+  .lc-com-saiba > .lc-saiba-fora { display: block; min-height: 44px; margin: 0; padding: 0 16px; text-align: left; }
+  .lc-com-saiba > .lc-saiba-fora::after { content: none; }
+  .cfg-celular .lc-switch::before { inset: -12px -5px; }
+  .cfg-celular .lc-seletor { min-height: 44px; max-width: 46vw; }
+  .cfg-celular .lc-link { min-height: 52px; }
+
+  /* Feedback: o Enviar fica embaixo, à vista, logo acima do teclado (a coluna segue --altura-visivel). */
+  .cfg-celular .cfg-fb { display: flex; flex-direction: column; min-height: 100%; }
+  .cfg-celular .cfg-fb-cab { display: contents; }
+  .cfg-celular .cfg-fb-cab .cfg-enviar { order: 99; position: sticky; bottom: 0; margin-top: auto; align-self: stretch; justify-content: center;
+    min-height: 48px; box-shadow: 0 -8px 16px var(--surface-side); }
+
+  /* A folha "Criar um bot agora?": presa embaixo, mensagem do Nod (mascote e balão), Criar em contorno e Cancelar em texto. */
+  dialog.folha-criar-bot { inset: auto 0 0; width: 100%; max-width: 100%; max-height: none; margin: 0; box-sizing: border-box;
+    padding: 10px max(16px, env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    border: 0; border-top: 1px solid var(--line); border-radius: 18px 18px 0 0; background: var(--surface); color: var(--ink); box-shadow: var(--shadow-pop); }
+  dialog.folha-criar-bot::backdrop { background: var(--backdrop); }
+  .fcb-alca { width: 36px; height: 5px; margin: 0 auto 14px; border-radius: 3px; background: var(--line-strong); }
+  .fcb-msg { display: flex; align-items: flex-start; gap: 10px; }
+  .fcb-mascote { flex: none; display: grid; width: 32px; height: 32px; }
+  .fcb-mascote svg { width: 32px; height: 32px; }
+  .fcb-balao { flex: 1; min-width: 0; padding: 10px 14px; border: 1px solid var(--line); border-radius: 4px 16px 16px 16px; background: var(--surface-side); }
+  .fcb-balao h2 { margin: 0 0 4px; font-size: 16px; font-weight: 600; }
+  .fcb-balao p { margin: 0; font-size: 15px; color: var(--ink-2); }
+  /* O arrasto da folha é dela: sem isso o navegador trata como rolagem e manda pointercancel. */
+  dialog.folha-criar-bot { touch-action: none; }
+  .fcb-acoes { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+  .fcb-acoes .bt { min-height: 48px; width: 100%; justify-content: center; font-size: 16px; }
+  .fcb-criar { border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); }
+  .fcb-cancelar { border: 0; background: none; color: var(--ink-2); }
+
+  /* Achados da auditoria de 44px (scripts/alvos-44px): o avatar da conta, os itens do menu da conta, a busca dos agentes
+     e a caixa de mensagem tinham menos de 44 de toque. */
+  .me { min-width: 44px; }
+  /* 48 e não 44: itens colados com 44 exatos perdem a borda para o vizinho no arredondamento do subpixel. */
+  [role="menu"] > [role="menuitem"] { min-height: 48px; }
+  .cfg-busca input { min-height: 44px; }
+}
+/* NOD-381 (protótipo nod-381): a folha do +, os alvos de 44 px que faltavam no chat e os estados (carregando e não enviada). */
+@media (hover: none) and (pointer: coarse) and (max-width: 600px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  /* A folha do + sobe da base, na largura da tela, com linhas de 60 px: título, o valor de hoje em 13 px e o ›. */
+  dialog.bot-menu.folha-mais { inset: auto 0 0 0; width: 100%; max-width: 100%; margin: 0; box-sizing: border-box;
+    padding: 6px 8px calc(10px + env(safe-area-inset-bottom)); border: 0; border-radius: 18px 18px 0 0; }
+  .folha-mais .fm-alca { display: block; width: 36px; height: 5px; margin: 2px auto 8px; border-radius: 3px; background: var(--line-strong); }
+  .bot-menu.folha-mais .fm-linha { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 60px; padding: 8px 12px; border: 0; border-radius: 12px;
+    background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+  .bot-menu.folha-mais .fm-linha:active, .bot-menu.folha-mais .fm-linha:focus-visible { background: var(--surface-raised); }
+  .folha-mais .fm-ic { flex: none; color: var(--ink-2); }
+  .folha-mais .fm-txt { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+  .folha-mais .fm-txt b { font-size: 16px; font-weight: 600; }
+  .folha-mais .fm-txt small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--ink-3); }
+  .folha-mais .fm-txt small.fm-atencao { color: var(--warning); }
+  .bot-menu.folha-mais .fm-ic { width: 20px; height: 20px; }
+  .bot-menu.folha-mais .fm-chev { width: 16px; height: 16px; }
+  .folha-mais .fm-chev { flex: none; color: var(--ink-3); }
+
+  /* O ✕ do anexo continua com 20/22 px de desenho, com alvo de 44 px. */
+  .anexo-x { position: relative; }
+  .anexo-thumb .anexo-x { position: absolute; }
+  .anexo-x::after { content: ""; position: absolute; inset: -11px; }
+  /* O ✕ da miniatura tem 20 px: 20 + 2 × 12 = 44. */
+  .anexo-thumb .anexo-x::after { inset: -12px; }
+  /* A miniatura cortava o alvo (overflow: hidden): o corte fica só na foto, e o ✕ alcança 44 px. */
+  .anexo-thumb { overflow: visible; }
+  .anexo-thumb img { border-radius: 11px; }
+  /* Os botões do cartão de artefato (nova aba, Tela cheia, Baixar) e o ✕ da tela cheia: alvo de 44 px. */
+  .artefato-acoes .bt.link { min-height: 44px; padding: 0 4px; }
+  .artefato-acoes .bt.link, .artefato-dialogo .artefato-acoes .bt.sm { min-width: 44px; min-height: 44px; }
+
+  /* Carregando: três balões cinza no lugar do texto (o texto fica para o leitor de tela). */
+  .carregando-conversa { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .esqueleto-conversa { display: flex; flex-direction: column; gap: 14px; padding: 8px 4px; }
+  .esqueleto-conversa i { display: block; height: 44px; width: 70%; border-radius: 18px; background: var(--surface-raised); animation: esqueleto-pulsa 1.4s ease-in-out infinite; }
+  .esqueleto-conversa .eq-voce { align-self: flex-end; width: 52%; }
+  .esqueleto-conversa .curto { width: 40%; }
+  /* Não enviada: o balão claro com contorno tracejado e a linha "Não foi enviada · Tentar de novo" em 13 px, sem o
+     vermelho (o erro é da rede, não da pessoa). NOD-431: sem a opacidade de antes, que com a cor do bot caía abaixo de
+     4,5:1. */
+  .fala-pendente[data-envio="falhou"] .message.you .bubble { --balao-fundo: var(--surface); --balao-tinta: var(--ink); --balao-codigo: var(--surface-raised); border: 1px dashed var(--line-strong); background: var(--surface); color: var(--ink); }
+  .fala-pendente .envio-erro { font-size: 13px; color: var(--ink-2); }
+  .fala-pendente .envio-erro .bt.envio-bt { min-height: 44px; font-size: 13px; border: 0; background: none; color: var(--ink); text-decoration: underline; }
+}
+@keyframes esqueleto-pulsa { 50% { opacity: .55; } }
+
+/* NOD-42 (definido em 2026-10-28, protótipo v3): no celular a busca aberta é [✕] ( mascote ⌕ termo 3/4 │ ˄ ˅ ). O ✕ ocupa
+   o lugar e o tamanho do ‹; saem o nome do bot e o "desde" (o leitor ouve pelo anúncio); tudo com 44 px. */
+@media (hover: none) and (pointer: coarse) and (max-width: 600px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  .cabecalho.cabecalho-pilula.buscando { padding-left: calc(max(12px, env(safe-area-inset-left)) + 52px); padding-right: max(12px, env(safe-area-inset-right)); }
+  /* A lupa da busca geral (NOD-380) sai enquanto a busca na conversa está aberta: a pílula ocupa o lugar dela. */
+  .cabecalho.buscando .voltar-bots, .cabecalho.buscando .buscar-celular { display: none; }
+  .cabecalho.cabecalho-pilula.buscando .bnc-fechar-cl { display: grid; place-items: center; position: absolute; left: max(12px, env(safe-area-inset-left)); top: calc(env(safe-area-inset-top) + 4px);
+    width: 44px; height: 44px; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 50%; color: var(--ink);
+    background: color-mix(in srgb, var(--surface) 82%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); box-shadow: var(--shadow-pop); }
+  .bnc-fechar-cl svg { width: 20px; height: 20px; }
+  .bnc-pilula { height: 46px; width: auto; flex: 1 1 0; min-width: 0; padding-right: 0; border-radius: 22px;
+    background: color-mix(in srgb, var(--surface) 92%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
+  .cabecalho.cabecalho-pilula .bnc-pilula .pilula-bot.bnc-pb { height: 44px; min-height: 44px; padding: 0 6px 0 5px; background: none; box-shadow: none;
+    -webkit-backdrop-filter: none; backdrop-filter: none; }
+  /* Na sala e na task não há o ✕ da esquerda: lá fica o × das setas (revisão do PR 560). */
+  .bnc-pilula .bnc-pb .pilula-txt, .bnc-desde, .cabecalho-pilula .bnc-setas .bnc-fechar { display: none; }
+  .bnc-campo { min-width: 64px; padding: 0 4px 0 8px; }
+  .bnc-campo input { font-size: 16px; }
+  .bnc-contagem { padding: 0 2px; font-size: 15px; }
+  .bnc-bt { width: 44px; height: 44px; }
+  .bnc-bt svg { width: 18px; height: 18px; }
+  .cabecalho:not(.cabecalho-pilula) .bnc-pilula { width: auto; margin-left: 0; }
+  /* Puxar a pílula para baixo abre a busca (main.ts): a pílula acompanha o dedo; o navegador não rola com ela. */
+  .cabecalho.cabecalho-pilula .pilula-bot, .cabecalho.cabecalho-pilula .bnc-pilula { touch-action: none; }
+  .cabecalho.cabecalho-pilula .pilula-bot.bnc-puxando { transition: none; }
+  /* O cutucão nunca roda com movimento reduzido: quem decide é o main.ts (deveCutucar), que nem põe a classe. */
+  .cabecalho.cabecalho-pilula .pilula-bot.bnc-cutuca { animation: bnc-cutuca .9s cubic-bezier(.2, .8, .2, 1) 1; }
+  @keyframes bnc-cutuca { 0% { transform: none; } 30% { transform: translateY(6px); } 100% { transform: none; } }
+}
+/* NOD-380 (protótipo v3) deixava aqui o balão da pessoa com a mesma cor do balão do bot; a NOD-431 desfez isso (o
+   feedback foi que as duas vozes não se separavam): no celular o balão da pessoa também veste a cor do bot (interface.css).
+   Este bloco é casca do celular (ADR-094: o mobile.css é a última folha e quem decide o celular). */
+@media (hover: none) and (pointer: coarse) and (max-width: 600px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  /* Na conversa com o topo em pílula (NOD-381), a lupa é o par do ‹: o mesmo círculo de vidro de 44, à direita. */
+  .cabecalho.cabecalho-pilula .buscar-celular { position: absolute; right: max(12px, env(safe-area-inset-right)); top: calc(env(safe-area-inset-top) + 4px);
+    margin: 0; border: 1px solid var(--line); border-radius: 50%; color: var(--ink);
+    background: color-mix(in srgb, var(--surface) 82%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); box-shadow: var(--shadow-pop); }
+}
+/* NOD-399 (card de proposta, web/card-proposta.css): no celular o card acompanha a fala do bot (ícone de 28 + vão de 8 =
+   36 px de recuo) e todo alvo de toque tem 44 px. Os botões aparecem com 36 px e a área de toque cresce 4 px em cima e
+   embaixo; os links da linha decidida crescem só a área (::after), sem esticar a linha. */
+@media (hover: none) and (pointer: coarse) and (max-width: 600px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  .cp, .cp-linha, .cp-erro { --cp-recuo: 36px; }
+  .cp .cp-sim, .cp .cp-nao, .cp-erro .cp-acao { min-height: 36px; padding-inline: 14px; font-size: 14px; }
+  .cp .cp-sim::after, .cp .cp-nao::after, .cp-erro .cp-acao::after { content: ""; position: absolute; inset: -4px 0; }
+  .cp-detalhes { margin-top: 0; }
+  .cp-detalhes > summary { min-height: 44px; }
+  .cp-detalhes + .cp-acoes { margin-top: 4px; }
+  .cp-acoes { row-gap: 8px; }
+  .cp-linha .cp-link, .cp-linha .ce-rodape .bt.link { position: relative; }
+  .cp-linha .cp-link::after, .cp-linha .ce-rodape .bt.link::after { content: ""; position: absolute; inset: -14px -2px; }
+  .cp-linha .ce-detalhes > summary { min-height: 44px; display: flex; align-items: center; }
+}
+
+@keyframes nl-sobe-c { from { opacity: 0; transform: translateY(8px); } }

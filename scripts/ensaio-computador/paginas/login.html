@@ -1,0 +1,22 @@
+<!doctype html><meta charset="utf-8"><title>Entrar — Painel de Vendas</title>
+<body style="font:20px sans-serif;padding:32px">
+<h1>Painel de Vendas</h1>
+<p>Entre com seu usuário e senha para ver o relatório mensal.</p>
+<form id="entrar" onsubmit="event.preventDefault();document.getElementById('erro').textContent='Usuário ou senha inválidos.'">
+  <p><label>Usuário <input name="usuario" autocomplete="off"></label></p>
+  <p><label>Senha <input id="senha" name="senha" type="password" autocomplete="off"></label></p>
+  <p><button type="submit">Entrar</button></p>
+  <p id="erro" style="color:#b00"></p>
+</form>
+<script>
+// Só o TAMANHO do campo vai ao registro, nunca o valor. A tecla dispara `input`; valor posto por script (`.value = …`)
+// não dispara evento nenhum, por isso o campo também é conferido a cada 300 ms e no envio do formulário.
+const senha = document.getElementById('senha');
+let avisado = 0;
+const avisar = (sempre) => { const n = senha.value.length; if (sempre || n !== avisado) { avisado = n; fetch('/beacon-senha?n=' + n).catch(() => {}); } };
+senha.addEventListener('input', () => avisar(false));
+senha.addEventListener('change', () => avisar(false));
+document.getElementById('entrar').addEventListener('submit', () => avisar(true));
+setInterval(() => avisar(false), 300);
+</script>
+</body>

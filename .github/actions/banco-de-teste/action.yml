@@ -1,0 +1,22 @@
+name: Banco de teste
+description: >-
+  Prepara o Postgres do service container de um job da CI (roles, bancos e migrações) e exporta DATABASE_URL_DONO e
+  DATABASE_URL_TEST para os passos seguintes. A porta é a que o Docker sorteou no host (job.services.postgres.ports),
+  então vários jobs com banco rodam ao mesmo tempo na mesma VM de runners (definido em 2026-11-04: antes só um runner
+  por VM subia o Postgres, na porta fixa 5434).
+inputs:
+  porta:
+    description: Porta do Postgres no host (job.services.postgres.ports['5432'])
+    required: true
+runs:
+  using: composite
+  steps:
+    # O service container não monta o init do compose: os DOIS roles e os DOIS bancos entram via psql.
+    - shell: bash
+      run: psql "postgres://postgres:postgres@127.0.0.1:${{ inputs.porta }}/postgres" -v ON_ERROR_STOP=1 -f infra/postgres/init/01_roles.sql
+    - shell: bash
+      run: |
+        echo "DATABASE_URL_DONO=postgres://nod_dono:nod@127.0.0.1:${{ inputs.porta }}/nod" >> "$GITHUB_ENV"
+        echo "DATABASE_URL_TEST=postgres://nod_app:nod@127.0.0.1:${{ inputs.porta }}/nod_test" >> "$GITHUB_ENV"
+    - shell: bash
+      run: npm run db:migrate:test

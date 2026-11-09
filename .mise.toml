@@ -1,0 +1,5 @@
+# Runtime pinado por versão EXATA (herdado, docs/praticas-herdadas.md §8).
+# definido em 2026-09-16: 24.19.0 é a versão que rodou a suíte verde nesta máquina.
+# Aviso: nvm/asdf ativos no shell GANHAM do mise — ver AGENTS.md.
+[tools]
+node = "24.19.0"

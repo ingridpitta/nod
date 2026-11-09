@@ -1,0 +1,5 @@
+{
+  "nodDesktop": ["aoAbrir", "aoBuscar", "aoDeepLink", "avisar", "contador", "contas", "deepLinkPendente", "definirAvisos", "definirBarra", "definirDecisaoBarra", "definirSom", "definirTema", "desafioConta", "emLigacao", "estaMaquina", "esteComputador", "googleConta", "iaEntrar", "iaInstalar", "iaTestar", "ias", "microfone", "midia", "preferencias", "removerDaqui", "souDaEquipe", "trocarConta", "vmTentarAgora"],
+  "ias": ["abrirLink", "aoMudar", "atualizar", "cancelar", "colarCodigo", "entrar", "estados", "instalar", "verificar"],
+  "midia": ["existe", "maquina", "mostrarNoFinder"]
+}

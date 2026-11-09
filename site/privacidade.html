@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Política de Privacidade · nod</title>
+<meta name="description" content="Como o nod trata seus dados pessoais: o que coletamos, para que usamos, com quem compartilhamos e seus direitos pela LGPD.">
+<link rel="canonical" href="https://nodbot.ai/privacidade">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+:root{--ink:#0a0a0a;--paper:#fff;--fog:#f5f5f6;--line:#ececee;--mute:#636366;--blue:#0a84ff;
+ --sans:"Inter","SF Pro Display",-apple-system,BlinkMacSystemFont,"Helvetica Neue","Segoe UI",Arial,sans-serif}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;font:16px/1.65 var(--sans);background:var(--paper);color:var(--ink);-webkit-font-smoothing:antialiased}
+a{color:inherit;text-underline-offset:3px}
+:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+::selection{background:var(--ink);color:var(--paper)}
+.top{max-width:760px;margin:0 auto;padding:18px 24px 0;display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:600}
+.top .logo{font-size:20px;font-weight:800;letter-spacing:-.05em;text-decoration:none}
+.top a.volta{color:var(--mute);text-decoration:none;min-height:44px;display:inline-flex;align-items:center}
+.top a.volta:hover{color:var(--ink)}
+main{max-width:760px;margin:0 auto;padding:56px 24px 72px}
+h1{font-size:clamp(36px,7vw,56px);line-height:1;letter-spacing:-.045em;font-weight:800;margin:0 0 14px;text-wrap:balance}
+.meta{color:var(--mute);font-size:14px;margin:0 0 40px}
+.resumo{border:1px solid var(--line);border-radius:16px;padding:18px 22px;margin:0 0 44px;color:var(--ink)}
+.resumo p{margin:0}
+h2{font-size:20px;letter-spacing:-.02em;font-weight:700;margin:44px 0 10px;text-wrap:balance}
+h3{font-size:16px;font-weight:650;margin:24px 0 6px}
+p,li{color:#1c1c1e;text-wrap:pretty}
+ul{padding-left:20px;margin:10px 0}
+li{margin:6px 0}
+.nota{color:var(--mute);font-size:14px}
+footer{max-width:760px;margin:0 auto;padding:28px 24px 44px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:16px 32px;flex-wrap:wrap;font-size:13px;color:var(--mute)}
+footer strong{color:var(--ink);font-size:15px;letter-spacing:-.02em;margin-right:10px}
+footer nav{display:flex;gap:22px}
+footer nav a{color:var(--ink);font-weight:600;text-decoration:none;min-height:44px;display:inline-flex;align-items:center}
+footer nav a:hover,footer nav a[aria-current]{text-decoration:underline}
+@media (max-width:560px){main{padding:40px 16px 56px}.top,footer{padding-left:16px;padding-right:16px}}
+</style>
+</head>
+<body>
+<header class="top"><a class="logo" href="/" aria-label="nod, página inicial">nod</a><a class="volta" href="/">← Voltar para o nod</a></header>
+<main>
+<h1>Política de Privacidade</h1>
+<p class="meta">Última atualização: 28 de outubro de 2026 · Versão beta</p>
+
+<div class="resumo"><p><strong>Em resumo:</strong> usamos seus dados para fazer o nod funcionar: entrar na sua conta, guardar suas conversas e o trabalho dos seus bots, e executar o que você pede. Não vendemos seus dados nem os usamos para publicidade. Você pode exportar seus dados e pedir a exclusão da conta a qualquer momento.</p></div>
+
+<h2>1. Quem somos</h2>
+<p>O nod é um produto da Gamefik, que é a controladora dos dados pessoais tratados no serviço, nos termos da Lei Geral de Proteção de Dados (Lei nº 13.709/2018, “LGPD”). Para qualquer assunto sobre privacidade, inclusive o exercício dos seus direitos, escreva para <a href="mailto:admin1@exemplo.com">admin1@exemplo.com</a>.</p>
+<p>Esta política vale para o site nodbot.ai, para o app do nod (Mac e navegador) e para o servidor que os atende.</p>
+
+<h2>2. Que dados tratamos</h2>
+<h3>Conta e acesso</h3>
+<ul>
+ <li><strong>Entrar com Google:</strong> recebemos do Google apenas o identificador da sua conta Google e o seu endereço de e-mail (escopos <code>openid</code> e <code>email</code>). Não recebemos sua senha do Google.</li>
+ <li><strong>E-mail e senha:</strong> seu e-mail e a senha que você escolher. A senha é guardada só como hash (Argon2id); nunca a guardamos em texto.</li>
+ <li><strong>Perfil:</strong> o nome e as informações que você escrever em “Minha conta” (por exemplo, “Sobre mim”).</li>
+ <li><strong>Sessões e computadores:</strong> registros das sessões abertas e das chaves de cada computador conectado, para que você possa vê-los e encerrá-los.</li>
+ <li><strong>Uso sem conta:</strong> quando essa opção estiver disponível e você usar o app antes de criar conta, criamos um espaço provisório ligado à sua instalação. Ele também fica no nosso servidor.</li>
+</ul>
+<h3>O que você cria no nod</h3>
+<ul>
+ <li>Conversas com os bots, arquivos e imagens que você envia ou que os bots geram, memórias, instruções e rotinas dos bots.</li>
+ <li>Quando um bot usa um computador, a conversa pode guardar uma captura da tela que ele viu, para você conferir o resultado. Essa tela pode conter dados de terceiros que estavam visíveis.</li>
+ <li>Registros de atividade (o que cada bot fez e quando), usados para você acompanhar o trabalho e para segurança.</li>
+</ul>
+<h3>Apps e credenciais conectados</h3>
+<ul>
+ <li>Quando você conecta um app (por exemplo, Slack, Gmail, GitHub ou Linear) ou cola uma chave de API, a credencial fica guardada cifrada (AES-256-GCM) e só é usada para as ações que você autoriza aos seus bots.</li>
+ <li>As conexões com apps de terceiros passam pelo Composio, que guarda a autorização em nome da sua conta.</li>
+</ul>
+<h3>Dados técnicos</h3>
+<ul>
+ <li>Registros do servidor (como horário, rota acessada e erros), usados para operar e proteger o serviço. Não registramos senhas, tokens, cookies nem códigos de verificação.</li>
+ <li>Contagens de uso da interface (por exemplo, quais tipos de aviso foram exibidos e abertos), para melhorar o produto.</li>
+</ul>
+
+<h2>3. Acesso à sua conta Google Cloud</h2>
+<p>Se você optar por rodar o computador do seu bot na sua própria conta Google Cloud, o nod pede o escopo <code>https://www.googleapis.com/auth/cloud-platform</code>. Usamos esse acesso <strong>apenas</strong> para preparar e operar esse computador no seu projeto:</p>
+<ul>
+ <li>escolher ou criar o projeto, verificar o faturamento e ativar as APIs de Compute e IAM;</li>
+ <li>criar uma rede própria para as máquinas do nod e uma conta de serviço exclusiva sua, com permissões mínimas, restritas às máquinas cujo nome começa com <code>nod-g-</code>;</li>
+ <li>criar, ligar, desligar e excluir essas máquinas quando seus bots precisam delas.</li>
+</ul>
+<p>O token de acesso que o Google nos entrega fica só na memória durante o preparo e <strong>não é gravado</strong>. Guardamos apenas a chave da conta de serviço criada no seu projeto, cifrada, para ligar e desligar as máquinas. Não lemos nem alteramos outros recursos do seu projeto. Os custos das máquinas são cobrados pelo Google na sua conta. Você pode revogar o acesso a qualquer momento em <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a> e excluir a conta de serviço no seu projeto.</p>
+<p>O uso de informações recebidas das APIs do Google segue a <a href="https://developers.google.com/terms/api-services-user-data-policy">Política de Dados do Usuário dos Serviços de API do Google</a>, incluindo os requisitos de Uso Limitado.</p>
+
+<h2>4. Para que usamos os dados e com qual base legal</h2>
+<ul>
+ <li><strong>Prestar o serviço</strong> (criar a conta, autenticar, guardar seu trabalho, executar o que você pede aos bots): execução do contrato (art. 7º, V, da LGPD).</li>
+ <li><strong>Segurança e prevenção de abuso</strong> (limites de uso, registros de acesso, revogação de sessões): legítimo interesse (art. 7º, IX) e cumprimento de obrigação legal quando aplicável.</li>
+ <li><strong>E-mails transacionais</strong> (código de verificação, recuperação de senha, avisos da conta): execução do contrato.</li>
+ <li><strong>Melhorar o produto</strong> com contagens de uso da interface: legítimo interesse.</li>
+ <li><strong>Conectar apps e sua conta Google Cloud</strong>: execução do contrato, a partir da sua autorização explícita em cada conexão.</li>
+</ul>
+<p>Não usamos seus dados para publicidade nem os vendemos.</p>
+
+<h2>5. Com quem compartilhamos</h2>
+<p>Compartilhamos dados apenas com fornecedores necessários para o serviço funcionar:</p>
+<ul>
+ <li><strong>Google Cloud</strong> (hospedagem do servidor, banco de dados, segredos e registros), na região de São Paulo (<code>southamerica-east1</code>).</li>
+ <li><strong>Anthropic e OpenAI</strong> (modelos de IA): o conteúdo das conversas e o contexto necessário para cada tarefa são enviados ao provedor do modelo que o bot usa, pela assinatura do Claude ou do ChatGPT que <strong>você</strong> conectou. Esse uso segue também os termos e a política de privacidade do provedor na sua assinatura.</li>
+ <li><strong>Composio</strong> (conexão com apps de terceiros) e os próprios apps que você conectar, apenas nas ações que você autoriza.</li>
+ <li><strong>Resend</strong> (envio de e-mails transacionais a partir do domínio nodbot.ai): seu e-mail e o conteúdo da mensagem.</li>
+ <li><strong>Cloudflare</strong> (entrega do site nodbot.ai).</li>
+</ul>
+<p>Alguns desses fornecedores podem tratar dados fora do Brasil. Nesses casos, a transferência internacional ocorre para a execução do contrato com você ou com as salvaguardas previstas na LGPD. Também podemos compartilhar dados quando exigido por lei ou ordem de autoridade competente.</p>
+
+<h2>6. Por quanto tempo guardamos</h2>
+<ul>
+ <li>Os dados da sua conta e o seu trabalho ficam guardados enquanto a conta existir.</li>
+ <li>Quando você pede a exclusão da conta (em “Minha conta”, onde disponível, ou pelo contato acima), há um prazo de 30 dias para desfazer. Vencido esse prazo, os dados da conta são apagados do nosso banco de dados, sem retenção seletiva.</li>
+ <li>Cópias de segurança do banco são mantidas por até 7 dias e registros do servidor por cerca de 30 dias; depois disso, são descartados no ciclo normal.</li>
+ <li>Exportações que você gera ficam disponíveis para download por 7 dias.</li>
+</ul>
+<p class="nota">Durante o beta, a exclusão automática pode ainda não estar ativa para todas as contas. Se você pedir a exclusão e quiser confirmação, escreva para o contato acima e cuidaremos manualmente, incluindo conexões com apps e arquivos de trabalho dos bots fora do banco de dados.</p>
+
+<h2>7. Seus direitos</h2>
+<p>Pela LGPD, você pode, a qualquer momento: confirmar se tratamos seus dados e acessá-los; corrigir dados incompletos ou desatualizados; pedir anonimização, bloqueio ou eliminação de dados desnecessários; pedir a portabilidade; pedir a eliminação dos dados tratados com seu consentimento; saber com quem compartilhamos; e revogar consentimentos.</p>
+<p>À medida que as funções de “Minha conta” forem liberadas no beta, boa parte disso você faz sozinho no app (editar perfil, exportar os dados, encerrar sessões, desconectar apps e excluir a conta). Para qualquer pedido, escreva para <a href="mailto:admin1@exemplo.com">admin1@exemplo.com</a>. Você também pode reclamar à Autoridade Nacional de Proteção de Dados (ANPD).</p>
+
+<h2>8. Segurança</h2>
+<p>Adotamos medidas técnicas para proteger seus dados, entre elas: conexão cifrada (HTTPS), isolamento dos dados de cada conta no banco de dados, credenciais e chaves guardadas cifradas, senhas com hash, sessões revogáveis e limites contra abuso. Nenhum sistema é totalmente imune a falhas; se ocorrer um incidente de segurança que possa trazer risco relevante, avisaremos você e a ANPD, conforme a lei.</p>
+
+<h2>9. Cookies</h2>
+<p>O app do nod usa apenas cookies necessários para funcionar: o cookie de sessão, que mantém você conectado, e cookies temporários usados durante o login com Google e a conexão com o Google Cloud. Não usamos cookies de publicidade nem de rastreamento de terceiros. O site nodbot.ai não usa cookies próprios.</p>
+
+<h2>10. Crianças</h2>
+<p>O nod não se destina a menores de 18 anos.</p>
+
+<h2>11. Mudanças nesta política</h2>
+<p>Podemos atualizar esta política, especialmente ao longo do beta. A data no topo mostra a versão em vigor. Se a mudança for relevante, avisaremos no app ou por e-mail antes de ela valer.</p>
+</main>
+<footer aria-label="Rodapé">
+ <div><strong>nod</strong>Beta · Gamefik</div>
+ <nav aria-label="Links legais"><a href="/">Início</a><a href="/privacidade" aria-current="page">Privacidade</a><a href="/termos">Termos</a></nav>
+</footer>
+</body>
+</html>

@@ -1,0 +1,724 @@
+/* Linguagem visual de prototypes/private-agents-minimal.html (protótipo de alta fidelidade do PR #4,
+   "cópia Grok Bot"), redesenhada em 2026-10-04 sobre os tokens do design system (web/tokens.css): base grafite,
+   ação grafite, azul só para o que é novo e a cor do agente só na identidade. Chat em BALÕES; o ícone do bot é o
+   mascote. Este arquivo não tem cor literal: tudo vem de var(--…). */
+* { box-sizing: border-box; }
+body { margin: 0; color: var(--ink); font: 400 14px/1.45 var(--font-sans); -webkit-font-smoothing: antialiased;
+  background: var(--surface-side); }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; text-align: left; }
+input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 8px; }
+[hidden] { display: none !important; }
+code { font-family: var(--font-mono); font-size: 12px; background: var(--surface-raised); padding: 1px 5px; border-radius: 4px; }
+body.ocupado { cursor: progress; }
+
+.app { display: grid; grid-template-columns: 336px 1fr; height: 100dvh; min-height: 0; }
+
+/* O rail foi removido em 2026-09-18; o ponto de conexão vive no rodapé da sidebar. */
+.conexao-aberto { color: var(--success); } .conexao-conectando, .conexao-reconectando { color: var(--warning); }
+.conexao-parado { color: var(--ink-3); }
+
+/* ---- sidebar (Meus agentes) ---- */
+.sidebar { min-height: 0; border-right: 1px solid var(--line); display: flex; flex-direction: column;
+  position: relative; color: var(--ink-2); background: var(--surface-side); }
+
+.search-wrap { padding: 10px 10px 8px; border-bottom: 1px solid var(--line); }
+.sh { display: flex; align-items: center; gap: 8px; padding: 2px 4px 8px; }
+.sh b { font-size: 14px; font-weight: 700; color: var(--ink); }
+.search-row { display: grid; grid-template-columns: 1fr 26px; gap: 8px; align-items: center; }
+.search { height: 30px; border: 1px solid var(--line); border-radius: 8px; padding: 0 10px; display: flex;
+  align-items: center; gap: 6px; background: var(--surface-raised); color: var(--ink-3); }
+/* foco-no-conteiner: .search */
+.search input { border: 0; background: none; width: 100%; outline: none; font-size: 13px; }
+.create-trigger { width: 26px; height: 26px; border-radius: 8px; border: 1px solid var(--line-strong);
+  background: var(--surface); color: var(--ink-3); font-size: 16px; line-height: 1;
+  display: grid; place-items: center; transition: border-color .16s ease, color .16s ease, box-shadow .16s ease; }
+.create-trigger:hover { border-color: var(--ink-3); color: var(--ink); }
+
+.favorites { margin-top: 8px; border: 1px dashed transparent; border-radius: 10px; padding: 6px 4px 4px; }
+.favorites-head { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 5px;
+  font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-3); font-weight: 600; }
+.favorites-head b { font-size: 10.5px; color: var(--ink-2); font-weight: 700; }
+.favorites-note { padding: 5px 5px 2px; font-size: 10.5px; color: var(--ink-3); }
+.fav-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.fav { border-radius: 8px; padding: 4px 3px; text-align: center; color: var(--ink-2); min-height: 58px; min-width: 0; user-select: none; }
+.fav:hover { background: var(--surface-raised); }
+.fav .icon { margin: 0 auto 3px; }
+.fav b { display: block; font-size: 10.5px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fav span { display: block; font-size: 9.5px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.list, .ss { min-height: 0; overflow: auto; flex: 1; padding: 8px 6px 12px; margin: 6px 8px 10px;
+  border-radius: 12px; border: 1px solid transparent; }
+.section, .sec { margin: 6px 0 10px; border-radius: 10px; border: 1px solid transparent; }
+.section h3, .sechd { margin: 0; padding: 6px 8px; font-size: 11px; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--ink-3); font-weight: 600; display: flex; align-items: center; height: auto; }
+.row, .sr { width: 100%; border-radius: 8px; padding: 7px 8px; text-align: left; display: grid;
+  grid-template-columns: 24px 1fr auto; align-items: center; gap: 8px; color: var(--ink-2); border: 1px solid transparent; }
+.row:hover, .sr:hover { background: var(--surface-raised); }
+.row[aria-current="true"], .sr[aria-current="true"] { background: var(--surface-selected); }
+/* ink-3 sobre surface-selected fica abaixo de 4,5:1: no item atual, o texto secundário sobe para ink-2. */
+.row[aria-current="true"] .txt span, .row[aria-current="true"] .meta { color: var(--ink-2); }
+.row .g { width: 24px; text-align: center; color: var(--ink-3); }
+.txt { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.txt b { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
+.txt span { font-size: 11.5px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meta { text-align: right; color: var(--ink-3); font-size: 11px; display: flex; align-items: center; gap: 6px; }
+.meta .pin { font-size: 10px; color: var(--ink-3); opacity: .85; }
+.meta .dot, .sr .pt { width: 6px; height: 6px; border-radius: 50%; background: var(--signal); display: inline-block; }
+.sr .pt.rodando { animation: pulsa 1.4s ease-in-out infinite; }
+.sidebar .bt.sm { display: block; width: calc(100% - 12px); margin: 4px 6px 2px; text-align: center;
+  color: var(--ink-3); border-color: var(--line-strong); background: var(--surface); }
+.mudo { color: var(--ink-3); font-size: 12px; padding: 4px 8px; }
+
+.me { margin-top: auto; border-top: 1px solid var(--line); padding: 8px 12px; font-size: 11.5px;
+  color: var(--ink-2); display: flex; align-items: center; gap: 8px; }
+.me .av-me { width: 20px; height: 20px; border-radius: 50%; background: var(--surface-raised); display: grid;
+  place-items: center; font-size: 9px; color: var(--ink-2); font-weight: 700; flex: none; }
+
+/* ---- mascote do bot ---- */
+.icon { width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center; flex: none; }
+.icon.md { width: 30px; height: 30px; }
+.icon.lg { width: 42px; height: 42px; }
+.shape-square { border-radius: 7px; }
+.shape-circle { border-radius: 50%; }
+.shape-hex { clip-path: polygon(25% 7%, 75% 7%, 100% 50%, 75% 93%, 25% 93%, 0 50%); border-radius: 0; }
+
+/* A cor de cada agente (classe c-* gravada no perfil, web/lib/mascote.ts CORES_MASCOTE) vira --mascote-cor, uma vez
+   só; o mascote, o avatar vazado e a amostra do editor leem dali (definido em 2026-10-04: skins do design system). */
+.c-red { --mascote-cor: var(--agent-rouge); } .c-pink { --mascote-cor: var(--agent-rose); }
+.c-purple, .c-lilac { --mascote-cor: var(--agent-violet); } .c-blue { --mascote-cor: var(--agent-bleu); }
+.c-teal { --mascote-cor: var(--agent-turquoise); } .c-green { --mascote-cor: var(--agent-vert); }
+.c-orange { --mascote-cor: var(--agent-orange); } .c-black { --mascote-cor: var(--agent-encre); }
+.c-brown { --mascote-cor: var(--agent-brun); } .c-amber { --mascote-cor: var(--agent-ambre); }
+.c-gray { --mascote-cor: var(--agent-gris); } .c-cream { --mascote-cor: var(--agent-creme); }
+
+/* NOD-431 (emenda da ADR-070): o balão da pessoa veste a cor do bot da conversa. A classe balao-c-* vai no
+   .message.you (classeDoBalao, web/telas/conversa.ts) e aponta para os tokens da skin, já com contraste garantido. */
+.balao-c-red { --balao-fundo: var(--balao-rouge); --balao-tinta: var(--balao-rouge-tinta); --balao-codigo: var(--balao-rouge-codigo); }
+.balao-c-pink { --balao-fundo: var(--balao-rose); --balao-tinta: var(--balao-rose-tinta); --balao-codigo: var(--balao-rose-codigo); }
+.balao-c-purple, .balao-c-lilac { --balao-fundo: var(--balao-violet); --balao-tinta: var(--balao-violet-tinta); --balao-codigo: var(--balao-violet-codigo); }
+.balao-c-blue { --balao-fundo: var(--balao-bleu); --balao-tinta: var(--balao-bleu-tinta); --balao-codigo: var(--balao-bleu-codigo); }
+.balao-c-teal { --balao-fundo: var(--balao-turquoise); --balao-tinta: var(--balao-turquoise-tinta); --balao-codigo: var(--balao-turquoise-codigo); }
+.balao-c-green { --balao-fundo: var(--balao-vert); --balao-tinta: var(--balao-vert-tinta); --balao-codigo: var(--balao-vert-codigo); }
+.balao-c-orange { --balao-fundo: var(--balao-orange); --balao-tinta: var(--balao-orange-tinta); --balao-codigo: var(--balao-orange-codigo); }
+.balao-c-black { --balao-fundo: var(--balao-encre); --balao-tinta: var(--balao-encre-tinta); --balao-codigo: var(--balao-encre-codigo); }
+.balao-c-brown { --balao-fundo: var(--balao-brun); --balao-tinta: var(--balao-brun-tinta); --balao-codigo: var(--balao-brun-codigo); }
+.balao-c-amber { --balao-fundo: var(--balao-ambre); --balao-tinta: var(--balao-ambre-tinta); --balao-codigo: var(--balao-ambre-codigo); }
+.balao-c-gray { --balao-fundo: var(--balao-gris); --balao-tinta: var(--balao-gris-tinta); --balao-codigo: var(--balao-gris-codigo); }
+.balao-c-cream { --balao-fundo: var(--balao-creme); --balao-tinta: var(--balao-creme-tinta); --balao-codigo: var(--balao-creme-codigo); }
+
+/* avatares vazados (mensagens de sistema / membros de sala) — mantidos do shell antigo */
+.av { display: inline-grid; place-items: center; font-size: 11px; font-weight: 700; flex: none; }
+.av-pessoa { border-radius: 50%; background: var(--surface-raised); color: var(--ink-2); }
+/* A cor do agente fica na borda; as iniciais em tinta, porque creme, âmbar e verde não têm contraste como texto. */
+.av-agente { border-radius: 7px; background: transparent; border: 2px solid var(--mascote-cor, var(--line-strong)); color: var(--ink-2); }
+.av.sm { width: 20px; height: 20px; font-size: 8px; } .av.md { width: 30px; height: 30px; } .av.lg { width: 42px; height: 42px; font-size: 13px; }
+
+/* ---- palco: a área principal (surface) ao lado da barra (surface-side) ---- */
+.stage { min-height: 0; display: flex; flex-direction: column; min-width: 0; position: relative;
+  background: var(--surface); margin: 6px; border: 1px solid var(--line); overflow: hidden;
+  border-top-left-radius: 18px; border-bottom-left-radius: 18px;
+  border-top-right-radius: 10px; border-bottom-right-radius: 10px; }
+.cabecalho { flex: none; min-height: 43px; border-bottom: 1px solid var(--line); padding: 8px 14px;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.cabecalho:empty { display: none; }
+.ambiente-banco { margin: 0 10px 8px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 8px;
+  font-size: 11px; font-weight: 650; color: var(--ink-2); background: var(--surface-raised); }
+.ambiente-banco span { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: var(--ink-3); }
+.ambiente-persistente { color: var(--success); border-color: var(--line); background: var(--success-soft); }
+.ambiente-persistente span { background: var(--success); }
+.ambiente-efemero { color: var(--warning); border-color: var(--warning-line); background: var(--warning-soft); }
+.ambiente-efemero span { background: var(--warning); }
+.cab-esq { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.cab-esq .nome { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cab-esq .tag { font-size: 10px; color: var(--ink-2); background: var(--surface-raised); border: 1px solid var(--line);
+  padding: 2px 6px; border-radius: 999px; }
+.cab-acoes { display: flex; align-items: center; gap: 6px; }
+.membros { display: flex; gap: 8px; flex-wrap: wrap; }
+.membro { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--ink-2); }
+#erro:empty { display: none; }
+.erro { margin: 10px 14px 0; padding: 8px 12px; border: 1px solid var(--danger-line); background: var(--danger-soft); color: var(--danger);
+  border-radius: 8px; font-size: 13px; }
+.erro-detalhe { margin-top: 4px; font-size: 12px; color: var(--ink-3); }
+.erro-detalhe summary { cursor: pointer; }
+/* NOD-215: o "Reconectando…" ocupa o lugar do banner de erro, com o mesmo respiro, no tom neutro do aviso de estado. */
+/* Revisão: `.aviso-compacto` (mais abaixo, mesma especificidade) ganhava; as duas classes juntas vencem. */
+.aviso-compacto.aviso-reconectando { margin: 10px 14px 0; }
+/* Aviso de estado (componente Notice do design system, web/lib/aviso-estado.ts; definido em 2026-10-04): o que aconteceu,
+   o motivo e o botão que resolve. O botão primário dentro do aviso usa a cor do estado.
+   Revisto em 2026-10-16 (plano "tela limpa", T7; pedido do Marlon: "cards bege muito feios"): o alerta é um cartão branco
+   com borda fina; o âmbar fica só no ícone e o botão que resolve é o primário de sempre (--action). */
+.aviso-estado { display: flex; align-items: center; gap: 12px; padding: 9px 10px 9px 12px; border: 1px solid; border-radius: 10px;
+  font-size: 13px; line-height: 18px; margin: 4px 0 14px; }
+.aviso-estado-ic { flex: none; align-self: flex-start; margin-top: 1px; }
+.aviso-estado-txt { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.aviso-estado-txt b { font-weight: 600; }
+.aviso-estado .bt { flex: none; }
+.tom-erro { background: var(--danger-soft); border-color: var(--danger-line); color: var(--danger); }
+.tom-alerta { background: var(--surface); border-color: var(--line); color: var(--ink); }
+.tom-alerta .aviso-estado-ic { color: var(--warning); }
+.tom-ok { background: var(--success-soft); border-color: transparent; color: var(--success); }
+.tom-info { background: var(--surface-raised); border-color: var(--line); color: var(--ink); }
+.tom-erro .bt.pri { background: var(--danger); border-color: var(--danger); color: var(--on-status); }
+.tom-alerta .bt.pri { background: var(--action); border-color: var(--action); color: var(--on-action); }
+.tom-ok .bt.pri { background: var(--success); border-color: var(--success); color: var(--on-status); }
+/* ADR-108 (R4/R6, canvas C1–C3): o aviso de troca de IA — cartão neutro com as opções em lista, a recomendada marcada. */
+.aviso-troca { align-items: flex-start; padding: 14px 16px; background: var(--surface); font-size: 14px; line-height: 21px; }
+.aviso-troca p { margin: 4px 0 10px; color: var(--ink-2); }
+.troca-opcoes { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.troca-opcao { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 10px 12px; border: 1px solid var(--line);
+  border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.troca-opcao:hover, .troca-opcao:focus-visible { border-color: var(--ink); }
+.troca-opcao.recomendada { border-color: var(--ink-2); }
+.troca-opcao small { color: var(--ink-3); font-size: 12.5px; line-height: 18px; }
+.troca-opcao-tit { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; font-weight: 500; }
+.troca-reco { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-2); font-weight: 400; }
+/* NOD-313 (2026-10-23): o card que sugere espaçar ou pausar a rotina — cara de mensagem, borda fina, sem fundo, pílulas vazadas. */
+.ritmo-card { max-width: 620px; margin: 2px auto 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: none; font-size: 14px; line-height: 20px; color: var(--ink); }
+.ritmo-card p { margin: 0; }
+.ritmo-card b { font-weight: 500; }
+.ritmo-sub { margin-top: 2px; color: var(--ink-2); }
+.ritmo-opcoes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.ritmo-pilula { padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; background: none; color: var(--ink); font: inherit; font-size: 13px; line-height: 20px; cursor: pointer; }
+.ritmo-pilula:hover, .ritmo-pilula:focus-visible { border-color: var(--line-strong); }
+.ritmo-pilula:disabled { opacity: .5; cursor: default; }
+.troca-rodape { display: block; margin-top: 10px; color: var(--ink-3); font-size: 12.5px; }
+.aviso-estado-detalhes { margin-top: 4px; color: var(--ink-2); font-size: 12px; }
+.aviso-estado-detalhes > summary { cursor: pointer; width: fit-content; color: var(--ink-3); }
+.aviso-estado-detalhes[open] > summary { margin-bottom: 4px; }
+/* Na barra lateral: menor, colado ao rodapé, e o botão volta ao tamanho do texto (vence o .sidebar .bt.sm de bloco). */
+.aviso-compacto { margin: 0 12px 6px; padding: 7px 8px 7px 10px; font-size: 12px; gap: 8px; }
+/* definido em 2026-10-05 (ia-fora.ts): o aviso "a conta da IA não serve" e a linha "Respondendo pelo ChatGPT". O logo do
+   provedor vai no HTML (cor de marca de terceiros, fora dos tokens de propósito); aqui só a moldura dele. */
+.ia-logo { width: 22px; height: 22px; flex: none; display: inline-grid; place-items: center; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+.ia-logo svg { width: 14px; height: 14px; }
+.aviso-estado-acoes { display: flex; gap: 8px; flex-wrap: wrap; flex: none; }
+.bt.com-logo { display: inline-flex; align-items: center; gap: 7px; }
+.bt.com-logo .ia-logo { width: 18px; height: 18px; border-radius: 5px; }
+.bt.com-logo .ia-logo svg { width: 12px; height: 12px; }
+.aviso-ia-fora { flex-wrap: wrap; }
+.aviso-ia-trocada { margin: 4px 0 12px 46px; max-width: 620px; font-size: 13px; }
+.sidebar .aviso-estado .bt.sm { display: inline-block; width: auto; margin: 0; }
+.timeline-wrap { flex: 1; overflow: auto; min-height: 0; padding: 14px 16px 18px; }
+.timeline { max-width: 880px; margin: 0 auto; width: 100%; }
+/* As duas partes da timeline (histórico e ao vivo) e os blocos do histórico são regiões de render, não caixas:
+   o layout é o de antes (web/lib/regioes.ts regiaoPorBlocos). */
+.timeline-parte, .timeline-parte > .bloco { display: contents; }
+.composer-wrap { flex: none; border-top: 1px solid var(--line); padding: 8px 12px 10px; background: var(--surface); }
+.composer-wrap:empty { display: none; }
+
+/* ---- chat em balões ---- */
+.time-sep { margin: 8px 0 12px; text-align: center; color: var(--ink-3); font-size: 11px; }
+.message { display: flex; margin-bottom: 8px; position: relative; width: 100%; }
+.message.you { justify-content: flex-end; }
+.bubble-wrap { position: relative; max-width: min(76%, 740px); }
+.bubble { border-radius: 15px; padding: 9px 12px; font-size: 13.5px; line-height: 1.5; }
+.message.bot .bubble { background: var(--surface-raised); color: var(--ink); border-top-left-radius: 8px; }
+.message.you .bubble { background: var(--balao-fundo, var(--action)); color: var(--balao-tinta, var(--on-action)); border-top-right-radius: 8px; }
+.bubble .sender { display: block; font-size: 11px; font-weight: 700; color: var(--ink-2); margin-bottom: 2px; }
+.bubble .meta-tags { margin-top: 4px; display: flex; gap: 5px; flex-wrap: wrap; }
+/* Ações da mensagem: fora do balão, na margem, alinhadas ao topo do texto. `top: -16px` (a regra
+   original, nunca usada por nenhum render) cobria o nome e a hora em .msg-autor; a margem lateral é
+   espaço morto nas duas direções e não disputa nada (definido em 2026-09-21). */
+.msg-actions { position: absolute; top: 2px; left: 100%; margin-left: 6px; display: flex; gap: 4px;
+  opacity: 0; pointer-events: none; transform: translateX(-3px);
+  transition: opacity .14s ease, transform .14s cubic-bezier(.22, 1, .36, 1); }
+.message.you .msg-actions { left: auto; right: 100%; margin: 0 6px 0 0; transform: translateX(3px); }
+/* Linha não-balão (sistema, parada, negação): o mesmo botão, ancorado à direita do bloco. */
+.msg-linha { position: relative; }
+.msg-linha .msg-actions { top: 50%; left: auto; right: 0; margin: 0; transform: translate(3px, -50%); }
+.message:hover .msg-actions, .msg-linha:hover .msg-actions, .msg-actions:focus-within { opacity: 1; pointer-events: auto; transform: translateX(0); }
+.msg-linha:hover .msg-actions, .msg-linha .msg-actions:focus-within { transform: translate(0, -50%); }
+/* O helper botao() sempre emite class="bt", e `.bt` traz padding 6px 12px — numa caixa de 26px com
+   box-sizing:border-box sobram 2px de conteúdo, e o SVG de 15px transborda para baixo e para a
+   direita em vez de centralizar. Zerar o padding é o que centra de fato (medido em 2026-09-21). */
+.msg-actions button.bt { width: 26px; height: 26px; padding: 0; border-radius: 8px;
+  border: 1px solid transparent; background: none; color: var(--ink-3);
+  display: grid; place-items: center; cursor: pointer;
+  transition: color .12s ease, background .12s ease, border-color .12s ease; }
+/* SVG inline herda a baseline do texto e assenta alguns décimos abaixo do centro da grade, mesmo com
+   place-items:center. `display:block` tira o glifo do fluxo de linha (definido em 2026-09-21). */
+.msg-actions button.bt svg { display: block; }
+.msg-actions button.bt:hover { background: var(--surface); border-color: var(--line); color: var(--ink-2); }
+.msg-actions button.bt:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .msg-actions { transition: opacity .14s ease; transform: none; } }
+/* Toque não tem hover: na ausência dele o ícone fica visível, apagado (a feature não some no iPad). */
+@media (hover: none) { .msg-actions { opacity: .45; pointer-events: auto; transform: none; } }
+/* Ouvir uma resposta (NOD-106, protótipo do Gil 16/10): com a leitura ativa a barra fica visível sem hover, e o botão
+   vira a pílula "Parar" — o ícone diz o estado (spinner = carregando, barras = tocando; no hover, ■), a palavra a ação. */
+.message.lendo .msg-actions { opacity: 1; pointer-events: auto; transform: none; }
+.msg-actions button.bt.ouvir-ativo { width: auto; padding: 0 9px 0 7px; display: inline-flex; align-items: center; gap: 6px;
+  border-color: var(--line-strong); background: var(--surface); color: var(--ink); font-size: 12px; font-weight: 500; white-space: nowrap; }
+.msg-actions button.bt.ouvir-ativo:hover { border-color: var(--ink-3); background: var(--surface-raised); color: var(--ink); }
+/* Ligação viva: aria-disabled (não `disabled`), para continuar focável e mostrar o motivo na dica. */
+.msg-actions button.bt[aria-disabled="true"] { color: var(--ink-3); opacity: .5; cursor: not-allowed; }
+.msg-actions button.bt[aria-disabled="true"]:hover { background: none; border-color: transparent; }
+.ouvir-wrap { position: relative; display: inline-flex; }
+/* A barra fica na borda direita da mensagem: a dica cresce para a esquerda, senão vaza da tela (captura de 17/10). */
+.ouvir-dica { position: absolute; right: 0; top: calc(100% + 6px); white-space: nowrap; font-size: 12px; padding: 5px 8px; border-radius: 7px;
+  background: var(--action); color: var(--on-action); box-shadow: var(--shadow-pop); pointer-events: none; opacity: 0; transition: opacity .12s ease; z-index: 2; }
+.ouvir-wrap:hover .ouvir-dica, .ouvir-wrap:focus-within .ouvir-dica { opacity: 1; }
+.ouvir-spin { animation: ouvir-gira .8s linear infinite; transform-origin: 50% 50%; }
+@keyframes ouvir-gira { to { transform: rotate(360deg); } }
+.ouvir-barras rect { transform-origin: 50% 100%; transform-box: fill-box; animation: ouvir-onda 1s ease-in-out infinite; }
+.ouvir-barras rect:nth-child(2) { animation-delay: -.33s; }
+.ouvir-barras rect:nth-child(3) { animation-delay: -.66s; }
+@keyframes ouvir-onda { 0%, 100% { transform: scaleY(.35); } 50% { transform: scaleY(1); } }
+.bt.ouvir-ativo .ouvir-parar { display: none; }
+.bt.ouvir-ativo:hover .ouvir-barras { display: none; }
+.bt.ouvir-ativo:hover .ouvir-parar { display: block; }
+@media (prefers-reduced-motion: reduce) { .ouvir-spin, .ouvir-barras rect { animation: none; } }
+/* Falha antes do primeiro som: linha neutra embaixo do balão (é informação, não um trabalho parado). */
+.msg-aviso { display: flex; align-items: center; gap: 6px; margin: 5px 0 0 2px; font-size: 12px; color: var(--ink-2); }
+.msg-aviso svg { color: var(--ink-3); flex: none; }
+.streaming .cursor { animation: pulsa 1s steps(2) infinite; color: var(--ink-3); }
+
+/* mensagens de sistema / eventos: linhas discretas centradas ou à esquerda, sem balão */
+.msg-sistema { font-size: 12px; color: var(--ink-3); line-height: 1.55; margin: 4px auto 12px; text-align: center; max-width: 620px; }
+/* definido em 2026-09-24: três ou mais linhas de sistema seguidas recolhidas; abertas, voltam ao normal. */
+.avisos-sistema { margin: 4px auto 12px; max-width: 620px; width: 100%; }
+.avisos-sistema > summary { cursor: pointer; font-size: 12px; color: var(--ink-3); text-align: center; }
+.avisos-sistema > summary:hover { color: var(--ink-2); }
+.avisos-sistema[open] > summary { margin-bottom: 8px; }
+.msg-handoff, .msg-passe { font-size: 13px; color: var(--ink-2); margin: 4px 0 12px; }
+.msg-consentimento { font-size: 13px; border-left: 3px solid var(--line-strong); padding-left: 10px; margin: 4px 0 12px; }
+.msg-consentimento small { display: block; color: var(--ink-3); }
+.msg-rotina, .msg-resultado, .msg-parada, .msg-peer { font-size: 13.5px; margin: 4px 0 12px; }
+.msg-rotina-passou_em_branco, .msg-rotina-falhou { color: var(--ink-2); }
+.msg-peer .tag { display: inline-block; margin-bottom: 4px; }
+
+.tag { display: inline-block; font-size: 10px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--ink-3); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; vertical-align: middle; }
+.tag-ambar { color: var(--warning); border-color: var(--warning-line); background: var(--warning-soft); }
+.tag-cinza { color: var(--ink-3); }
+.tag-ok { color: var(--success); border-color: transparent; background: var(--success-soft); }
+/* definido em 2026-09-24 (emenda da ADR-037): computador do bot fora do ar — o mesmo vermelho de ESTADO
+   no chip do cabeçalho, no subtítulo da lateral, no cartão da conversa e no painel. */
+.tag-vermelha { color: var(--danger); border-color: var(--danger-line); background: var(--danger-soft); }
+.sub-fora-do-ar { color: var(--danger) !important; }
+/* NOD-399: o aviso do computador fora do ar é o .cp-erro neutro (web/card-proposta.css); fica no centro, como as
+   outras linhas de sistema (interface.css, `.msg-linha > .msg-computador-fora`). */
+.msg-computador { padding: 14px 16px; border: 1px solid var(--line); background: var(--surface-side); border-radius: 16px; }
+.msg-computador .mc-cab { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.msg-computador .mc-cab b { font-weight: 600; }
+.msg-computador p { margin: 8px 0 0; line-height: 1.5; }
+.msg-computador .mcf-acoes { display: flex; gap: 8px; margin-top: 12px; align-items: center; }
+.msg-computador .mc-sub { color: var(--ink-2); font-size: 13px; }
+.detalhe-computador-fora { display: flex; flex-direction: column; gap: 6px; padding: 12px; border: 1px solid var(--danger-line); background: var(--danger-soft); border-radius: 10px; }
+.detalhe-computador-fora .tag { align-self: flex-start; }
+.detalhe-computador-fora p { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--ink); }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-3);
+  border: 1px solid var(--line); border-radius: 99px; padding: 3px 10px; }
+
+/* ---- proposta (E1.1) ---- */
+.card-prop { width: min(560px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+  overflow: hidden; margin: 6px auto 14px; }
+.card-prop .hd { padding: 10px 12px 6px; font-size: 12px; color: var(--ink-3); }
+.card-prop .ttl { padding: 0 12px 10px; font-size: 16px; font-weight: 600; }
+.card-prop .it { padding: 8px 12px; border-top: 1px solid var(--line); font-size: 13.5px; line-height: 1.45; }
+.card-prop .it b { display: block; font-size: 11px; color: var(--ink-3); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 3px; }
+.card-prop .ft { padding: 10px 12px; display: flex; gap: 8px; border-top: 1px solid var(--line); background: var(--surface-side); flex-wrap: wrap; }
+/* definido em 2026-09-24 ("rotina nasce com o acesso"): o app que a rotina lê ou altera, em destaque. */
+.rotina-precisa { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border-top: 1px solid var(--warning-line);
+  background: var(--warning-soft); font-size: 13.5px; line-height: 1.45; }
+.decisao .rotina-precisa { border: 1px solid var(--warning-line); border-radius: 10px; margin-top: 8px; }
+.rotina-precisa .app-logo { width: 32px; height: 32px; min-width: 32px; border-radius: 9px; font-size: 16px; }
+.rotina-precisa .rp-corpo { min-width: 0; }
+.rotina-precisa .rp-rotulo { display: block; font-size: 11px; color: var(--warning); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 2px; }
+.rotina-precisa .rp-oque { font-weight: 600; }
+.rotina-precisa .rp-fora { display: block; color: var(--ink-3); font-size: 12.5px; margin-top: 2px; }
+.rp-liberado { margin: 0; padding: 0 12px 10px; font-size: 12.5px; }
+.card-prop .rp-liberado { background: var(--surface-side); }
+
+/* ---- composer ---- */
+.composer .box { max-width: 100%; margin: 0 auto; border: 1px solid var(--line-strong); border-radius: 14px;
+  min-height: 38px; padding: 6px 8px; display: flex; align-items: flex-end; gap: 7px; background: var(--surface); position: relative; }
+.composer .box:focus-within { border-color: var(--ink); }
+/* foco-no-conteiner: .composer .box */
+.composer textarea { flex: 1; border: 0; background: none; resize: none; outline: none; min-height: 22px;
+  max-height: 170px; line-height: 1.44; font-size: 13.5px; padding-top: 3px; }
+.composer .send { width: 24px; height: 24px; border-radius: 50%; background: var(--action); color: var(--on-action);
+  display: grid; place-items: center; font-size: 12px; margin-bottom: 2px; flex: none; }
+.composer .nota { max-width: 100%; font-size: 11px; color: var(--ink-3); padding: 4px 3px 0; margin: 0; }
+.autocomplete { position: absolute; left: 8px; bottom: 100%; margin-bottom: 6px; background: var(--surface);
+  border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow-pop);
+  display: flex; flex-direction: column; min-width: 160px; z-index: 5; }
+.sug { padding: 6px 10px; font-size: 13px; } .sug:hover { background: var(--surface-raised); }
+
+/* ---- telas de feature (frota, sua-vez, rotinas, conectores, perfil, memória) ---- */
+.tela { max-width: 860px; margin: 0 auto; }
+.tela-cab { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; flex-wrap: wrap; }
+.tela-cab h1 { margin: 0; font-size: 20px; }
+.vazio { font-size: 15px; color: var(--ink-2); padding: 20px 0; }
+.lista { list-style: none; margin: 0; padding: 0; }
+.lista > li { padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; background: var(--surface); }
+.bt { border: 1px solid var(--line-strong); background: var(--surface); border-radius: 8px; padding: 6px 12px; font-size: 12.5px; font-weight: 500; white-space: nowrap; }
+.bt:hover { border-color: var(--ink-3); background: var(--surface-raised); } .bt.pri { background: var(--action); color: var(--on-action); border-color: var(--action); }
+.bt.pri:hover { opacity: .88; }
+/* Botão desabilitado precisa PARECER desabilitado: sem isso "Sempre permitir" bloqueado num card
+   sensível lê como clicável, e a pessoa não entende por que nada acontece (ADR-029 em espírito —
+   o motivo está no title). Cursor e opacidade dizem o estado antes do clique. */
+.bt[disabled] { opacity: .45; cursor: not-allowed; }
+.bt[disabled]:hover { border-color: var(--line-strong); }
+.bt.sm { padding: 3px 8px; font-size: 11.5px; font-weight: 400; } .bt.perigo { color: var(--danger); border-color: var(--danger-line); } .bt:disabled { opacity: .4; }
+.acoes { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
+.form { display: grid; gap: 10px; max-width: 560px; }
+.form label { display: grid; gap: 4px; font-size: 12px; color: var(--ink-3); }
+.form input, .form select, .form textarea, .criar input, .resposta { border: 1px solid var(--line-strong); border-radius: 8px; padding: 7px 10px; font-size: 14px; background: var(--surface); color: var(--ink); }
+.form.linha { grid-template-columns: auto 1fr auto; align-items: end; }
+.criar { display: flex; gap: 8px; margin: 12px 0 18px; max-width: 560px; } .criar input { flex: 1; }
+.cartoes { display: grid; gap: 8px; }
+.inventario { font-size: 13px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); display: flex; flex-direction: column; gap: 6px; }
+.inv-linha, .ex-linha { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ex-linha { padding-top: 6px; border-top: 1px dashed var(--line); }
+.ex-mudo { font-size: 12px; color: var(--ink-3); } .ex-recusa { font-size: 12px; color: var(--warning); }
+.inv-falha { border-color: var(--warning-line); background: var(--warning-soft); color: var(--warning); }
+.negacoes h4 { margin: 14px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-3); }
+.negacao { font-size: 13px; padding: 8px 12px; border-radius: 8px; margin-bottom: 6px; border: 1px solid var(--warning-line); background: var(--warning-soft); color: var(--warning); }
+.negacao-ferramenta_negada { border-color: var(--line); background: var(--surface-raised); color: var(--ink-2); }
+.neg-classe { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; margin-right: 6px; }
+.faixa { margin: 10px auto; padding: 10px 12px; border-radius: 8px; font-size: 13.5px; border: 1px solid var(--line); background: var(--surface-raised); max-width: 620px; }
+.faixa-parada { border-color: var(--danger-line); background: var(--danger-soft); color: var(--danger); }
+.faixa-parada div { color: var(--ink-2); font-size: 12.5px; margin-top: 4px; }
+
+/* sua vez */
+.decisao { border-left: 4px solid var(--warning) !important; }
+.decisoes-chat { width: min(640px, 100%); align-self: flex-start; margin: 12px 0; }
+.decisoes-chat h2 { font-size: 16px; margin: 0 0 6px; }
+.dec-fechar { margin-left: auto; border: 0; background: none; color: var(--ink-3); font-size: 18px; line-height: 1; padding: 2px 6px; }
+.dec-fechar:hover, .dec-fechar:focus-visible { color: var(--ink); }
+.decisoes-chat > p { color: var(--ink-3); font-size: 13px; margin: 0 0 12px; }
+.decisoes-chat .dec-frase { overflow-wrap: anywhere; }
+.decisoes-chat .acoes { flex-wrap: wrap; }
+.msg-consentimento details { margin-top: 6px; overflow-wrap: anywhere; }
+.msg-consentimento summary { cursor: pointer; color: var(--ink-3); }
+.dec-vencido { border-left-color: var(--ink-3) !important; color: var(--ink-3); background: var(--surface-raised) !important; }
+.dec-reaberto { border-left-color: var(--warning) !important; }
+.dec-fora { border-left-color: var(--ink-3) !important; }
+.dec-cab { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+.dec-frase { font-size: 15px; margin: 6px 0; }
+.dec-rodape { margin-top: 8px; }
+/* definido em 2026-09-24: pedidos iguais dobrados ("×N") e vencidos recolhidos num <details> só.
+   "Limpar vencidos" fica na linha do resumo, mas fora do <summary> (o clique não abre/fecha a lista). */
+.dec-gemeas { font-variant-numeric: tabular-nums; }
+.dec-vencidos { position: relative; margin-top: 4px; }
+.dec-vencidos-lista > summary { cursor: pointer; font-size: 13px; color: var(--ink-3); width: fit-content; padding: 4px 0; }
+.dec-vencidos-lista > summary:hover { color: var(--ink-2); }
+.dec-vencidos-lista[open] > summary { margin-bottom: 8px; }
+.dec-vencidos > .dec-limpar { position: absolute; top: 0; right: 0; }
+/* Aprovação em duas densidades: o que vai acontecer em português, o nome técnico atrás do
+   disclosure. Item sensível sai do modo enxuto — ver renderAprovacao em web/telas/sua-vez.ts. */
+.ap-lista { list-style: none; padding: 0; margin: 8px 0 0; }
+.ap-item { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; padding: 9px 0; border-top: 1px solid var(--line); }
+.ap-item:first-child { border-top: none; }
+.ap-marca { display: flex; align-items: center; padding-top: 2px; }
+.ap-item.sensivel { background: var(--warning-soft); border-radius: 8px; padding: 10px; border-top-color: transparent; }
+.ap-corpo { min-width: 0; }
+.ap-oque { font-size: 14.5px; line-height: 1.45; }
+.ap-onde { font-size: 12.5px; color: var(--ink-3); margin-top: 1px; }
+.ap-unico .ap-onde { margin-top: 2px; }
+/* definido em 2026-09-28 (ADR-055): o comando que vai rodar no Mac, inteiro e em fonte de código. */
+.ap-comando { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--surface-raised); border: 1px solid var(--line); font: 12.5px/1.5 var(--font-mono); white-space: pre-wrap; word-break: break-all; }
+.ap-item .justificativa { font-size: 12.5px; color: var(--warning); font-style: italic; margin: 5px 0 0; }
+.ap-detalhe { margin-top: 6px; }
+.ap-detalhe > summary { cursor: pointer; font-size: 12.5px; color: var(--ink-3); width: fit-content; }
+.ap-detalhe > summary:hover { color: var(--ink-2); }
+.ap-detalhe dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 8px 0 0; font-size: 12px; }
+.ap-detalhe dt { color: var(--ink-3); }
+.ap-detalhe dd { margin: 0; overflow-wrap: anywhere; }
+.ap-detalhe .texto-final { border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; font-size: 13px; width: 100%; margin-top: 8px; }
+.resposta { min-width: 280px; }
+
+/* rotinas / conectores / memória / perfil */
+.rt-cab, .cn-cab { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rt-linha { font-size: 13px; margin-top: 4px; }
+/* definido em 2026-10-15 (pacote A3): o aviso dos horários pulados, ancorado logo abaixo da próxima execução. */
+.rt-aviso { color: var(--warning); }
+.execucoes { list-style: none; padding: 0; margin: 8px 0 0; font-size: 12.5px; }
+.exec { padding: 4px 0; border-top: 1px dashed var(--line); }
+.exec-executou b { color: var(--success); } .exec-passou_em_branco b { color: var(--warning); } .exec-falhou b { color: var(--danger); }
+/* sem_novidade é o desfecho silencioso: rodou, nada mudou, nada foi escrito na conversa. Apagado
+   de propósito — está ali para consulta, não para chamar atenção. */
+.exec-sem_novidade, .exec-sem_novidade b { color: var(--ink-3); }
+/* interrompida (ADR-045): a máquina parou no meio — não é erro da rotina (vermelho) nem falta de
+   resposta (âmbar). Cinza como sem_novidade: é registro; o aviso único já contou o que houve. */
+.exec-interrompida, .exec-interrompida b { color: var(--ink-3); }
+/* adiada (NOD-243; revisão do Gil no PR 335, A5): a janela que esperou a anterior terminar. Cinza: é registro — o aviso
+   e a linha de espera já explicam; uma série de adiadas não vira a parte mais forte do histórico. */
+.exec-adiada, .exec-adiada b { color: var(--ink-3); }
+/* nao_rodou (NOD-274): a janela que a cota da IA (ou a execução anterior aberta) pulou. Registro, não erro: cinza. */
+.exec-nao_rodou, .exec-nao_rodou b { color: var(--ink-3); }
+/* bloqueada (definido em 2026-09-24, emenda da ADR-044): o pré-voo parou a janela sem gastar turno. Âmbar
+   como passou_em_branco — espera por você (o card de acesso) —, sem o vermelho de erro. */
+.exec-bloqueada b { color: var(--warning); }
+.rotina-parada .acoes .pri, .detalhe-rotina .dr-parada { margin-top: 4px; }
+.dr-parada { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; width: 100%; }
+.dec-nao-rodaram { margin: 6px 0 0; font-size: 12.5px; color: var(--ink-3); }
+.dr-execucoes { list-style: none; margin: 6px 0 0; padding: 0; font-size: 11.5px; color: var(--ink-3); }
+.dr-execucoes .exec { padding: 3px 0; }
+.catalogo { list-style: none; padding: 0; margin: 8px 0; font-size: 13px; } .catalogo li { padding: 3px 0; }
+.registrar { margin-bottom: 14px; } .registrar summary { cursor: pointer; font-weight: 600; margin-bottom: 8px; }
+.memoria { display: grid; grid-template-columns: auto 1fr auto auto auto; gap: 8px; align-items: center; }
+.memoria input, .memoria select { border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font-size: 13px; }
+.opcoes { display: grid; gap: 6px; } .opcao { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.entrar { margin: 60px auto; text-align: center; max-width: 480px; }
+.entrar h1 { font-size: 28px; }
+
+@keyframes pulsa { 50% { opacity: .3; } }
+
+/* Minhas chaves (ADR-031): a chave crua aparece uma vez, legível e fácil de selecionar inteira. */
+.chave-emitida { margin: 0 0 14px; padding: 12px 14px; border: 1px solid var(--warning-line); background: var(--warning-soft); border-radius: 10px; }
+.chave-emitida p { margin: 0 0 8px; }
+.chave-crua { display: block; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface);
+  font-size: 12px; word-break: break-all; user-select: all; }
+.chaves > li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.tela.entrar .erro { margin: 0 0 12px; }
+
+@media (max-width: 900px) {
+  .app { grid-template-columns: 240px 1fr; }
+  .stage { margin: 0; border: 0; border-radius: 0; }
+  .timeline { max-width: 100%; }
+  .bubble-wrap { max-width: 86%; }
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Relatar comportamento (ADR-041). Tom discreto e factual: relatar é anotar um dado, não reclamar —
+   por isso nenhuma cor de alerta, nenhum ícone grande, nenhuma comemoração no fim. A hierarquia sai
+   da tinta (ink → ink-3), como no resto do nod, e não de peso ou tamanho.
+   definido em 2026-09-21: uma etapa só; o campo de texto nasce da escolha, com a pergunta dela. */
+.relato-dialogo { width: min(420px, calc(100vw - 32px)); padding: 24px; border: 1px solid var(--line);
+  border-radius: 20px; background: var(--surface); color: var(--ink); box-shadow: var(--shadow-pop); }
+.relato-dialogo::backdrop { background: var(--backdrop); backdrop-filter: blur(2px); }
+.relato-dialogo h2 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -.01em; }
+.relato-nota { margin: 5px 0 0; color: var(--ink-3); font-size: 12.5px; line-height: 1.5; }
+
+/* Lista vertical: rótulos de tamanhos distintos não quebram o alinhamento, e o olho desce reto. */
+.relato-opcoes { display: flex; flex-direction: column; gap: 2px; margin: 16px 0 0; }
+.relato-opcao { display: flex; align-items: center; width: 100%; padding: 9px 11px; border: 0;
+  border-radius: 9px; background: none; color: var(--ink-2); font: inherit; font-size: 13.5px;
+  text-align: left; cursor: pointer; transition: background .12s ease, color .12s ease; }
+.relato-opcao:hover { background: var(--surface-raised); color: var(--ink); }
+.relato-opcao:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+/* A escolha é marcada por tinta e peso, não por caixa colorida: o estado é lido, não gritado. */
+.relato-opcao[aria-checked="true"] { background: var(--surface-selected); color: var(--ink); font-weight: 600; }
+.relato-opcao[aria-checked="true"]::after { content: "✓"; margin-left: auto; color: var(--ink-3); font-size: 12px; }
+
+/* Campo e anexo nascem da escolha. A animação é de opacity+transform (nunca de height), e o
+   elemento some com [hidden] quando a categoria não pede texto (definido em 2026-09-21). */
+.relato-campo, .relato-anexo { animation: relato-abre .2s cubic-bezier(.22, 1, .36, 1); }
+.relato-campo[hidden], .relato-anexo[hidden] { display: none; }
+@keyframes relato-abre { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+
+.relato-campo { margin-top: 12px; }
+.relato-campo textarea { box-sizing: border-box; width: 100%; padding: 10px 11px; border: 1px solid var(--line-strong);
+  border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13.5px;
+  line-height: 1.5; resize: vertical; min-height: 62px; transition: border-color .12s ease; }
+.relato-campo textarea::placeholder { color: var(--ink-3); }
+.relato-campo textarea:focus { border-color: var(--ink-3); outline: none; }
+
+/* Anexar tem default; trocar é um clique. Par de chips discretos, sem cara de formulário. */
+.relato-anexo { display: flex; align-items: center; gap: 8px; margin: 14px 0 0; }
+.relato-anexo > span { color: var(--ink-3); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+.relato-anexo-opcoes { display: flex; gap: 6px; }
+.relato-alcance { padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: none;
+  color: var(--ink-3); font: inherit; font-size: 11.5px; cursor: pointer; transition: color .12s ease, border-color .12s ease; }
+.relato-alcance:hover { color: var(--ink-2); border-color: var(--line-strong); }
+.relato-alcance:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.relato-alcance[aria-checked="true"] { border-color: var(--ink); color: var(--ink); font-weight: 500; }
+
+.relato-erro { margin: 12px 0 0; color: var(--danger); font-size: 12.5px; }
+.relato-acoes { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .relato-campo, .relato-anexo { animation: none; }
+  .relato-opcao, .relato-alcance, .relato-campo textarea { transition: none; }
+}
+
+/* Modo dev (definido em 2026-09-28, 0036; canvas página modo-dev): faixa por resposta, selo no cabeçalho e a gaveta Raio-X. */
+/* definido em 2026-09-28 (revisão contra o D1): uma linha solta embaixo da resposta, sem caixa; a mini-barra mostra o contexto. */
+.faixa-dev { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 6px 0 0; padding: 2px 4px;
+  color: color-mix(in srgb, var(--ink-2) 70%, var(--ink-3)); font: 11.5px/1.4 var(--font-mono); font-variant-numeric: tabular-nums; max-width: 100%; }
+.faixa-dev b { color: var(--ink); font-weight: 500; }
+.faixa-dev-ctx { display: inline-flex; align-items: center; gap: 6px; }
+.faixa-dev-barra { display: inline-block; width: 90px; height: 6px; border-radius: 3px; background: var(--surface-raised); overflow: hidden; }
+.faixa-dev-barra > span { display: block; height: 100%; background: var(--ink-3); }
+.dev-alerta { color: var(--warning); }
+.dev-alerta .faixa-dev-barra > span { background: var(--warning); }
+.faixa-dev-bt { margin-left: -4px; padding: 2px 4px; border: 0; border-radius: 6px; background: none; color: var(--ink); font: 500 12px var(--font-sans); cursor: pointer; }
+.faixa-dev-bt:hover { text-decoration: underline; text-underline-offset: 3px; }
+.faixa-dev-bt:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.msg-linha .faixa-dev { margin-left: 0; }
+.selo-dev { padding: 3px 7px; border-radius: 6px; background: var(--ink); color: var(--surface); font: 700 10px/1 var(--font-mono); letter-spacing: .06em; }
+.dev-hoje { color: var(--ink-2); font-size: 12px; white-space: nowrap; }
+
+/* definido em 2026-09-28 (revisão contra o canvas modo-dev, D2/D3): gaveta encostada à direita, com a conversa
+   visível ao lado; cartões em surface sobre o fundo surface-side; a parte fixa numa barra só, uma linha por chamada. */
+.raio-x { position: fixed; inset: 0 0 0 auto; z-index: 30; box-sizing: border-box; width: min(600px, 100vw); height: 100dvh;
+  max-width: none; max-height: none; margin: 0; padding: 0; border: 0; border-left: 1px solid var(--line); border-radius: 0;
+  background: var(--surface-side); color: var(--ink); font-size: 13px; }
+.raio-x[open] { display: flex; flex-direction: column; animation: rx-entrar .18s cubic-bezier(.25, 1, .5, 1); }
+@keyframes rx-entrar { from { transform: translateX(16px); opacity: 0; } }
+.raio-x:focus { outline: none; }
+@media (min-width: 1100px) {
+  body.com-raio-x .app { box-sizing: border-box; padding-right: min(600px, 100vw); }
+  body.com-raio-x .app .detalhes { display: none; }
+}
+@media (min-width: 1100px) { body.com-raio-x .app.com-detalhes { grid-template-columns: 340px minmax(360px, 1fr); } }
+@media (max-width: 1099px) { .raio-x { box-shadow: var(--shadow-pop); } }
+
+.rx-cab { display: flex; align-items: flex-start; gap: 12px; padding: 18px 22px 12px; background: var(--surface); }
+.rx-cab > div { flex: 1; min-width: 0; }
+.rx-cab h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.rx-meta { margin: 3px 0 0; color: var(--ink-3); font-size: 12px; overflow-wrap: anywhere; }
+.rx-fechar { display: grid; place-items: center; flex-shrink: 0; width: 32px; height: 32px; margin: -2px -4px 0 0; padding: 0;
+  border: 0; border-radius: 16px; background: var(--surface-raised); color: var(--ink-2); cursor: pointer; }
+.rx-fechar:hover { background: var(--line); color: var(--ink); }
+.rx-fechar:focus-visible, .rx-abas button:focus-visible, .rx-corpo:focus-visible, .raio-x summary:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.rx-abas { display: flex; gap: 18px; padding: 0 22px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.rx-abas button { margin-bottom: -1px; padding: 10px 2px; border: 0; border-bottom: 2px solid transparent; background: none;
+  color: var(--ink-3); font: 500 13px var(--font-sans); cursor: pointer; }
+.rx-abas button:hover { color: var(--ink-2); }
+.rx-abas button[aria-selected="true"] { color: var(--ink); font-weight: 600; border-bottom-color: var(--ink); }
+.rx-corpo { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 18px; padding: 18px 22px 22px; }
+.rx-corpo[hidden] { display: none; }
+.rx-corpo > * { flex-shrink: 0; }
+.rx-rodape { display: flex; gap: 8px; padding: 12px 22px 16px; background: var(--surface); border-top: 1px solid var(--line); }
+.rx-intro { margin: 0; color: var(--ink-2); font-size: 12.5px; line-height: 1.5; }
+.rx-carregando { padding: 22px; color: var(--ink-3); }
+.rx-falha { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 4px 22px 22px; }
+.rx-secao > .rx-vazio { padding: 0; color: var(--ink-3); }
+.rx-aviso { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--warning-soft); color: var(--warning); font-size: 12px; }
+.rx-num { font: 12px var(--font-mono); color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rx-nota { color: var(--ink-3); font-size: 11.5px; }
+.rx-atencao, .rx-pesada.rx-num { color: var(--warning); }
+
+/* Custo e contexto */
+.rx-cartoes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.3fr); gap: 10px; }
+.rx-cartao { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 12px 10px 12px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.rx-rotulo { color: var(--ink-3); font-size: 11.5px; }
+.rx-valor { margin-top: 2px; font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.rx-sub { color: var(--ink-3); font-size: 11px; }
+.rx-sub.rx-atencao { color: var(--warning); }
+.rx-tokens { margin-top: 4px; font: 500 11.5px/1.5 var(--font-mono); color: var(--ink-2); white-space: nowrap; }
+.rx-secao { display: flex; flex-direction: column; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.rx-secao h3 { margin: 0; font-size: 13px; font-weight: 600; }
+.rx-secao > h3 { margin-bottom: 10px; }
+.rx-secao-cab { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.rx-pilha { display: flex; height: 14px; margin-top: 10px; border-radius: 7px; overflow: hidden; background: var(--surface-raised); }
+.rx-pilha > span { flex-shrink: 0; height: 100%; }
+.rx-pilha > span + span { box-shadow: inset 1px 0 0 var(--surface); }
+.rx-sobra { margin: 4px 0 0; color: var(--ink-3); font-size: 11px; text-align: right; }
+.rx-legenda { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
+.rx-legenda li { display: grid; grid-template-columns: 9px minmax(0, 1fr) auto 104px; align-items: center; gap: 8px; }
+.rx-legenda li > span:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }
+.rx-legenda .rx-nota { text-align: right; }
+.rx-legenda li.rx-pesada { color: var(--warning); font-weight: 600; }
+.rx-legenda li.rx-pesada .rx-num { color: var(--warning); }
+.rx-cor { width: 9px; height: 9px; border-radius: 2px; }
+/* Partes da janela: tons de tinta (a cor distingue, não alarma; o azul é só do que é novo); âmbar só na que passa do limite. */
+.rx-p-prompt { background: var(--ink-2); }
+.rx-p-catalogo { background: var(--ink-3); }
+.rx-p-nod { background: var(--ink); }
+.rx-p-apps { background: color-mix(in srgb, var(--ink) 45%, var(--surface)); }
+.rx-p-claude { background: var(--line-strong); }
+.rx-pilha > .rx-pesada, .rx-legenda li.rx-pesada .rx-cor { background: var(--warning); }
+.rx-linha { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; font-size: 12.5px; }
+.rx-chamada, .rx-evento { display: grid; grid-template-columns: 62px 166px minmax(0, 1fr); align-items: center; gap: 10px; }
+.rx-evento > span { grid-column: 2 / -1; }
+.rx-linha time { color: var(--ink-3); font: 11.5px var(--font-mono); font-variant-numeric: tabular-nums; }
+.rx-ctx { display: flex; align-items: center; gap: 6px; }
+.rx-mini { display: flex; flex-shrink: 0; width: 90px; height: 8px; border-radius: 4px; overflow: hidden; background: var(--surface-raised); }
+.rx-mini > span { flex-shrink: 0; height: 100%; }
+.rx-mini-fixa { background: var(--line-strong); }
+.rx-mini-conversa { background: var(--ink-2); }
+.rx-mini > .rx-pesada, .rx-chaves i.rx-pesada { background: var(--warning); }
+.rx-desc { min-width: 0; line-height: 1.5; color: var(--ink-2); overflow-wrap: anywhere; }
+.rx-desc code { font: 11.5px var(--font-mono); color: var(--ink); }
+.rx-desc b { font-weight: 600; color: var(--ink); }
+.rx-sep { color: var(--ink-3); }
+.rx-erro { color: var(--danger); font-size: 11px; font-weight: 600; }
+.rx-subagente { opacity: .72; }
+.rx-compactou { color: var(--warning); }
+.rx-falhou { color: var(--danger); font-weight: 600; }
+.rx-chaves { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px; color: var(--ink-3); font-size: 11px; }
+.rx-chaves span { display: inline-flex; align-items: center; gap: 5px; }
+.rx-chaves i { width: 9px; height: 9px; border-radius: 2px; }
+
+/* O que foi enviado */
+.rx-lista { padding: 0; overflow: hidden; }
+.rx-lista .rx-secao-cab { padding: 11px 14px; border-bottom: 1px solid var(--line); }
+.rx-item, .raio-x summary { display: flex; align-items: baseline; gap: 8px; padding: 6px 14px; font-size: 12.5px; }
+.rx-item:first-of-type, .rx-lista .rx-secao-cab + .rx-item { padding-top: 10px; }
+details.rx-item { display: block; padding: 0; }
+.raio-x summary { list-style: none; cursor: pointer; }
+.raio-x summary::-webkit-details-marker { display: none; }
+.raio-x summary:hover .rx-item-nome { color: var(--ink); }
+.rx-seta { flex-shrink: 0; width: 8px; height: 8px; margin-right: 2px; border: solid var(--ink-3); border-width: 0 1.5px 1.5px 0; transform: translateY(-2px) rotate(-45deg); transition: transform .12s ease; }
+details[open] > summary .rx-seta { transform: translateY(-4px) rotate(45deg); }
+.rx-seta-vazia { border-color: transparent; }
+.rx-item-nome { flex: 1; min-width: 0; color: var(--ink-2); overflow-wrap: anywhere; }
+.rx-item-nome .rx-nota { display: block; margin-top: 2px; }
+.rx-item.rx-pesada, details.rx-item.rx-pesada > summary { background: var(--warning-soft); }
+.rx-item.rx-pesada .rx-item-nome, .rx-item.rx-pesada .rx-num { color: var(--warning); font-weight: 600; }
+.rx-lista > :last-child { margin-bottom: 8px; }
+.raio-x pre { max-height: 320px; overflow: auto; margin: 4px 14px 8px 30px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--surface-raised); font: 11.5px/1.55 var(--font-mono); white-space: pre-wrap; word-break: break-word; }
+.rx-quadro { margin: 6px 14px 12px; padding: 8px 10px; border-radius: 8px; background: var(--surface-raised); color: var(--ink-2); font-size: 12px; line-height: 1.5; }
+.rx-quadro b { color: var(--ink); font-weight: 600; }
+.rx-texto { margin: 0; padding: 10px 14px 12px; color: var(--ink-2); font-size: 12.5px; line-height: 1.5; }
+.rx-citacao { color: var(--ink); white-space: pre-wrap; max-height: 240px; overflow: auto; }
+@media (max-width: 560px) {
+  .rx-cartoes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rx-chamada, .rx-evento { grid-template-columns: 56px minmax(0, 1fr); }
+  .rx-chamada .rx-desc { grid-column: 2; }
+  .rx-legenda li { grid-template-columns: 9px minmax(0, 1fr) auto; }
+  .rx-legenda .rx-nota { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .rx-seta { transition: none; } .raio-x[open] { animation: none; } }
+@media (hover: none) { .rx-fechar { width: 44px; height: 44px; border-radius: 22px; } }
+
+/* A lista de tarefas do bot no cartão de atividade (definido em 2026-09-28): a checklist que o terminal mostra. */
+.atividade-tarefas { margin: 4px 0 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.atividade-tarefas-cab { margin: 0 0 4px; color: var(--ink-3); font-size: 11.5px; font-weight: 600; }
+.atividade-tarefas ol { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; font-size: 13px; color: var(--ink-2); }
+.atividade-tarefas li { display: flex; gap: 8px; align-items: baseline; }
+.tarefa-marca { width: 14px; flex-shrink: 0; text-align: center; }
+.tarefa-feita { color: var(--ink-3); }
+.tarefa-feita .tarefa-marca { color: var(--success); }
+.tarefa-andamento { color: var(--ink); font-weight: 500; }
+.tarefa-andamento .tarefa-marca { color: var(--ink); }
+
+/* O "/" do campo (definido em 2026-09-28; canvas "Comandos /"): a lista acima do campo, a dica e o chip na mensagem. */
+.composer { position: relative; }
+.barra-lista { position: absolute; left: 0; bottom: calc(100% + 6px); z-index: 20; width: min(660px, 100%); max-height: 420px; overflow: auto;
+  display: flex; flex-direction: column; gap: 1px; padding: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: var(--shadow-pop); }
+.barra-cab, .barra-grupo { display: flex; justify-content: space-between; gap: 12px; padding: 8px 12px 4px; font-size: 11.5px; color: var(--ink-3); }
+/* Na rolagem, o que é o total e o que são as teclas continuam à vista. */
+.barra-cab { position: sticky; top: -6px; z-index: 1; background: var(--surface); }
+.barra-grupo { font-weight: 600; border-top: 1px solid var(--line); margin-top: 4px; }
+.barra-grupo span + span { font-weight: 400; }
+.barra-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 9px 12px; border: 0; border-radius: 10px; background: none;
+  text-align: left; font: inherit; cursor: pointer; }
+.barra-item[aria-selected="true"], .barra-item:hover { background: var(--surface-selected); }
+.barra-nome { flex-shrink: 0; width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 13px var(--font-mono); color: var(--ink); }
+.barra-nome b { color: var(--ink); font-weight: 700; }
+.barra-desc { flex-grow: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; color: var(--ink-2); }
+.barra-etiqueta { flex-shrink: 0; padding: 2px 7px; border-radius: 6px; background: var(--surface-raised); color: var(--ink-2); font-size: 11px; }
+.barra-aviso { margin: 4px 2px; padding: 9px 12px; border-radius: 10px; background: var(--warning-soft); color: var(--warning); font-size: 12.5px; }
+.barra-vazio { padding: 10px 12px; font-size: 12.5px; color: var(--ink-3); }
+.barra-rodape { position: sticky; bottom: -6px; display: flex; flex-wrap: wrap; gap: 14px; padding: 8px 12px 6px; margin-top: 4px; border-top: 1px solid var(--line); background: var(--surface); font-size: 11.5px; color: var(--ink-3); }
+.barra-rodape b { font: 500 11.5px var(--font-mono); color: var(--ink-2); }
+.barra-dica-nomes { margin-left: auto; }
+.barra-dica { margin: 0 0 8px; padding: 9px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-side); font-size: 12.5px; color: var(--ink-2); }
+.barra-dica b { font: 600 12.5px var(--font-mono); color: var(--ink); }
+.barra-dica span { color: var(--ink-3); }
+.chip-comando { display: inline-block; margin-right: 6px; padding: 2px 9px; border-radius: 10px; background: var(--surface-raised); color: var(--ink-2); font: 500 12.5px var(--font-mono); }
+
+/* NOD-122: alto contraste (forced-colors). O sistema troca os fundos pelas cores dele, então o foco que era só fundo some.
+   Aqui o foco ganha contorno em Highlight; nada muda fora deste modo. Gate: tests/unit/web/foco-forced-colors.test.ts. */
+@media (forced-colors: active) {
+  .relato-campo textarea:focus-visible, .search:focus-within, .composer .box:focus-within { outline: 2px solid Highlight; outline-offset: 2px; }
+  /* O Raio-X ocupa a altura da janela: o contorno vai para dentro. */
+  .raio-x:focus-visible { outline: 2px solid Highlight; outline-offset: -4px; }
+}

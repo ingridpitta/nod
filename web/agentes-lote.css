@@ -1,0 +1,135 @@
+/* NOD-368: a seleção e a troca em lote de Configurações › Agentes.
+   Computador = NOD-367 v2 j5-6 a j5-10 (.p367-cb, .p367-lote, .p367-pop); celular = NOD-368 v1 (.p368-*), mesmo HTML.
+   Sem fundo chapado e sem botão cheio: a linha marcada ganha um tom leve e o confirmar é de contorno. */
+
+/* ---------- A caixa ---------- */
+.lote-cb { flex: none; display: grid; place-items: center; width: 28px; height: 28px; margin-right: -4px; padding: 0; border: 0; border-radius: 8px; background: none; color: var(--surface); cursor: pointer; }
+.lote-cb-caixa { box-sizing: border-box; display: grid; place-items: center; width: 16px; height: 16px; border: 1.5px solid var(--line-strong); border-radius: 4px; background: var(--surface); }
+.lote-cb-caixa svg { width: 12px; height: 12px; }
+.lote-cb[aria-checked="true"] .lote-cb-caixa, .lote-cb[aria-checked="mixed"] .lote-cb-caixa { border-color: var(--ink); background: var(--ink); }
+.lote-cb:hover .lote-cb-caixa { border-color: var(--ink-2); }
+.lote-cb:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 0; }
+/* A caixa aparece ao passar o mouse ou com o foco, e fica em todas as linhas depois da 1ª marcada. */
+.lote-linha { padding-left: 8px; }
+.lote-linha .lote-cb { opacity: 0; transition: opacity .12s; }
+.lote-linha:hover .lote-cb, .lote-linha:focus-within .lote-cb, .lote-ligado .lote-linha .lote-cb { opacity: 1; }
+.lote-linha.lote-marcada { background: color-mix(in srgb, var(--surface-selected) 60%, transparent); }
+
+/* ---------- O topo: Selecionar todos (e, no celular, Selecionar / Cancelar) ---------- */
+.lote-cab { display: flex; align-items: center; gap: 8px; min-height: 36px; margin: -6px 0 8px; padding-left: 9px; }
+.lote-todos { display: inline-flex; align-items: center; width: auto; gap: 8px; padding-right: 8px; color: var(--surface); }
+.lote-todos-txt { font-size: 13px; font-weight: 500; color: var(--ink-2); }
+.lote-cab .lote-todos { opacity: 0; }
+.lote-cab:hover .lote-todos, .lote-cab .lote-todos:focus-visible, .lote-cab.ligado .lote-todos, .cfg-agentes:has(.lote-linha:hover) .lote-todos { opacity: 1; }
+/* Revisão 2: sem hover (tablet, toque com tela larga), as caixas e o Selecionar todos ficam à vista, como o "…" da lista. */
+@media (hover: none) { .lote-linha .lote-cb, .lote-cab .lote-todos { opacity: 1; } }
+.lote-selecionar, .lote-cancelar-topo { display: none; margin-left: auto; }
+.lote-bt-texto { min-height: 36px; padding: 0 12px; border: 0; border-radius: 9px; background: none; color: var(--ink-2); font: inherit; font-size: 13.5px; font-weight: 500; cursor: pointer; }
+.lote-bt-texto:hover { background: var(--surface-raised); color: var(--ink); }
+.lote-bt-texto:focus-visible, .lote-conf:focus-visible, .lote-bt:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+/* ---------- A mensagem na linha ---------- */
+.lote-linha .lc-txt small { display: flex; flex-direction: column; }
+.lote-msg { display: flex; flex-wrap: wrap; align-items: center; gap: 0 6px; margin-top: 4px; font-size: 12.5px; color: var(--ink-3); }
+.lote-msg .lc-status { white-space: normal; }
+.lote-gira { flex: none; box-sizing: border-box; width: 11px; height: 11px; border: 1.5px solid var(--ink-3); border-top-color: transparent; border-radius: 50%; animation: lote-gira .9s linear infinite; }
+@keyframes lote-gira { to { transform: rotate(1turn); } }
+.lote-msg-erro { color: var(--danger); }
+.lote-tentar { position: relative; padding: 0; border: 0; background: none; color: var(--danger); font: inherit; font-weight: 500; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.lote-tentar::after { content: ""; position: absolute; left: -8px; right: -8px; top: 50%; height: 44px; margin-top: -22px; }
+.lote-tentar:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 4px; }
+
+/* ---------- A barra de lote, presa ao pé da lista ---------- */
+.lote-barra { position: sticky; bottom: 16px; z-index: 20; display: flex; align-items: center; gap: 8px; margin: 4px 0 0; padding: 8px 8px 8px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow-pop); }
+.lote-n { margin-right: auto; font-size: 13.5px; font-weight: 500; color: var(--ink); font-variant-numeric: tabular-nums; }
+.lote-barra-acoes { display: flex; gap: 8px; }
+.lote-bt { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 4px 12px 4px 10px; border: 1px solid var(--line); border-radius: 10px; background: none; color: var(--ink); font: inherit; font-size: 13.5px; font-weight: 500; text-align: left; cursor: pointer; }
+.lote-bt svg { flex: none; width: 16px; height: 16px; color: var(--ink-2); }
+.lote-bt > span { min-width: 0; display: flex; flex-direction: column; }
+.lote-bt small { display: block; overflow: hidden; font-size: 12px; font-weight: 400; line-height: 1.3; color: var(--ink-3); text-overflow: ellipsis; white-space: nowrap; }
+.lote-bt:hover, .lote-bt[aria-expanded="true"] { border-color: var(--line-strong); background: var(--surface-raised); }
+.lote-bt[aria-disabled="true"] { opacity: .45; cursor: default; }
+
+/* ---------- O seletor com a prévia, em cima da barra ---------- */
+.lote-pop { position: absolute; right: 0; bottom: calc(100% + 8px); box-sizing: border-box; width: 420px; max-width: 100%; max-height: min(70vh, 560px); overflow-y: auto; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow-pop); }
+.lote-pop h3 { margin: 0 0 10px; font-size: 14.5px; font-weight: 600; color: var(--ink); }
+.lote-ops { border: 1px solid var(--line); border-radius: 12px; }
+.lote-ops > * + * { border-top: 1px solid var(--line); }
+.lote-op { min-height: 52px; padding: 9px 12px; cursor: pointer; }
+.lote-ops > .lote-op:first-child { border-radius: 11px 11px 0 0; }
+.lote-ops > .lote-op:last-child { border-radius: 0 0 11px 11px; }
+.lote-op .lc-ic { min-width: 20px; }
+.lote-op .lc-ic svg, .lote-op .lote-logo svg { width: 17px; height: 17px; }
+.lote-op:hover { background: var(--surface-raised); }
+.lote-op[aria-checked="true"] { background: var(--surface-selected); }
+.lote-op[aria-checked="true"] small { color: var(--ink-2); }
+.lote-op:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+.lote-radio { flex: none; box-sizing: border-box; width: 16px; height: 16px; border: 1.5px solid var(--line-strong); border-radius: 50%; }
+.lote-op[aria-checked="true"] .lote-radio { border: 5px solid var(--ink); }
+.lote-op-off { cursor: not-allowed; }
+.lote-op-off:hover { background: none; }
+.lote-op-off b, .lote-op-off .lc-ic { color: var(--ink-3); }
+.lote-op-off .lote-radio { border-style: dashed; }
+.lote-previa { margin: 12px 2px 0; }
+.lote-previa p { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--ink-2); }
+.lote-previa b { font-weight: 600; color: var(--ink); }
+.lote-previa .lote-aviso { display: flex; align-items: flex-start; gap: 7px; margin-top: 6px; font-size: 12.5px; color: var(--ink-3); }
+.lote-aviso svg { flex: none; width: 14px; height: 14px; margin-top: 2px; color: var(--warning); }
+.lote-aviso-mudo svg { color: var(--ink-3); }
+.lote-pop-acoes { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.lote-conf { min-height: 36px; padding: 0 14px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.lote-conf:hover:not(:disabled) { background: var(--surface-raised); }
+.lote-conf:disabled { opacity: .45; cursor: default; }
+
+/* ---------- Celular (NOD-368 v1) ---------- */
+/* Revisão 3 (ADR-094): celular = CONSULTA_CELULAR (web/lib/celular.ts), a mesma string; tests/unit/web/agentes-lote.test.ts confere.
+   A janela estreita de computador fica no layout de computador (com mouse, a caixa aparece no hover). */
+@media (hover: none) and (pointer: coarse) and (max-width: 600px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  /* A caixa redonda de 24px num alvo de 44px; sempre visível no modo seleção, escondida fora dele. */
+  .lote-cb { width: 44px; height: 44px; margin: 0 2px 0 -8px; }
+  .lote-cb-caixa { width: 24px; height: 24px; border-radius: 50%; }
+  .lote-cb-caixa svg { width: 14px; height: 14px; }
+  .lote-linha .lote-cb { display: none; }
+  .lote-ligado .lote-linha .lote-cb { display: grid; opacity: 1; grid-row: 1 / span 2; }
+  .lote-ligado .lc-linha.lote-linha { grid-template-columns: auto auto minmax(0, 1fr) auto; }
+  .lote-ligado .lote-linha .lc-ic { grid-column: 2; }
+  .lote-ligado .lote-linha .lc-txt, .lote-ligado .lote-linha .lc-status { grid-column: 3; }
+  .lote-ligado .lote-linha .lc-ctrl { display: none; }
+  .lote-linha { -webkit-touch-callout: none; user-select: none; }
+  .lote-linha.lote-marcada { background: var(--surface-selected); }
+  /* O topo: Selecionar à direita; no modo seleção, Selecionar todos à esquerda e Cancelar à direita. */
+  .lote-cab { min-height: 44px; margin: -6px 0 8px; padding-left: 0; }
+  .lote-cab .lote-todos { display: none; }
+  .lote-cab.ligado .lote-todos { display: inline-flex; align-items: center; width: auto; height: 44px; padding: 0 12px 0 0; opacity: 1; }
+  .lote-todos-txt { font-size: 16px; color: var(--ink); }
+  .lote-selecionar, .lote-cancelar-topo { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 22px; font-size: 16px; color: var(--ink); }
+  .lote-msg { font-size: 13px; color: var(--ink-2); }
+  /* A barra em vidro presa ao pé, acima da safe area; a lista ganha folga para a última linha não ficar embaixo dela. */
+  .cfg-agentes.lote-ligado { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 140px); }
+  .lote-barra { position: fixed; left: 12px; right: 12px; bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); z-index: 50; flex-wrap: wrap; gap: 8px; padding: 10px; border: 0; border-radius: 24px; background: none; isolation: isolate; }
+  /* Revisão 1: o vidro fica num ::before; backdrop-filter na própria barra a tornaria bloco de contenção da folha fixa. */
+  .lote-barra::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; box-shadow: var(--shadow-pop);
+    background: color-mix(in srgb, var(--surface) 94%, transparent); -webkit-backdrop-filter: blur(24px) saturate(1.8); backdrop-filter: blur(24px) saturate(1.8); }
+  .lote-n { flex: 1 1 auto; margin: 2px 8px 0; font-size: 14px; }
+  .lote-barra > .lote-cancelar { display: none; }
+  .lote-barra-acoes { order: 2; flex: 1 0 100%; }
+  .lote-bt { flex: 1 1 0; min-width: 0; min-height: 52px; gap: 10px; padding: 6px 12px; border-color: var(--line-strong); border-radius: 16px; font-size: 15px; }
+  .lote-bt small { font-size: 13px; color: var(--ink-2); }
+  .lote-bt[aria-expanded="true"] { border-color: var(--ink); background: none; }
+  /* A folha presa à base: opções de 56px, prévia e o confirmar de contorno em largura cheia. */
+  .lote-pop { position: fixed; left: 8px; right: 8px; bottom: 8px; width: auto; max-height: 80%; overflow-y: auto; padding: 8px 16px calc(env(safe-area-inset-bottom, 0px) + 8px); border-radius: 24px; z-index: 60; }
+  .lote-pop h3 { margin: 6px 4px 12px; font-size: 17px; }
+  .lote-ops { border: 0; border-radius: 14px; background: var(--surface-side); overflow: clip; }
+  .lote-op { min-height: 56px; padding: 9px 14px; }
+  .lote-op .lc-txt b { font-size: 16px; }
+  .lote-op .lc-txt small { font-size: 13px; }
+  .lote-radio { width: 22px; height: 22px; }
+  .lote-op[aria-checked="true"] .lote-radio { border-width: 7px; }
+  .lote-op .lc-status { grid-column: 3; }
+  .lote-previa { margin: 14px 4px; }
+  .lote-previa p { font-size: 15px; }
+  .lote-previa .lote-aviso { font-size: 14px; }
+  .lote-pop-acoes { flex-direction: column-reverse; align-items: stretch; }
+  .lote-conf, .lote-pop-acoes .lote-bt-texto { min-height: 48px; border-radius: 14px; font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { .lote-gira { animation: none; } .lote-linha .lote-cb { transition: none; } }
