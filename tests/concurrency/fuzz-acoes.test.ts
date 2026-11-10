@@ -403,6 +403,19 @@ for (const [ordem, config] of CONFIGURACOES.entries()) {
         const caminho = segs.map((s, j) => (j > 0 && SEMEADOS[segs[j - 1]!] !== undefined ? encodeURIComponent(SEMEADOS[segs[j - 1]!]!) : s)).join("/");
         plano.casos.splice(i, 0, { ...base, caminho });
       }
+      // O #685 e a main 6efd24bd ficaram vermelhos com a semente 2841792856 no `canvas.comentar`: os casos que caíam no canvas
+      // semeado traziam um `pai_id` sorteado (404 "o comentário a responder não está neste canvas") ou um corpo quebrado.
+      // Cada ação do canvas ganha um caso com o id semeado e um corpo válido, na posição do primeiro caso dela.
+      const DO_CANVAS: Record<string, { caminho: string; corpo: Record<string, unknown> }> = {
+        "canvas.comentar": { caminho: `/canvas/${meuCanvas.canvas}/comentarios`, corpo: { texto: "caso semeado do fuzz", endereco: "#J1-1", tipo: "pino", x: 0.25, y: 0.75 } },
+        "canvas.resolver_comentario": { caminho: `/canvas/comentarios/${meuCanvas.comentario}/resolver`, corpo: { resolvido: true } },
+      };
+      for (const [acao, semeado] of Object.entries(DO_CANVAS)) {
+        const i = plano.casos.findIndex((c) => c.acao === acao);
+        if (i < 0) continue;
+        const base = plano.casos[i]!;
+        plano.casos.splice(i, 0, { ...base, caminho: semeado.caminho, entrada: { ...base.entrada, rotulo: "semeado válido", corpo: JSON.stringify(semeado.corpo) } });
+      }
       const primeiraQueTira = plano.casos.findIndex((c) => c.acao === "quadro.mudar_tarefa");
       if (primeiraQueTira >= 0) {
         const depois = (c: (typeof plano.casos)[number], i: number) => i > primeiraQueTira && PRECISAM_DA_TAREFA.has(c.acao);
@@ -545,7 +558,10 @@ for (const [ordem, config] of CONFIGURACOES.entries()) {
         const teto = Number(process.env.FUZZ_TETO_S ?? "");
         if (N <= 20 && teto > 0) expect(total, `o fuzz do PR passou de ${teto} s (critério 7 do NOD-398)`).toBeLessThan(teto);
       }
-    }, PRAZO_DO_FUZZ_MS);
+    // Sem retry (o vitest.config dá 1 na CI): a semente é a mesma, então refazer repete as entradas, e o beforeAll não
+    // roda de novo; o fuzz do servidor de contas já encerrou a sessão de partida (sair de todos), e a segunda tentativa só
+    // dava "POST agentes → 401 Sua sessão terminou" por cima da falha de verdade (o #685, run 42061739845).
+    }, { timeout: PRAZO_DO_FUZZ_MS, retry: 0 });
 
     // Critério 4 (NOD-398): ação arriscada ou pessoa_confirma nunca roda sem decisão. Lista e risco vêm do registro (lote +
     // riscoDe), os argumentos do gerador. Para cada item e cada modo em que ela tem de esperar, o gerir_bots do Nod (o
