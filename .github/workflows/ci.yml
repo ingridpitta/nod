@@ -2,16 +2,15 @@
 # Postgres, cada um no próprio service container (porta sorteada pelo Docker: .github/actions/banco-de-teste).
 # Os jobs com banco MIGRAM e NÃO rodam seed (Práticas §6): cada teste cria as próprias linhas.
 # CI=1 (padrão do GitHub) faz o skip de integração virar ERRO em tests/helpers/integracao.ts.
-# Roda no Blacksmith (definido em 2026-11-04, piloto): runner novo por job, escala com a fila, sem VM para administrar.
-# Antes rodava nas VMs próprias da GCP (infra/gcp/runner/, docs/deploy-gcp.md): com 2 runners vivos a fila passava de
-# 3 h por PR. O app `blacksmith-sh` está instalado na organização Gamefik para todos os repositórios (a ADR 037 do
-# monorepo gamefik registra a adoção lá). Voltar às VMs é trocar o `runs-on` de volta para `[self-hosted, linux]`.
-# O `deploy.yml` continua nas VMs (autentica pelo WIF a partir delas); fora do escopo deste piloto.
+# NOD-485 (ADR-161): roda em runners hospedados do GitHub (ubuntu-latest, macos-15, windows-latest). Repo público:
+# nenhum runner self-hosted (um PR de fork rodaria código nele), nenhum secret nos jobs (PR de fork não recebe secret e
+# nenhum job pede um), nada de pull_request_target, token só de leitura. O deploy é outro workflow (deploy.yml), que só
+# roda depois deste, num push à main, no environment `producao`.
 # Actions pinadas por SHA imutável (verificados em 2026-09-16 na API do GitHub; actions/cache em 2026-11-04):
 #   actions/checkout v4.2.2  = 11bd71901bbe5b1630ceea73d27597364c9af683
 #   actions/setup-node v4.4.0 = 49933ea5288caeca8642d1e84afbd3f7d6820020
 #   actions/upload-artifact   = ea165f8d65b6e75b540449e92b4886f43607fa02 (o mesmo do desktop-release.yml)
-#   actions/cache v4.2.3      = 5a3ec84eff668545956fd18022155c47e93e2684 (no Blacksmith usa o backend de cache deles)
+#   actions/cache v4.2.3      = 5a3ec84eff668545956fd18022155c47e93e2684
 name: ci
 on:
   push:
@@ -36,10 +35,13 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+permissions:
+  contents: read
+
 jobs:
   lint-typecheck:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -54,7 +56,7 @@ jobs:
 
   unit:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -64,51 +66,27 @@ jobs:
       - run: npm ci
       - run: npm run test:unit
 
-  # ADA-282 (ADR-160): o snapshot do repo público, a seco. Exporta o HEAD pelo oss/manifesto.json, varre (padrões
-  # proibidos + gitleaks pinado por sha256) e compila o snapshot com o typecheck, para o export nunca levar dado de
-  # produção nem tirar algo de que o build depende. NUNCA faz push (o push é decisão do Marlon, à mão). Não bloqueia na
-  # primeira fase (continue-on-error): o veredito fica no resumo do job. Só roda no repo privado (no público o
-  # scripts/oss não existe).
-  oss:
-    if: github.repository == 'gamefik/nod' && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
-    runs-on: blacksmith-2vcpu-ubuntu-2404
-    continue-on-error: true
-    timeout-minutes: 15
+  # NOD-485 (ADR-161): gitleaks pinado por sha256 em todo PR e push (o repo é público: segredo que entra aqui vaza). A
+  # varredura dos nomes internos fica fora deste repo (a lista é ela mesma interna) e roda agendada sobre a main e os PRs.
+  gitleaks:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     env:
       GITLEAKS_VERSAO: "8.28.0"
       GITLEAKS_SHA256: a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: "24.19.0"
-          cache: npm
       - name: gitleaks (pinado)
         run: |
           curl -sSfL -o "$RUNNER_TEMP/gitleaks.tgz" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSAO}/gitleaks_${GITLEAKS_VERSAO}_linux_x64.tar.gz"
           echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/gitleaks.tgz" | sha256sum -c -
           tar -xzf "$RUNNER_TEMP/gitleaks.tgz" -C "$RUNNER_TEMP" gitleaks
-          echo "GITLEAKS=$RUNNER_TEMP/gitleaks" >> "$GITHUB_ENV"
-      - run: npm ci
-      - name: testes do export (com o gitleaks de verdade)
-        run: npx vitest run --project unit tests/unit/scripts/oss-exportar.test.ts
-      - name: export a seco + varredura
-        run: |
-          node scripts/oss/exportar.mjs --saida "$RUNNER_TEMP/oss" --json > "$RUNNER_TEMP/oss.json" || status=$?
-          node -e 'const r=require(process.argv[1]); console.log(`snapshot ${r.total} arquivos, ${r.excluidos} excluídos, limpo=${r.limpo}`); for (const a of [...r.avisos, ...r.pendencias]) console.log(a)' "$RUNNER_TEMP/oss.json" | tee -a "$GITHUB_STEP_SUMMARY"
-          exit "${status:-0}"
-      - name: o snapshot compila
-        run: |
-          ln -s "$GITHUB_WORKSPACE/node_modules" "$RUNNER_TEMP/oss/node_modules"
-          cd "$RUNNER_TEMP/oss" && npm run typecheck
+          "$RUNNER_TEMP/gitleaks" dir . --config scripts/ci/gitleaks.toml --redact --no-banner --exit-code 1
 
-  # definido em 2026-11-04: o job de integração único (medido na main em 2026-11-04: 31 min, dos quais 18 min de
-  # concorrência em série) virou quatro jobs em paralelo, cada um com o próprio Postgres (service container na porta
-  # que o Docker sorteia: vários na mesma VM). A parede cai para o maior deles (~12 min). `npm run check` local segue
-  # rodando tudo em sequência. O service container repete nos quatro: o Actions não aceita âncora YAML.
   integracao:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     services:
       postgres:
@@ -144,7 +122,7 @@ jobs:
   concorrencia:
     name: e2e ${{ matrix.fatia }}/2
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -186,7 +164,7 @@ jobs:
   # montada (dist/web) e do binário; medidos em 2026-11-04 somam ~5 min.
   navegador:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     services:
       postgres:
@@ -270,7 +248,7 @@ jobs:
   # contratos que o preload leva. Mesmo build e mesmo comando do release; sem assinatura, sem secret.
   desktop-filtro:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     outputs:
       roda: ${{ steps.filtro.outputs.roda }}
     steps:
@@ -318,7 +296,7 @@ jobs:
   # runner próprio) e não em on.paths: um job pulado conta como sucesso, e o ci da main continua liberando o deploy.
   windows-filtro:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     outputs:
       roda: ${{ steps.filtro.outputs.roda }}
     steps:

@@ -1,0 +1,39 @@
+# NOD-485 (ADR-161): gitleaks do repo público, rodado pelo job `gitleaks` do ci.yml. Parte das regras padrão e aceita só os falsos
+# positivos que a auditoria conferiu um a um (docs/open-source/auditoria.md, "Gitleaks"). Cada exceção casa arquivo E
+# trecho (condition AND): um segredo de verdade colado no mesmo arquivo de teste continua sendo achado.
+title = "nod (repo público)"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "pin SHA da action google-github-actions/auth (não é chave)"
+condition = "AND"
+paths = ['''\.github/workflows/[^/]+\.ya?ml$''']
+regexes = ['''7c6bc770dae815cd3e89ee6cdf493a5fab2cc''']
+
+[[allowlists]]
+description = "constante do algoritmo da chave da conta GCP"
+condition = "AND"
+paths = ['''src/adapters/nuvem/conta-gcp\.ts$''']
+regexes = ['''KEY_ALG_RSA_2048''']
+
+[[allowlists]]
+description = "token recusado de mentira do teste do conector do GitHub"
+condition = "AND"
+paths = ['''tests/integration/github-conector\.test\.ts$''']
+regexes = ['''ghp_recusado''']
+
+[[allowlists]]
+description = "fixtures dos testes de redação de segredo (senhas e chaves de mentira)"
+condition = "AND"
+paths = ['''tests/unit/domain/(segredos|revisor)\.test\.ts$''']
+regexes = ['''abcd1234efgh''', '''COMPOSIO_KEY=abc''', '''maria:''', '''abc123segredo''', '''\$\{corpo\}''']
+regexTarget = "line"
+
+[[allowlists]]
+description = "chaves PEM de mentira dos testes de chave SSH e da conta GCP"
+condition = "AND"
+paths = ['''tests/unit/(web/chave-ssh|nuvem-gcp)\.test\.ts$''']
+regexes = ['''\$\{corpo\}''', '''Proc-Type: 4,ENCRYPTED''', '''\\nlixo\\n''']
+regexTarget = "line"

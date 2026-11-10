@@ -2,6 +2,8 @@
 
 Status: aceita (2026-11-09, ADA-282). Decisões do Marlon: titular do copyright Marlon Wanderllich, repo público
 `marlonwlv/nod`, exportar com histórico zerado (sem transferir o `gamefik/nod`).
+**Emendada pela [ADR-161](adr-161-repo-publico-unico-para-codigo-e-operacao.md) (2026-11-10):** o público passa a ser o
+repo único do código e da operação; os itens 1, 3 e 4 abaixo valem só para o histórico.
 
 ## Contexto
 

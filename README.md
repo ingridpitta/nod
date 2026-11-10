@@ -103,7 +103,7 @@ As suítes de banco usam o Postgres do `.env`. O guia completo está no [CONTRIB
 
 ## Contribuir
 
-Leia o [CONTRIBUTING.md](CONTRIBUTING.md). Toda contribuição segue o [código de conduta](CODE_OF_CONDUCT.md). Para falha de segurança, **não abra issue**: siga o [SECURITY.md](SECURITY.md).
+O desenvolvimento do nod acontece aqui: issues, PRs e a CI são deste repositório, e é a `main` dele que vai para produção. Leia o [CONTRIBUTING.md](CONTRIBUTING.md). Toda contribuição segue o [código de conduta](CODE_OF_CONDUCT.md). Para falha de segurança, **não abra issue**: siga o [SECURITY.md](SECURITY.md).
 
 ## Licença
 

@@ -45,10 +45,15 @@ Enquanto trabalha, rode só o que mexeu (`npx vitest run caminho/do/teste`) e o 
 1. Faça um fork e crie um branch a partir da `main`.
 2. Um PR por assunto, pequeno o bastante para revisar de uma vez.
 3. Preencha o template: o que muda, por quê, como testou e o que ficou de fora.
-4. A CI precisa estar verde (lint, typecheck, unit e integration).
+4. A CI precisa estar verde (lint, typecheck, unit, integration, e2e, navegador e gitleaks). Ela roda em runners do
+   GitHub, sem nenhum segredo, inclusive em PR de fork. PR em rascunho não roda CI: marque como pronto quando quiser.
 5. Mudança de interface leva print ou vídeo curto.
+6. Nada de segredo, chave, IP de servidor, e-mail ou dado de pessoa real no código, nos testes ou nos commits. O job
+   `gitleaks` reprova segredo; o resto é revisão.
 
-Usamos *squash merge*: o título do PR vira a mensagem do commit na `main`.
+Usamos *squash merge*: o título do PR vira a mensagem do commit na `main`. Este repositório é a fonte do código e da
+operação do nod: depois do merge, a `main` com a CI verde vai para produção pelo `deploy.yml`, que só roda na `main`
+deste repositório, num environment protegido, e nunca em PR.
 
 ## Certificado de origem (DCO)
 

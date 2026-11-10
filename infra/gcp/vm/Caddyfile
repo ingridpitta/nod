@@ -1,0 +1,44 @@
+# HTTPS automático (Let's Encrypt) para o endereço do nod. Sem `encode` no site todo: o SSE e o long-poll da ponte
+# (até 35 s, ADR-021) passam direto; flush_interval -1 manda cada frame na hora.
+# NOD-328 (2026-10-22): `encode` só nos arquivos do bundle (/assets e /diagrama): o mermaid do 1º diagrama tem ~203 KB
+# gzip e ~3x isso cru. O SSE e a API não casam com o matcher e seguem sem compressão.
+# definido em 2026-10-15 (NOD-254): sem HTTP/3; o QUIC derrubava o SSE por inatividade ("timeout: no recent network
+# activity"). No Caddy não dá por rota, então vale para o site todo; a porta UDP 443 saiu do compose.
+{
+	servers {
+		protocols h1 h2
+	}
+}
+
+# NOD-173 (2026-10-21): com o domínio definitivo, o endereço provisório <ip-com-traços>.sslip.io continua servido
+# (NOD_ENDERECO_PROVISORIO, vazio sem domínio): os Macs da preview e da 0.4.0 têm ele gravado e só trocam ao reconectar.
+{$NOD_DOMINIO} {$NOD_ENDERECO_PROVISORIO} {
+	# As métricas levam tenant_id e pessoa_id: ficam só dentro da VM (definido em 2026-10-04, plano do modo ligação).
+	@metricas path /metrics /api/metrics
+	respond @metricas 404
+
+	@bundle path /assets/* /diagrama/*
+	encode @bundle zstd gzip
+
+	# O WebSocket da ligação (/api/t/*/voz/v1/midia e /api/interno/voz/v1/cerebro) passa pelo mesmo proxy; num reload
+	# do Caddy as conexões vivas ganham 5 min antes de cair (ADR-071).
+	#
+	# NOD-218 (deploy azul/verde): as duas cores são upstreams; `first` manda tudo para a primeira saudável, e só a cor do
+	# marcador /opt/nod/estado/cor-ativa responde 200 em /api/saude/lb. A troca é simétrica (azul→verde e verde→azul):
+	# a ordem dos upstreams nunca escolhe a cor errada. A cor parada não resolve no DNS do compose e fica fora sozinha.
+	# Pedido que chega na janela da troca (~2 s) espera até 5 s por uma saudável em vez de cair.
+	# NOD-331 (decidido pelo Marlon em 2026-10-22): `health_fails 2`. O /api/saude/lb depende do banco; com 2 falhas
+	# seguidas um soluço do banco não tira a cor ativa do ar, e numa falha real a troca sai em ~2 s.
+	reverse_proxy nod-azul:8888 nod-verde:8888 {
+		lb_policy first
+		lb_try_duration 5s
+		lb_try_interval 250ms
+		health_uri /api/saude/lb
+		health_interval 1s
+		health_timeout 3s
+		health_fails 2
+		health_passes 1
+		flush_interval -1
+		stream_close_delay 5m
+	}
+}

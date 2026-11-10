@@ -1,0 +1,69 @@
+# Produção na VM (docs/deploy-gcp.md): duas cores do nod (azul e verde) e o Caddy na frente.
+# revisto em 2026-10-22 (NOD-218, emendas das ADR-001 e ADR-017): o deploy é azul/verde, não recreate. Fora do deploy só
+# uma cor roda; durante ele as duas vivem juntas no mesmo banco. Quem decide qual atende é o marcador
+# /opt/nod/estado/cor-ativa (escrito só pelo deploy.sh, tmp + mv), lido por cada processo a cada 500 ms em
+# /data/estado/cor-ativa. A cor fora do marcador sobe passiva: atende HTTP, mas não liga despachante, agendador,
+# varredores nem orquestrador, e o /api/saude/lb dela dá 503 (o Caddy não a escolhe).
+#
+# Imagem e env POR COR: NOD_IMAGEM_AZUL/NOD_IMAGEM_VERDE vêm de /opt/nod/imagens.env (as duas sempre definidas;
+# `docker compose --env-file imagens.env`), e cada cor lê o próprio env_file. O deploy só reescreve o da cor nova: a
+# velha, que ainda drena, nunca recebe config nova.
+x-nod: &nod
+  restart: unless-stopped
+  # ADR-071: no SIGTERM o nod drena por até 10 min (NOD_DRENAGEM_MAX_MS) antes de sair: as ligações vivas e os turnos
+  # de Mac que não atravessam o reinício. O turno do Mac que atravessa (NOD-214) não segura o deploy: a cor nova o adota
+  # pelo token (turno_credenciais). O deploy.sh para a velha com `docker stop -t 660`.
+  stop_grace_period: 11m
+  logging:
+    driver: gcplogs
+  healthcheck:
+    # /api/saude: 503 no boot e na drenagem, não olha a cor (a passiva saudável é o que o deploy espera antes da troca).
+    test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8888/api/saude').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+    interval: 15s
+    timeout: 5s
+    retries: 4
+    start_period: 20s
+
+services:
+  nod-azul:
+    <<: *nod
+    image: ${NOD_IMAGEM_AZUL:?defina NOD_IMAGEM_AZUL (imagens.env)}
+    env_file: /opt/nod/nod-azul.env
+    environment:
+      NOD_COR: azul
+    volumes:
+      # O NOD_HOME é o mesmo nas duas cores (o machine-id também); os grupos órfãos separam por NOD_COR.
+      - nod_home:/data/nod
+      - /opt/nod/estado:/data/estado:ro
+
+  nod-verde:
+    <<: *nod
+    image: ${NOD_IMAGEM_VERDE:?defina NOD_IMAGEM_VERDE (imagens.env)}
+    env_file: /opt/nod/nod-verde.env
+    environment:
+      NOD_COR: verde
+    volumes:
+      - nod_home:/data/nod
+      - /opt/nod/estado:/data/estado:ro
+
+  caddy:
+    image: caddy:2.10
+    restart: unless-stopped
+    # Sem depends_on (NOD-218): o Caddy fica de pé entre os deploys e acha a cor ativa pelo health check.
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      NOD_DOMINIO: ${NOD_DOMINIO:?defina NOD_DOMINIO}
+      NOD_ENDERECO_PROVISORIO: ${NOD_ENDERECO_PROVISORIO:-}
+    volumes:
+      - /opt/nod/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    logging:
+      driver: gcplogs
+
+volumes:
+  nod_home:
+  caddy_data:
+  caddy_config:

@@ -23,7 +23,7 @@ node scripts/alvos-44px/rodar.ts [claro|escuro]   # auditoria de toque do CELULA
 npm run sonda               # ADR-019: {estado, versao} sem email; custa um turno de MODELO_SONDA_PADRAO (Sonnet 4.6). sonda:mcp-timeout mede o teto do tools/call
 npm run test:integration    # só com DATABASE_URL_TEST (copie .env.example para .env); sem ele pula fora do CI e FALHA sob CI
 npm run prompt:referencia   # NOD-163: regrava tests/unit/domain/__prompts__/ (o prompt de sistema inteiro por cenário, estável × volátil, e tamanhos.json) — só quando a mudança no prompt é de propósito
-npm run oss:verificar       # ADA-282 (ADR-160): exporta o snapshot público a seco (oss/manifesto.json) e varre (proibidos, imagens, gitleaks); push só com --push=<repo> e decisão do Marlon
+gitleaks dir . --config scripts/ci/gitleaks.toml --redact   # NOD-485 (ADR-161): o repo é público; rode antes de cada push (a CI roda o mesmo no job gitleaks)
 npm run paridade            # NOD-391 (ADR-135): regrava docs/paridade.md a partir do registro de ações; sob CI ou com --conferir só confere
 npm run db:test:limpar      # apaga os bancos nod_test_<hash> de worktrees que não existem mais (nunca nod nem nod_test); roda no fim do check
 npm run db:migrate          # como nod_dono; a aplicação (nod_app, NOBYPASSRLS) nunca migra
@@ -43,6 +43,15 @@ O pre-commit roda só `lint-staged` (eslint --fix nos .ts). O gate pesado é `np
 O hook é instalado pelo `prepare` do `npm ci`/`npm install`; confira com `ls .git/hooks/pre-commit`
 (observado em 2026-09-16: o primeiro commit da fundação saiu SEM o hook porque ninguém tinha rodado
 `npm run prepare` — um `git commit` que não imprime a linha do lint-staged é sinal de hook ausente).
+
+**Onde abrir PR** (NOD-485, ADR-161, desde 2026-11-10): o desenvolvimento acontece AQUI, no repo público
+`marlonwlv/nod`, que também faz o deploy de produção (`deploy.yml`, depois do `ci` verde num push à `main`). Branch a
+partir da `main` deste repo, PR para a `main` dele, merge squash com a CI verde (a branch protection exige os checks).
+O `gamefik/nod` está congelado: não abra PR lá. Regras de repo público: nenhum segredo, IP, id de tenant, e-mail ou nome
+de pessoa/cliente/bot interno em código, comentário, teste, commit ou PR; a config real de produção mora no secret
+`NOD_CONFIG_PRIVADA` do environment `producao` (o `infra/gcp/config.env` daqui traz só flags e identificadores de
+exemplo); commits com `-s` (DCO, CONTRIBUTING.md). Uma varredura agendada fora deste repo confere a `main` e os PRs
+abertos contra a lista de nomes internos e avisa o Marlon.
 
 **PR rascunho não roda CI** (2026-10-28; a fila do runner próprio tinha 63% de runs cancelados por push novo nas
 frentes). Enquanto o PR é rascunho, confira local com `npm run check` (ou os testes do que mudou) e faça quantos

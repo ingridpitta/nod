@@ -119,10 +119,10 @@ describe("login por e-mail ligado em produção (ADR-124 §6, NOD-406, 2026-10-2
 });
 
 describe("PRs do GitHub no quadro no deploy: REPOS configurado, laço desligado até o 🧭 (NOD-421, ADR-145)", () => {
-  it("o config.env liga NOD_QUADRO_GITHUB_REPOS=gamefik/nod; o token só mora no Secret Manager e é opcional", async () => {
+  it("o config.env liga NOD_QUADRO_GITHUB_REPOS=marlonwlv/nod; o token só mora no Secret Manager e é opcional", async () => {
     const { readFile } = await import("node:fs/promises");
     const config = await readFile(fileURLToPath(new URL("../../infra/gcp/config.env", import.meta.url)), "utf8");
-    expect(config).toMatch(/^NOD_QUADRO_GITHUB_REPOS=gamefik\/nod$/m);
+    expect(config).toMatch(/^NOD_QUADRO_GITHUB_REPOS=marlonwlv\/nod$/m);
     expect(config.match(/^NOD_QUADRO_GITHUB_REPOS=/gm)).toHaveLength(1);
     expect(config).not.toMatch(/^NOD_QUADRO_GITHUB_TOKEN=/m);
     const script = await readFile(DEPLOY, "utf8");
@@ -142,7 +142,7 @@ describe("PRs do GitHub no quadro no deploy: REPOS configurado, laço desligado 
     expect(script).toMatch(/^NOD_QUADRO_GITHUB_TENANTS=\$NOD_QUADRO_GITHUB_TENANTS$/m);
     // As envs do config.env (REPOS ligada, sem token, sem tenants) no plano do boot: o laço não sobe.
     const env = Object.fromEntries([...config.matchAll(/^(NOD_QUADRO_GITHUB_\w+)=(.*)$/gm)].map((m) => [m[1]!, m[2]!]));
-    expect(env.NOD_QUADRO_GITHUB_REPOS).toBe("gamefik/nod");
+    expect(env.NOD_QUADRO_GITHUB_REPOS).toBe("marlonwlv/nod");
     const { planoPrsDoQuadro } = await import("../../src/adapters/fundo/prs-do-quadro.ts");
     expect(planoPrsDoQuadro({ ...env, PATH: process.env.PATH })).toBeNull();
   });

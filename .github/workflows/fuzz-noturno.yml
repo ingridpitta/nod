@@ -19,8 +19,8 @@ permissions:
 
 jobs:
   fuzz:
-    # O runner que sobe o Postgres na porta 5434 (ver ci.yml): um job por vez nele.
-    runs-on: [self-hosted, linux, nod-integracao]
+    # NOD-485: runner hospedado do GitHub (repo público, sem self-hosted).
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     services:
       postgres:

@@ -1,0 +1,121 @@
+# Deploy de produção na GCP (docs/deploy-gcp.md): depois do ci verde num push à main, gera a imagem, publica no
+# Artifact Registry e roda infra/gcp/vm/deploy.sh na VM pelo túnel IAP (migra como nod_dono e troca a cor azul/verde sem
+# queda, NOD-218). Autenticação por Workload Identity Federation: nenhuma chave da GCP mora no GitHub.
+#
+# NOD-485 (ADR-161): este repo é público e é o único de onde sai o deploy. Cuidados:
+#   - Runner hospedado do GitHub (nunca self-hosted) e nenhum gatilho de PR: só workflow_run do ci e workflow_dispatch.
+#   - O workflow_run dispara também para o ci de PR de fork cujo branch se chama "main"; por isso o job exige
+#     event == push E head_repository == este repo. O workflow_dispatch só roda da main (o environment recusa outra ref).
+#   - Environment `producao`: só a main faz deploy, e é nele que moram os secrets (NOD_CONFIG_PRIVADA, GCP_WIF_PROVIDER,
+#     GCP_DEPLOY_SA, FECHADO_DEPLOY_KEY). O WIF da GCP exige o repository_id deste repo, a ref main e esse environment.
+#   - Os logs do Actions são públicos: todo valor da config privada é mascarado antes de qualquer comando que o imprima.
+#   - vars.DEPLOY_PUBLICO == '1' liga o deploy. Na transição ele fica desligado até o corte (o gamefik/nod ainda faz o
+#     deploy) e o corte vira as duas variáveis juntas (ADR-161, "Transição"). Reverter = zerar esta e reativar a de lá.
+# Actions pinadas por SHA imutável (verificados em 2026-10-02 na API do GitHub):
+#   actions/checkout v4.2.2                    = 11bd71901bbe5b1630ceea73d27597364c9af683
+#   google-github-actions/auth v3.0.0          = 7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+#   google-github-actions/setup-gcloud v3.0.1  = aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+#   actions/setup-node v4.4.0                  = 49933ea5288caeca8642d1e84afbd3f7d6820020
+name: deploy
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+# Um deploy por vez e nunca cancelado no meio (a migração não pode ser interrompida). Na VM, o deploy.sh também pega um
+# flock: um deploy do repo antigo e um deste nunca rodam juntos.
+concurrency:
+  group: deploy-producao
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  deploy:
+    if: >-
+      vars.DEPLOY_PUBLICO == '1' && github.repository == 'marlonwlv/nod' && (
+        (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+        (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' &&
+         github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' &&
+         github.event.workflow_run.head_repository.full_name == github.repository)
+      )
+    runs-on: ubuntu-latest
+    environment: producao
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ env.SHA }}
+          persist-credentials: false
+
+      # O SHA do workflow_run tem de ser um commit da main deste repo (defesa extra além do head_repository).
+      - name: O commit é da main
+        run: |
+          git fetch --no-tags --quiet origin main
+          git merge-base --is-ancestor "$SHA" origin/main || { echo "::error::$SHA não está na main"; exit 1; }
+
+      # Parte fechada (ADR-160/161): o núcleo compila sem ela; o build da produção a traz para fechado/ com uma deploy key
+      # só de leitura do gamefik/nod-fechado. Sem a chave, o deploy para (a produção não sobe sem a parte fechada).
+      - name: Parte fechada
+        env:
+          FECHADO_DEPLOY_KEY: ${{ secrets.FECHADO_DEPLOY_KEY }}
+        run: |
+          test -n "$FECHADO_DEPLOY_KEY" || { echo "::error::secret FECHADO_DEPLOY_KEY ausente no environment producao"; exit 1; }
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$FECHADO_DEPLOY_KEY" > ~/.ssh/fechado && chmod 600 ~/.ssh/fechado
+          ssh-keyscan -t ed25519 github.com > ~/.ssh/known_hosts 2>/dev/null
+          rm -rf fechado
+          GIT_SSH_COMMAND="ssh -i ~/.ssh/fechado -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes" \
+            git clone --quiet --depth 1 git@github.com:gamefik/nod-fechado.git "$RUNNER_TEMP/fechado"
+          mv "$RUNNER_TEMP/fechado/fechado" fechado
+          rm -rf "$RUNNER_TEMP/fechado" ~/.ssh/fechado
+          echo "parte fechada: $(find fechado -type f | wc -l) arquivo(s)"
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24.19.0"
+
+      - name: Configuração
+        env:
+          NOD_CONFIG_PRIVADA: ${{ secrets.NOD_CONFIG_PRIVADA }}
+        run: node scripts/ci/config-producao.ts infra/gcp/config.env
+
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SA }}
+
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+
+      - name: Imagem
+        run: |
+          gcloud auth configure-docker "${REGIAO}-docker.pkg.dev" --quiet
+          docker build -t "$REGISTRO/nod:$SHA" .
+          docker push "$REGISTRO/nod:$SHA" >/dev/null
+          echo "imagem publicada: nod:$SHA"
+
+      - name: Arquivos da VM
+        run: |
+          gcloud compute ssh "$VM_NOME" --project="$PROJETO" --zone="$ZONA" --tunnel-through-iap --ssh-key-expire-after=1h --quiet \
+            --command="mkdir -p ~/nod-deploy-publico"
+          gcloud compute scp infra/gcp/config.env infra/gcp/vm/compose.yml infra/gcp/vm/Caddyfile infra/gcp/vm/deploy.sh \
+            "$VM_NOME":nod-deploy-publico/ --project="$PROJETO" --zone="$ZONA" --tunnel-through-iap --ssh-key-expire-after=1h --quiet
+
+      # NOD-331: o Caddyfile vai em estágio (Caddyfile.novo); o deploy.sh só o promove na troca, com a cor nova
+      # saudável, e devolve o anterior se a troca não confirmar. Caddyfile.novo.tag diz de que deploy é o estágio: um
+      # rollback manual para outra tag não promove o que sobrou de um deploy que falhou (QA NOD-331).
+      # NOD-485: a trava da VM (flock em /opt/nod/deploy.lock, a mesma do deploy.sh, que reaproveita o descritor herdado)
+      # cobre a instalação dos arquivos E o deploy: sem ela, um deploy do gamefik/nod trocaria config.env, compose.yml e
+      # Caddyfile.novo no meio deste. A pasta de estágio (~/nod-deploy-publico) é só deste repo; o de lá usa ~/nod-deploy.
+      - name: Deploy
+        run: |
+          gcloud compute ssh "$VM_NOME" --project="$PROJETO" --zone="$ZONA" --tunnel-through-iap --ssh-key-expire-after=1h --quiet \
+            --command="sudo flock -w 1800 -E 75 /opt/nod/deploy.lock sh -c 'install -m 0640 \$1/config.env \$1/compose.yml /opt/nod/ && install -m 0640 \$1/Caddyfile /opt/nod/Caddyfile.novo && echo \$2 > /opt/nod/Caddyfile.novo.tag && install -m 0750 \$1/deploy.sh /opt/nod/ && exec /opt/nod/deploy.sh \$2' _ ~/nod-deploy-publico '$SHA'" ||
+            { rc=$?; [ "$rc" != 75 ] || echo "::error::outro deploy segura /opt/nod/deploy.lock há 30 min; nada foi mexido"; exit "$rc"; }
