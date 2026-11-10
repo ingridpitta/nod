@@ -63,6 +63,12 @@ export const POLICIES_EXTRAS: Record<string, string> = {
     "PERMISSIVE só FOR UPDATE (INSERT/DELETE continuam da dona), USING e WITH CHECK pela perna do tenant: ADR-041 põe a chave Composio no tenant e qualquer pessoa a troca, senão quem cadastrou é a única que troca. A policy concede UPDATE de QUALQUER coluna; o trigger nod_composio_pernas_imutaveis (BEFORE UPDATE, P0001) fecha a lista para quem não é a dona: só chave_cifrada",
   "agente_perfil_versoes.nod_poda_versoes":
     "NOD-20 (0132): a poda das 50 últimas versões do perfil. TO nod_dono e só com os GUCs nod.poda_versoes_tenant/agente, que só a função SECURITY DEFINER nod_podar_versoes_perfil liga (e desliga) dentro dela, presa ao tenant e à pessoa do escopo vinculado; nod_app segue sem UPDATE/DELETE na tabela (tests/integration/perfil-versoes.test.ts)",
+  "relatos.nod_triagem_leitura":
+    "Triagem diária dos relatos (0159): SELECT de todos os tenants, TO nod_dono e só com o GUC nod.triagem ('ler' ou 'marcar'), que só as funções triagem_relatos/triagem_relato/triagem_marcar (SECURITY INVOKER) ligam por set_config local e desligam antes de sair; nod_app sem EXECUTE nelas, e mesmo com EXECUTE rodaria sob as próprias policies (tests/integration/triagem-relatos.test.ts)",
+  "relato_prosa.nod_triagem_leitura":
+    "Triagem diária dos relatos (0159): SELECT da prosa de todos os tenants, TO nod_dono e só com nod.triagem = 'ler' (triagem_relatos/triagem_relato); sem UPDATE, INSERT nem DELETE",
+  "relatos.nod_triagem_marcar":
+    "Triagem diária dos relatos (0159): UPDATE TO nod_dono só com nod.triagem = 'marcar' (triagem_marcar). A policy concede qualquer coluna; o trigger nod_triagem_so_rastreio (BEFORE UPDATE, 42501) fecha a lista em estado, tarefa_ref e triado_em. Sem policy de INSERT/DELETE",
 };
 
 export interface Tabela {

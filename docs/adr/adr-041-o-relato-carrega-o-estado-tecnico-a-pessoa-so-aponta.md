@@ -167,3 +167,18 @@ Gatilho de reversão desta emenda: voltar ao título só pela categoria se apare
 (o teste de integração quebra antes), ou se o texto cortado na linha passar a expor dado sensível que a pessoa não espera
 ver fora do detalhe — aí o título vira a categoria e o texto fica só ao abrir. O gatilho (a) acima passa a se medir pelo
 `relatos.categoria`, não pelo título da tela, que agora mostra o texto.
+
+## Emenda (2026-11-10, migração 0159, PR #726) — a triagem diária lê os relatos de todos os tenants
+
+A triagem diária dos relatos roda pelo psql na nod-vm com a credencial que já existe (`DATABASE_URL_DONO`, nod_dono). É a
+única exceção à prosa privada (ADR-004, emenda NOD-367 acima): quem tria lê `relatos` e `relato_prosa` de todos os tenants
+e marca o relato com `estado` (`novo`, `no_backlog`, `feito`, `descartado`), `tarefa_ref` (ex. `ADA-123`) e `triado_em`.
+O acesso passa só pelas funções `triagem_relatos`, `triagem_relato` e `triagem_marcar` (SECURITY INVOKER, `REVOKE ALL
+FROM PUBLIC`), que ligam o GUC `nod.triagem` enquanto rodam. As policies `nod_triagem_*` são `TO nod_dono` (nod_app não ganha
+leitura, nem do próprio tenant fora da pessoa) e o trigger `nod_triagem_so_rastreio` limita o UPDATE às três colunas da
+triagem. Não há policy de INSERT nem de DELETE, e a `nod_purga` fica como estava. Provas: `tests/concurrency/triagem-relatos.test.ts`
+e `tests/integration/triagem-relatos.test.ts`.
+
+Limite que fica: nod_dono é a dona das tabelas. Quem tem essa credencial pode ligar o GUC à mão ou mudar o schema, então o
+caminho fecha o uso do dia a dia, não a dona. Gatilho de reversão: tirar a leitura da prosa se o jurídico (LGPD) recusar
+que um operador leia o texto de outro tenant. Nesse caso a triagem passa a ver só os metadados tipados.
