@@ -8,7 +8,7 @@ import type { Concessao } from "../contracts/concessao.ts";
 import type { Conector } from "../contracts/conector.ts";
 import type { Autoria, Executor } from "../contracts/evento.ts";
 import { FERRAMENTAS_NOD, type NomeFerramentaNod } from "../contracts/ferramentas-nod.ts";
-import type { IdHarness } from "../contracts/harness.ts";
+import { HARNESS_LEGADO, type IdHarness } from "../contracts/harness.ts";
 import type { Inventario } from "../contracts/inventario.ts";
 import type { Memoria } from "../contracts/memoria.ts";
 import type { Confianca } from "../contracts/mensagem.ts";
@@ -32,6 +32,7 @@ import type { FormaTrabalho } from "../contracts/frente.ts";
 import { manualDoNod } from "./manual-do-nod.ts";
 import { ehNod } from "./nod.ts";
 import { FERRAMENTA_RESPONDER_PEDIDO, temPedidosNoTurno, type PedidoPendenteNoPrompt } from "./pedidos-pendentes.ts";
+import { janelaDoModelo, orcamentoDoTurno, precisaEnxugar, type OrcamentoContexto } from "./orcamento-contexto.ts";
 import { partesDoPromptSistema, trechoComClone, trechoDoClone, type BastidorNoPrompt, type EntradaPromptSistema, type RotinaNoPrompt, type TrabalhoNoPrompt } from "./prompt-sistema.ts";
 import { FERRAMENTAS_COMPUTADOR } from "../contracts/ferramentas-computador.ts";
 import { FERRAMENTA_ANEXAR_MIDIA, FERRAMENTA_LER_MAIS } from "../contracts/ferramentas-proxy.ts";
@@ -346,6 +347,11 @@ export type EntradaPlano = {
    * Só vale no modo conversa, fora de task e fora do Nod: soma atualizar_perfil e troca a linha do modo pela da entrevista.
    */
   reconfiguracao?: boolean;
+  /**
+   * NOD-480 (emenda da ADR-040): a janela que o Claude Code informou no último turno deste bot com o mesmo modelo (Raio-X).
+   * Ausente = pela tabela de `janelaDoModelo`.
+   */
+  janelaObservada?: number | null;
   agora: number;
 };
 
@@ -458,7 +464,10 @@ export function montarPlano(entrada: EntradaPlano): Omit<PlanoTurno, "tokenDeTur
   // NOD-323 (ADR-126): quem tem pasta e terminal gera arquivos; `anexar_midia` os mostra no chat (atendida pelo proxy).
   // A sala fica fora nesta PR (a fala da sala vai por postarNaSala, que não prende a mídia).
   if (pasta && modo !== "sala" && entrada.semAnexarMidia !== true) ferramentas = [...ferramentas, FERRAMENTA_ANEXAR_MIDIA];
-  const prompt = promptEmPartes({ agente: deOutraPessoa ? { ...entrada.agente, modoAprovacao: "manual" } : entrada.agente, memorias: deOutraPessoa ? [] : entrada.memorias, ferramentas, nativas, pastaDoBot: pasta, pessoaNome: entrada.pessoaNome, modo, colegas: deOutraPessoa ? [] : entrada.colegas, contextoConversa: entrada.contextoConversa, conectores: conectoresDoTurno, rotinas: deOutraPessoa ? [] : entrada.rotinasDoAgente, computadorFora: temComputador ? entrada.computadorFora ?? null : null, delegacao: modo === "delegacao" ? entrada.delegacao ?? null : null, profundidade: entrada.profundidade, semTerminal: motivoSemTerminal({ modo, confianca: entrada.confianca, terminal: entrada.terminal === true, deOutraPessoa }), harness: entrada.harness ?? null, trabalho: entrada.trabalho ?? null, trabalhosAbertos: podeAbrirTask(entrada.trabalho ?? null) && !deOutraPessoa ? entrada.trabalhosAbertos ?? [] : [], ...(comPedidos ? { pedidosPendentes: entrada.pedidosPendentes } : {}), ...(modo === "conversa" && entrada.bastidores?.length ? { bastidores: entrada.bastidores } : {}), ...(ehNod(entrada.agente) ? { manualDoNod: manualDoNod(entrada.revisor === true) } : {}), ...(entrada.maquina ? { maquina: entrada.maquina } : {}), ...(entrada.calibracao ? { calibracao: true } : {}), ...(entrada.whatsapp ? { whatsapp: true } : {}), ...(entrada.revisor ? { revisor: true } : {}), ...(entrada.sobreMim && !deOutraPessoa ? { sobreMim: entrada.sobreMim } : {}), ...(reconfigura ? { reconfiguracao: true } : {}) });
+  const entradaDoPrompt: EntradaPromptSistema = { agente: deOutraPessoa ? { ...entrada.agente, modoAprovacao: "manual" } : entrada.agente, memorias: deOutraPessoa ? [] : entrada.memorias, ferramentas, nativas, pastaDoBot: pasta, pessoaNome: entrada.pessoaNome, modo, colegas: deOutraPessoa ? [] : entrada.colegas, contextoConversa: entrada.contextoConversa, conectores: conectoresDoTurno, rotinas: deOutraPessoa ? [] : entrada.rotinasDoAgente, computadorFora: temComputador ? entrada.computadorFora ?? null : null, delegacao: modo === "delegacao" ? entrada.delegacao ?? null : null, profundidade: entrada.profundidade, semTerminal: motivoSemTerminal({ modo, confianca: entrada.confianca, terminal: entrada.terminal === true, deOutraPessoa }), harness: entrada.harness ?? null, trabalho: entrada.trabalho ?? null, trabalhosAbertos: podeAbrirTask(entrada.trabalho ?? null) && !deOutraPessoa ? entrada.trabalhosAbertos ?? [] : [], ...(comPedidos ? { pedidosPendentes: entrada.pedidosPendentes } : {}), ...(modo === "conversa" && entrada.bastidores?.length ? { bastidores: entrada.bastidores } : {}), ...(ehNod(entrada.agente) ? { manualDoNod: manualDoNod(entrada.revisor === true) } : {}), ...(entrada.maquina ? { maquina: entrada.maquina } : {}), ...(entrada.calibracao ? { calibracao: true } : {}), ...(entrada.whatsapp ? { whatsapp: true } : {}), ...(entrada.revisor ? { revisor: true } : {}), ...(entrada.sobreMim && !deOutraPessoa ? { sobreMim: entrada.sobreMim } : {}), ...(reconfigura ? { reconfiguracao: true } : {}) };
+  // NOD-480 (emenda da ADR-040): o orçamento pela janela do modelo. A decisão de enxugar mede só a parte estável (a do
+  // bot), para o prompt não mudar de um turno para outro e o cache não se perder. A ligação tem o prompt de voz.
+  const { prompt, orcamento } = comOrcamento(entrada, modo, entradaDoPrompt, ferramentas.length);
   const clone = cloneDaMaquina(entrada, pasta, ferramentas, prompt.promptSistema);
   return {
     tenantId: entrada.turno.tenantId,
@@ -481,8 +490,9 @@ export function montarPlano(entrada: EntradaPlano): Omit<PlanoTurno, "tokenDeTur
     entrada: { texto: entradaDoTurno(entrada.turno.entradaTexto, entrada.harness, reconfigura), sessaoCli: entrada.sessaoCli, modelo: entrada.turno.modelo, ...(entrada.anexos?.length ? { anexos: [...entrada.anexos] } : {}), ...(esforco ? { esforco } : {}) },
     politicaExecucao: {
       prazoMs,
-      orcamentoResultadoChars: ORCAMENTO_RESULTADO_CHARS,
+      orcamentoResultadoChars: orcamento?.resultadoChars ?? ORCAMENTO_RESULTADO_CHARS,
     },
+    ...(orcamento ? { orcamento } : {}),
     modoAprovacao: modoNoTurno(entrada.agente.modoAprovacao, autoria) ?? "manual",
     modoTurno: modo,
     daPessoa: daFaixaDaPessoa(entrada.turno),
@@ -496,6 +506,20 @@ export function montarPlano(entrada: EntradaPlano): Omit<PlanoTurno, "tokenDeTur
     semprePermitir: entrada.confianca === "nao_confiavel" ? [] : semprePermitirNoCatalogo(entrada.semprePermitir ?? [], ferramentas),
     expiraEm: PLANO_SEM_VALIDADE,
   };
+}
+
+/**
+ * NOD-480 (emenda da ADR-040): o prompt do turno com o orçamento da janela. Só no Claude Code (o autocompact é dele; o
+ * Codex fica como está) e fora da ligação. Acima da fração segura do limiar, o catálogo de apps vai enxuto.
+ */
+export function comOrcamento(entrada: Pick<EntradaPlano, "harness" | "turno" | "janelaObservada">, modo: ModoTurno, doPrompt: EntradaPromptSistema, ferramentas: number): { prompt: Pick<PlanoTurno, "promptSistema" | "promptSistemaPartes">; orcamento: OrcamentoContexto | null } {
+  const cheio = promptEmPartes(doPrompt);
+  if (modo === "ligacao" || (entrada.harness ?? HARNESS_LEGADO) !== "claude-cli") return { prompt: cheio, orcamento: null };
+  const janela = janelaDoModelo(entrada.turno.modelo, entrada.janelaObservada);
+  const medida = (p: Pick<PlanoTurno, "promptSistema" | "promptSistemaPartes">) => ({ promptChars: (p.promptSistemaPartes?.estavel ?? p.promptSistema).length, ferramentas });
+  const enxuto = precisaEnxugar(janela, medida(cheio));
+  const prompt = enxuto ? promptEmPartes({ ...doPrompt, catalogoEnxuto: true }) : cheio;
+  return { prompt, orcamento: orcamentoDoTurno({ janela, enxuto, medida: medida(prompt) }) };
 }
 
 /** O que o clone da máquina precisa do turno, menos a credencial: Linux, frente na pasta dela e um repo válido. */

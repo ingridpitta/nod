@@ -233,7 +233,7 @@ export function linhaDaMemoriaNoTurno(m: ComposicaoRaioX["memoria"]): string {
 /** O mesmo fechar da gaveta do Marketplace (redondo, fundo suave), com o X no desenho dos ícones do nod. */
 export const BOTAO_FECHAR = '<button type="button" class="rx-fechar" data-rx="fechar" aria-label="Fechar o Raio-X"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>';
 
-const MOTIVO_NO_CHIP: Record<MotivoRecomeco, string> = { troca_de_conta: "troca de conta", troca_de_ia: "troca de IA", troca_de_maquina: "troca de máquina", sessao_recusada: "sessão recusada" };
+const MOTIVO_NO_CHIP: Record<MotivoRecomeco, string> = { troca_de_conta: "troca de conta", troca_de_ia: "troca de IA", troca_de_maquina: "troca de máquina", sessao_recusada: "sessão recusada", autocompactacao: "histórico enchia" };
 
 /** NOD-312: "recomeçou · troca de conta" (ou de IA, de máquina, sessão recusada), "lembrando" (retomada) ou "sessão nova". */
 export function rotuloDaSessao(c: Pick<ComposicaoRaioX, "sessaoRetomada" | "recomeco">): string {

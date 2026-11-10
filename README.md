@@ -26,7 +26,7 @@ Você precisa de **git**, **Node 24.19.0** (versão exata; o [mise](https://mise
 ### 1. Baixar e instalar
 
 ```bash passo=clonar
-git clone https://github.com/marlonwlv/nod-oss.git nod
+git clone https://github.com/marlonwlv/nod.git
 cd nod
 ```
 

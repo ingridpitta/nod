@@ -139,6 +139,20 @@ export type PlanoTurno = {
     orcamentoResultadoChars: number;
   };
   /**
+   * NOD-480 (emenda da ADR-040): o orçamento de contexto pela janela do modelo (domain/orcamento-contexto.ts). O driver do
+   * Claude Code força a busca de ferramentas com `enxuto` e põe os tetos de Bash e Read quando vierem. Ausente (Codex,
+   * ligação, servidor antigo) = como antes; app antigo ignora.
+   */
+  orcamento?: {
+    janela: number;
+    limiar: number;
+    parteFixa: number;
+    enxuto: boolean;
+    resultadoChars: number;
+    saidaBashChars?: number;
+    leituraTokens?: number;
+  };
+  /**
    * ADR-059: o modo de aprovação do agente NA EMISSÃO, para o prompt e o Raio-X. Quem decide cada pedido lê o modo
    * ATUAL do agente (trocar vale na próxima ação); este campo só diz ao modelo como o turno começou. Ausente = 'manual'.
    */

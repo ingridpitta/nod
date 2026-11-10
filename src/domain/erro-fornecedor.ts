@@ -69,6 +69,8 @@ const PADROES: readonly (readonly [Exclude<ClasseErroFornecedor, "desconhecido">
   ]],
   ["autocompactacao", [
     /autocompact is thrashing/i,
+    // NOD-480: o código do 2.1.309 no `result` (`api_error: autocompact_thrashing`, repro do #718).
+    /autocompact_thrashing/i,
   ]],
   // NOD-309: sobrecarga, 5xx e rede. O 5xx só com contexto de HTTP ("API Error: 502", "status 503", o nome do status):
   // um "500" solto pode ser contagem de tokens. Rede: os códigos do Node e do undici e o corte do stream do Codex.
@@ -110,8 +112,10 @@ export const FRASE_ERRO_FORNECEDOR: Readonly<Record<Exclude<ClasseErroFornecedor
   teto_de_gasto: "a organização atingiu o teto de gasto do mês {no}; peça a quem administra a conta para subir o teto",
   limite_de_uso: "seu plano {do} atingiu o limite de uso; {confira}",
   contexto_cheio: "a conversa ficou longa demais para {o}; use /compactar e peça de novo",
-  // Compactar de novo não ajuda: o histórico volta a encher logo depois de resumido. Recomeçar a sessão resolve.
-  autocompactacao: "o histórico enche de novo logo depois de resumido e {o} parou; use /nova-sessao e peça de novo",
+  // Compactar de novo não ajuda: o histórico volta a encher logo depois de resumido. revisto em 2026-11-09 (NOD-480): o nod
+  // já recomeça sozinho numa sessão nova (assentar-turno); esta frase só sai quando a sessão nova também encheu (ou o
+  // turno não repete). O que resolve é um pedido menor ou um modelo com mais contexto, não o /nova-sessao.
+  autocompactacao: "o histórico enche de novo logo depois de resumido e {o} parou, mesmo numa sessão nova; divida o pedido em partes menores ou escolha um modelo com mais contexto",
   transitorio: "o serviço {do} está instável ou fora do ar; tente de novo em alguns minutos",
 };
 

@@ -13,7 +13,7 @@ import { esc } from "./render.ts";
 export type AlvoDoRecomeco = { tipo: "carona" | "marca"; motivo: MotivoRecomeco; nomeDoBot: string | null };
 
 /** A lista do contrato, repetida aqui (a web só importa tipos de src/contracts, ADR-018); o Record trava a exaustão. */
-const MOTIVOS: Record<MotivoRecomeco, true> = { troca_de_conta: true, troca_de_ia: true, troca_de_maquina: true, sessao_recusada: true };
+const MOTIVOS: Record<MotivoRecomeco, true> = { troca_de_conta: true, troca_de_ia: true, troca_de_maquina: true, sessao_recusada: true, autocompactacao: true };
 export function ehMotivoRecomeco(v: unknown): v is MotivoRecomeco {
   return typeof v === "string" && Object.hasOwn(MOTIVOS, v);
 }
@@ -95,6 +95,7 @@ const QUEM_NAO_TRAZ: Record<MotivoRecomeco, string> = {
   troca_de_ia: "A outra IA",
   troca_de_maquina: "A outra máquina",
   sessao_recusada: "A IA",
+  autocompactacao: "A sessão nova",
 };
 
 const idDaExplicacao = (id: string): string => `recomeco-explica-${id}`;
@@ -141,6 +142,8 @@ export function marcaDoRecomeco(id: string, alvo: AlvoDoRecomeco): { marca: stri
     troca_de_ia: `Desta vez ${esc(bot)} respondeu por outra IA, que não traz o que ele já leu e testou.`,
     troca_de_conta: `Desta vez ${esc(bot)} respondeu por outra conta da IA, que não traz o que ele já leu e testou.`,
     sessao_recusada: `Desta vez a IA não conseguiu continuar de onde ${esc(bot)} parou.`,
+    // NOD-480: o histórico enchia de novo logo depois de cada resumo; o nod recomeçou sozinho numa sessão nova.
+    autocompactacao: `O histórico de ${esc(bot)} enchia de novo logo depois de cada resumo, então o nod recomeçou numa sessão nova.`,
   };
   const explicacao = `<div class="p312-explica" id="${esc(idDaExplicacao(id))}" role="region" aria-label="${esc(bot)} recomeçou"${aberta ? "" : " hidden"}><b>${esc(bot)} recomeçou</b><p>${porque[alvo.motivo]} Ele recomeçou pela conversa e por um resumo do trabalho, e releu só o necessário.</p></div>`;
   return { marca, explicacao };
@@ -154,6 +157,7 @@ export function notaDasEtapas(motivo: MotivoRecomeco, nomeDoBot: string | null):
     troca_de_ia: "em outra IA",
     troca_de_maquina: "em outra máquina",
     sessao_recusada: "sem a sessão anterior",
+    autocompactacao: "numa sessão nova (o histórico enchia logo depois de resumido)",
   };
   return `<p class="p312-etapa-nota">${esc(bot)} recomeçou ${onde[motivo]} e relê o necessário antes de seguir.</p>`;
 }

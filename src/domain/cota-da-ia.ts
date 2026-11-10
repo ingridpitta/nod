@@ -319,7 +319,18 @@ export function entradaDaRetomadaDaQueda(motivo: string): string {
 }
 
 /** Os prefixos das voltas que o nod marca para o fundo (cota, nova tentativa, retomada da queda), nunca uma do bot. */
-export const PREFIXOS_DA_VOLTA_DO_FUNDO = [ENTRADA_DA_VOLTA_DA_COTA, ENTRADA_DA_NOVA_TENTATIVA, ENTRADA_DA_RETOMADA_DA_QUEDA] as const;
+/**
+ * NOD-480 (emenda da ADR-040): a volta do trabalho de fundo cujo histórico enchia de novo logo depois de cada resumo
+ * (`autocompact_thrashing`). O nod largou a sessão e recomeçou UMA vez numa nova; o pedido vem junto (entradaDaVoltaDoFundo)
+ * e, na frente, a passagem de bastão. Conta como volta do nod, não do bot (PREFIXOS_DA_VOLTA_DO_FUNDO).
+ */
+export const ENTRADA_DO_RECOMECO_POR_AUTOCOMPACTACAO = "[nod] Sessão nova: ";
+
+export function entradaDoRecomecoPorAutocompactacao(): string {
+  return `${ENTRADA_DO_RECOMECO_POR_AUTOCOMPACTACAO}o histórico deste trabalho enchia de novo logo depois de cada resumo e o nod recomeçou numa sessão nova, sem a memória da anterior. Siga de onde parou pelo pedido e pelo resumo; releia só o necessário e prefira saídas curtas (filtre, pagine, grave em arquivo). O que já saiu continua valendo. Não repita efeito externo que já foi feito (mensagem enviada, item criado ou alterado): confira antes.`;
+}
+
+export const PREFIXOS_DA_VOLTA_DO_FUNDO = [ENTRADA_DA_VOLTA_DA_COTA, ENTRADA_DA_NOVA_TENTATIVA, ENTRADA_DA_RETOMADA_DA_QUEDA, ENTRADA_DO_RECOMECO_POR_AUTOCOMPACTACAO] as const;
 
 /** NOD-309: a entrada é uma volta que o nod marcou para o fundo, nunca uma do bot. */
 export function ehVoltaDoFundo(entradaTexto: string): boolean {

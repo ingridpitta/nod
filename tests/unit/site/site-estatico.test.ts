@@ -150,8 +150,8 @@ describe("site estático (site/)", () => {
     const bloco = /<section id="open-source"[^>]*>[\s\S]*?<\/section>/.exec(html)?.[0];
     expect(bloco).toBeDefined();
     expect(bloco!.slice(0, bloco!.indexOf(">"))).toMatch(/\shidden(\s|$)/);
-    expect(bloco).toContain('href="https://github.com/marlonwlv/nod-oss"');
-    expect(bloco).toContain('href="https://github.com/marlonwlv/nod-oss/blob/main/CONTRIBUTING.md"');
+    expect(bloco).toContain('href="https://github.com/marlonwlv/nod"');
+    expect(bloco).toContain('href="https://github.com/marlonwlv/nod/blob/main/CONTRIBUTING.md"');
     expect(bloco).not.toMatch(/gamefik/i);
   });
 });

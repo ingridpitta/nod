@@ -63,6 +63,8 @@ const COMO_RECOMECOU: Record<MotivoRecomeco, string> = {
   troca_de_conta: "a conversa passou para outra conta da IA",
   troca_de_maquina: "a conversa passou para outra máquina",
   sessao_recusada: "a IA recusou a sessão anterior",
+  // NOD-480: o histórico enchia de novo logo depois de cada resumo; o nod recomeçou numa sessão nova, uma vez.
+  autocompactacao: "o histórico enchia de novo logo depois de resumido e o nod recomeçou numa sessão nova",
 };
 
 /** O teto do resumo do trabalho no turno de conversa que recomeça (a passagem da task tem 9 mil; aqui as falas já vão no histórico). */

@@ -238,8 +238,11 @@ export const TETO_HOOK_S = Math.ceil(ESPERA_APROVACAO_NO_TURNO_MS / 1000) + 30;
  * pessoa com rede, o gh e o git logados dela; quem segura é o hook, que manda cada comando ao servidor — o que só
  * lê roda, o resto espera a aprovação dela num card.
  */
-export function settingsDoTerminal(p: { comandoHook: string }): string {
+export function settingsDoTerminal(p: { comandoHook: string; saidaBashChars?: number }): string {
   return JSON.stringify({
+    // NOD-480 (emenda da ADR-040): na janela pequena, a saída do Bash acima do teto vai para um arquivo e o modelo recebe
+    // um trecho e o caminho (setting `bashOutputMaxChars` do Claude Code, lido no 2.1.312; versão sem ele ignora a chave).
+    ...(p.saidaBashChars ? { bashOutputMaxChars: p.saidaBashChars } : {}),
     // Só as nativas, no formato da documentação ("Edit|Write"). As ferramentas MCP do nod passam pelo proxy; o hook
     // as deixa passar também quando o CLI o consulta para elas (medido ao vivo em 2026-09-28: com "*", o hook
     // negava mcp__nod__publicar_artefato como "fora do kit").
@@ -357,7 +360,20 @@ export const CLAUDE_MD_DAS_PASTAS = "CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_M
 export const SEM_TETO_DE_COMANDO_MS = 2_147_483_647;
 
 /** Env do filho: cfg.env (já sem a denylist) + PATH aumentado + HOME + teto do tools/call. */
-export function montarEnvDoFilho(env: Record<string, string>, home: string, prazoMs: number, opcoes: { claudeMdDasPastas?: boolean } = {}): Record<string, string> {
+/**
+ * NOD-480 (emenda da ADR-040): o env do orçamento da janela. `enxuto` força a busca de ferramentas (as de MCP vão só
+ * pelo nome e carregam quando o modelo precisa; o padrão do 2.1.309 já é esse, mas um env herdado pode desligar) e
+ * `leituraTokens` põe o teto de uma leitura do Read. Sem orçamento (servidor antigo, 1M), nada.
+ */
+export function envDoOrcamento(orcamento: PlanoTurno["orcamento"] | undefined): Record<string, string> {
+  if (!orcamento) return {};
+  return {
+    ...(orcamento.enxuto ? { ENABLE_TOOL_SEARCH: "true" } : {}),
+    ...(orcamento.leituraTokens ? { CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS: String(orcamento.leituraTokens) } : {}),
+  };
+}
+
+export function montarEnvDoFilho(env: Record<string, string>, home: string, prazoMs: number, opcoes: { claudeMdDasPastas?: boolean; orcamento?: PlanoTurno["orcamento"] } = {}): Record<string, string> {
   return {
     ...env,
     PATH: caminhoAumentado(env.PATH, home),
@@ -372,6 +388,7 @@ export function montarEnvDoFilho(env: Record<string, string>, home: string, praz
     // definido em 2026-09-28: acima deste teto o CLI desviaria a resposta para um arquivo que o bot não lê.
     MAX_MCP_OUTPUT_TOKENS: String(MAX_MCP_OUTPUT_TOKENS_FILHO),
     ...(opcoes.claudeMdDasPastas ? { [CLAUDE_MD_DAS_PASTAS]: "1" } : {}),
+    ...envDoOrcamento(opcoes.orcamento),
   };
 }
 
@@ -605,7 +622,7 @@ export function criarClaudeCliDriver(lig: LigacaoClaudeCli): Driver {
                   const comandoHook = comandoDoHook({ ...nodeDoHook, config });
                   // ADR-055: o Mac inteiro da pessoa, a começar pela pasta dela; os projetos autorizados continuam juntos.
                   const dirsExtras = [...new Set([home, ...(plano.workspacePastas?.aprovadas ?? [])])].filter((p) => p !== pastaBot);
-                  terminal = { settings: settingsDoTerminal({ comandoHook }), dirsExtras };
+                  terminal = { settings: settingsDoTerminal({ comandoHook, ...(plano.orcamento?.saidaBashChars ? { saidaBashChars: plano.orcamento.saidaBashChars } : {}) }), dirsExtras };
                 }
                 // definido em 2026-10-07 (NOD-188, como a ligação na ADR-072): sem pasta, o cwd é estável por bot, não o
                 // tmpdir do turno. O CLI põe o cwd no contexto de cada turno; mudando a cada um, o histórico inteiro era
@@ -661,7 +678,7 @@ export function criarClaudeCliDriver(lig: LigacaoClaudeCli): Driver {
                   ? mensagemClaude(texto, anexos)
                   : [texto, ...anexos.map((a) => `[anexo "${a.meta.nome}" não pôde ser lido: esta versão do Claude Code não aceita arquivos. Diga isso à pessoa.]`)].join("\n\n");
                 const { args } = montarArgs({ plano: { ...planoDoTurno, ...(pastas || terminal ? {} : { workspacePastas: null }) }, mcpJson, compactar, streamJson, terminal, esforco, systemPrompt, snapshotOff, bifurcar, windows });
-                const env = montarEnvDoFilho(cfg.env, home, plano.politicaExecucao.prazoMs, { claudeMdDasPastas: Boolean(terminal) });
+                const env = montarEnvDoFilho(cfg.env, home, plano.politicaExecucao.prazoMs, { claudeMdDasPastas: Boolean(terminal), orcamento: plano.orcamento });
 
                 const pendentes: Promise<void>[] = [];
                 // ADR-067: o que segura a sessão viva aberta — comandos em segundo plano ainda rodando — e as voltas

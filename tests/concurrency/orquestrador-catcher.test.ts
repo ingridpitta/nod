@@ -251,7 +251,8 @@ describeIntegracao("orquestrador + ponte interna + catcher (ADR-021 in-process):
       return escopado(async (trx) => {
         const repos = criarRepos(trx, PESSOA);
         const aviso = (await repos.mensagens.listarDaConversa(c.conversa.id)).filter((m) => m.turnoId === plano!.turnoId && m.kind === "sistema")[0]?.texto ?? "";
-        return { aviso, raioX: (await repos.raioX.doTurno(plano!.turnoId))?.execucao, log };
+        const repeticao = (await repos.turnos.listarDaConversa(c.conversa.id, 50)).find((t) => t.estado === "pendente" && t.id !== plano!.turnoId);
+        return { aviso, raioX: (await repos.raioX.doTurno(plano!.turnoId))?.execucao, log, repeticao };
       });
     };
     const antigo = await rodar("1.0.0-rc.6", "9.9.9");
@@ -259,7 +260,10 @@ describeIntegracao("orquestrador + ponte interna + catcher (ADR-021 in-process):
     expect(antigo.raioX?.versaoApp).toBe("1.0.0-rc.6");
     expect(antigo.log?.versao_app).toBe("1.0.0-rc.6");
     const semVersao = await rodar(undefined, "1.0.0-rc.6");
-    expect(semVersao.aviso).toContain("use /nova-sessao e peça de novo");
+    // NOD-480: sem versão anunciada (não é o app antigo), a 1ª autocompactação recomeça sozinha numa sessão nova, sem aviso.
+    expect(semVersao.aviso).toBe("");
+    expect(semVersao.repeticao?.motivoRecomeco).toBe("autocompactacao");
+    expect(antigo.repeticao).toBeUndefined();
     expect(semVersao.raioX).toBeDefined();
     expect(semVersao.raioX).not.toHaveProperty("versaoApp");
     expect(semVersao.log?.versao_app).toBeNull();

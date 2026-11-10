@@ -273,8 +273,9 @@ describeIntegracao("fila de turnos (ADR-010): enviar → despachar → assentar,
       const deps = depsSobreTrx(trx, MARLON);
       const casos = [
         { versaoApp: "1.0.0-rc.6", aviso: "o nod deste computador está na versão 1.0.0-rc.6, que resume cedo demais: reinicie o nod para atualizar e peça de novo", raioX: { versaoApp: "1.0.0-rc.6" } },
-        { versaoApp: "1.0.0-rc.7", aviso: "use /nova-sessao e peça de novo", raioX: { versaoApp: "1.0.0-rc.7" } },
-        { versaoApp: undefined, aviso: "use /nova-sessao e peça de novo", raioX: {} },
+        // NOD-480: no app com a janela real, a 1ª vez recomeça sozinha numa sessão nova (sem aviso); só a 2ª avisa.
+        { versaoApp: "1.0.0-rc.7", aviso: null, raioX: { versaoApp: "1.0.0-rc.7" } },
+        { versaoApp: undefined, aviso: null, raioX: {} },
       ];
       for (const c of casos) {
         const { data: criado } = await executar(deps, criarAgente, { dono: "pessoa" });
@@ -285,8 +286,18 @@ describeIntegracao("fila de turnos (ADR-010): enviar → despachar → assentar,
         expect(resultado.erroCru).toContain("Autocompact is thrashing");
         await executar(deps, assentarTurno, { turnoId, machineId: maquina, seqLocal: 1, harness: "claude-cli", ...(c.versaoApp ? { versaoApp: c.versaoApp } : {}), fala: { tipo: "texto", texto: resultado.texto }, resultado });
         const aviso = (await deps.repos.mensagens.listarDaConversa(criado.conversa.id)).filter((m) => m.turnoId === turnoId && m.kind === "sistema")[0]?.texto ?? "";
-        expect(aviso).toContain("Turno interrompido: o histórico enche de novo logo depois de resumido e o Claude Code parou");
-        expect(aviso).toContain(c.aviso);
+        const repeticao = (await deps.repos.turnos.listarDaConversa(criado.conversa.id, 50)).find((t) => t.estado === "pendente" && t.id !== turnoId);
+        if (c.aviso === null) {
+          expect(aviso).toBe("");
+          expect(repeticao?.motivoRecomeco).toBe("autocompactacao");
+          // A repetição sai da fila: o próximo caso reivindica o turno dele, não esta.
+          await deps.repos.turnos.assentar(repeticao!.id, { estado: "concluido" });
+        } else {
+          expect(aviso).toContain("Turno interrompido: o histórico enche de novo logo depois de resumido e o Claude Code parou");
+          expect(aviso).toContain(c.aviso);
+          // O app antigo resume cedo demais: repetir daria o mesmo, então não repete.
+          expect(repeticao).toBeUndefined();
+        }
         const raioX = await deps.repos.raioX.doTurno(turnoId);
         expect(raioX?.execucao).toMatchObject({ ...execucao, ...c.raioX });
         if (!c.versaoApp) expect(raioX?.execucao).not.toHaveProperty("versaoApp");

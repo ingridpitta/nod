@@ -33,6 +33,7 @@ const AMOSTRAS: Record<(typeof CLASSES_ERRO_FORNECEDOR)[number], string[]> = {
   autocompactacao: [
     "success | Autocompact is thrashing: the context refilled to the limit within 3 turns of the previous compact",
     "error_during_execution | Autocompact is thrashing",
+    "error_during_execution | api_error: autocompact_thrashing",
   ],
   contexto_cheio: [
     "success | Prompt is too long",
@@ -82,7 +83,7 @@ describe("erro do fornecedor em classe fechada (NOD-174)", () => {
     expect(classificarErroFornecedor("You've hit your session limit")).toBe("limite_de_uso");
     expect(fraseDoErroFornecedor("claude-cli", AMOSTRAS.teto_de_gasto[0])).toBe("a organização atingiu o teto de gasto do mês no Claude Code; peça a quem administra a conta para subir o teto");
     expect(fraseDoErroFornecedor(null, AMOSTRAS.teto_de_gasto[1])).toBe("a organização atingiu o teto de gasto do mês na sua IA; peça a quem administra a conta para subir o teto");
-    expect(fraseDoErroFornecedor("claude-cli", AMOSTRAS.autocompactacao[0])).toBe("o histórico enche de novo logo depois de resumido e o Claude Code parou; use /nova-sessao e peça de novo");
+    expect(fraseDoErroFornecedor("claude-cli", AMOSTRAS.autocompactacao[0])).toBe("o histórico enche de novo logo depois de resumido e o Claude Code parou, mesmo numa sessão nova; divida o pedido em partes menores ou escolha um modelo com mais contexto");
   });
 
   it("2026-11-09: o laço de compactação num app anterior à rc.7 manda atualizar; na rc.7, sem versão ou noutra IA, a frase de sempre", () => {

@@ -63,6 +63,7 @@ import type { ChamadaWebhook } from "../../src/contracts/rotina.ts";
 import type { Repos } from "../../src/repositories/tipos.ts";
 import { EXECUCOES_GUARDADAS, LEASE_MS } from "../../src/shared/constantes.ts";
 import type { Escopo } from "../../src/shared/types.ts";
+import { TURNOS_DA_JANELA } from "../../src/repositories/raio-x.repo.ts";
 import { PESSOA_MARLON, TENANT_PADRAO } from "./ids.ts";
 
 /** turnos.ultimo_sinal_em (0076): a hora da queda que `interromper` grava uma vez; o Turno do contrato não a carrega. */
@@ -3499,6 +3500,11 @@ function reposSobre(b: BancoMemoria, escopo: Escopo): Repos {
         if (!t) return null;
         const r = b.raioX.get(t.id);
         return { turnoId: t.id, agenteId: t.agenteId, estado: t.estado, custoUsd: t.custoUsd, criadoEm: t.criadoEm, composicao: r?.composicao ?? null, execucao: r?.execucao ?? null };
+      },
+      async ultimaJanela(conversaId, agenteId, modelo) {
+        const t = doTenant(b.turnos).filter((x) => x.conversaId === conversaId && x.agenteId === agenteId && x.modelo === modelo).sort((x, y) => y.criadoEm - x.criadoEm).slice(0, TURNOS_DA_JANELA)
+          .find((x) => typeof b.raioX.get(x.id)?.execucao?.janela === "number");
+        return t ? b.raioX.get(t.id)?.execucao?.janela ?? null : null;
       },
       async daConversa(conversaId, limite) {
         return doTenant(b.turnos).filter((t) => t.conversaId === conversaId).sort((x, y) => y.criadoEm - x.criadoEm).slice(0, limite)

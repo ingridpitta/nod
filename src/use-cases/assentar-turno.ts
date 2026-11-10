@@ -11,7 +11,7 @@ import { assuntoDaInterrupcao } from "../domain/destino-no-chat.ts";
 import { causaDaEntrega } from "../domain/stream-json.ts";
 import { ErroDeDominio } from "../domain/erro.ts";
 import { recusaDoArquivo } from "../domain/anexo.ts";
-import { classificarErroFornecedor, ehErroTransitorio, fraseDoErroFornecedor, fraseDoLimiteDoPlano, horaDaFrase, horaMinuto, quandoDaFrase } from "../domain/erro-fornecedor.ts";
+import { appSemJanelaReal, classificarErroFornecedor, ehErroTransitorio, fraseDoErroFornecedor, fraseDoLimiteDoPlano, horaDaFrase, horaMinuto, quandoDaFrase } from "../domain/erro-fornecedor.ts";
 import { descreverNegacao } from "../domain/estado-degradacao.ts";
 import { iaDaNegacao } from "../domain/harness.ts";
 import { negacoesDoTurno } from "../domain/negacao-nativa.ts";
@@ -21,7 +21,7 @@ import { motivoDependeDaMaquina, motivoNaMaquina, redigir } from "../domain/reda
 import { iasNoLimite, inteligenciaDoAgente, ordemEfetiva, podeReenviar, prazoDoLimite, prazoDoLimiteDaConta, proximaIaNoLimite } from "../domain/inteligencia.ts";
 import { usoDoPlanoValido } from "../domain/uso-do-plano.ts";
 import { trabalhoAberto } from "../domain/trabalho.ts";
-import { cadeiaJaEsperou, contasPelaCota, cotaDasContas, ehVoltaDoFundo, ENTRADA_DA_VOLTA_DA_COTA, entradaDaNovaTentativa, entradaDaTrocaDeConta, entradaDaTrocaDeIa, entradaDaVoltaDaCota } from "../domain/cota-da-ia.ts";
+import { cadeiaJaEsperou, contasPelaCota, cotaDasContas, ehVoltaDoFundo, ENTRADA_DA_VOLTA_DA_COTA, entradaDaNovaTentativa, entradaDoRecomecoPorAutocompactacao, entradaDaTrocaDeConta, entradaDaTrocaDeIa, entradaDaVoltaDaCota } from "../domain/cota-da-ia.ts";
 import { fraseDaDecisao } from "../domain/contas-da-ia.ts";
 import { decidirLimiteDaConta, ehIaComConta, fraseDoLimiteDaConta, voltaDaIa, type ContaDaPessoa, type DecisaoDoLimiteDaConta } from "../domain/contas-da-pessoa.ts";
 import type { IaComConta } from "../contracts/contas-ia.ts";
@@ -454,6 +454,10 @@ export const assentarTurno: CasoDeUso<EntradaAssentarTurno, SaidaAssentarTurno> 
   // NOD-309: o erro transitório do provedor (sobrecarga, 5xx, rede) — o fundo tenta de novo em vez de falhar. Nunca o limite
   // (ehLimite vem antes) nem a conta sem acesso.
   const transitorio = desfecho.estado === "interrompido" && !quedaDaMaquina && !resultado.causaSemIa && !ehLimite && desfecho.motivoFalha !== null && ehErroTransitorio(resultado.erroCru);
+  // NOD-480: a autocompactação em laço do Claude Code (`autocompact_thrashing`), pela classe do texto do fornecedor.
+  // Num app anterior à rc.7 (#718) o driver resume cedo demais e a repetição daria o mesmo: lá vale o aviso de reiniciar.
+  const autocompactou = desfecho.estado === "interrompido" && !quedaDaMaquina && !resultado.causaSemIa && !ehLimite && desfecho.motivoFalha !== null && classificarErroFornecedor(resultado.erroCru) === "autocompactacao"
+    && !(entrega.harness === "claude-cli" && appSemJanelaReal(entrega.versaoApp ?? null));
   let limite: { ia: IdHarness; renovaEm: number; semHora: boolean } | null = null;
   let limiteMudou = false;
   let trocou: RuntimeEvent[] | null = null;
@@ -518,6 +522,10 @@ export const assentarTurno: CasoDeUso<EntradaAssentarTurno, SaidaAssentarTurno> 
   } else if (limite && (trocou = await aposLimiteDaIaNoFundo(deps, { turno: assentado, executor, ...limite, machineId: entrega.machineId, prontos: entrega.prontosDaPessoa ?? [], prontosPorMaquina: entrega.prontosPorMaquina ?? null, motivoInterrupcao: desfecho.motivoInterrupcao, motivoFalha: desfecho.motivoFalha, autoria, agora, custoUsd }))) {
     events.push(...trocou);
   } else if (desfecho.motivoInterrupcao === "sessao_rejeitada" && (trocou = await aposSessaoRejeitada(deps, { turno, executor, autoria, agora, custoUsd }))) {
+    events.push(...trocou);
+  } else if (autocompactou && (trocou = await aposAutocompactacao(deps, { turno, assentado, executor, motivoInterrupcao: desfecho.motivoInterrupcao, motivoFalha: desfecho.motivoFalha, autoria, agora, custoUsd }))) {
+    // NOD-480 (emenda da ADR-040): o histórico enchia de novo logo depois de cada resumo. A sessão sai e o turno se repete
+    // UMA vez numa nova, com o resumo do que já saiu; a pessoa não precisa do /nova-sessao. Na 2ª, o aviso de sempre.
     events.push(...trocou);
   } else if (transitorio && (trocou = await aposErroTransitorioNoFundo(deps, { turno: assentado, ia: entrega.harness ?? null, motivoInterrupcao: desfecho.motivoInterrupcao, motivoFalha: desfecho.motivoFalha, autoria, agora, custoUsd }))?.some((e) => e.kind === "turno_interrompido")) {
     // NOD-309: o fundo que caiu num erro transitório do provedor tenta de novo sozinho (ou a janela da rotina fica nao_rodou).
@@ -1033,6 +1041,78 @@ async function repetirRetomadaSemSessao(
     evento(deps.escopo, { kind: "turno_interrompido", autoria: p.autoria, agora: p.agora, conversaId: turno.conversaId, turnoId: turno.id, dados: { motivo: "sessao_rejeitada", motivo_falha: null, repete_sem_resume: true, custo_usd: p.custoUsd } }),
     evento(deps.escopo, { kind: "turno_criado", autoria: p.autoria, agora: p.agora, conversaId: turno.conversaId, turnoId: novo.id, dados: { origem: "retomada", agente_id: turno.agenteId, retoma_turno_id: turno.id, repete_turno_id: turno.id, reenvios: novo.reenvios } }),
   ];
+}
+
+/**
+ * NOD-480 (emenda da ADR-040): o turno parou porque o histórico enchia de novo logo depois de cada resumo
+ * (`autocompact_thrashing`). Repetir na MESMA sessão dá o mesmo; numa sessão nova, com o resumo do que já saiu, o turno
+ * recomeça com a parte fixa e um histórico curto. A sessão sai de onde ela seria retomada (a conversa, a task, o turno da
+ * cadeia) e o turno se repete UMA vez, marcado com o motivo 'autocompactacao'. As falas que já saíram ficam (parciais) e
+ * vão no histórico, então nada se repete no chat. null = não repete (a pessoa pediu para parar, já é a repetição, passou do
+ * teto de reenvios, ou a origem não repete): vale o aviso de sempre.
+ */
+async function aposAutocompactacao(
+  deps: Deps,
+  p: { turno: Turno; assentado: Turno; executor: Executor; motivoInterrupcao: MotivoInterrupcao | null; motivoFalha: MotivoFalha | null; autoria: Autoria; agora: number; custoUsd: number | null },
+): Promise<RuntimeEvent[] | null> {
+  const { turno, autoria, agora } = p;
+  if (turno.pararSolicitadoEm !== null || turno.motivoRecomeco === "autocompactacao" || !podeReenviar(turno)) return null;
+  const interrompido = (extra: Record<string, unknown>) => evento(deps.escopo, { kind: "turno_interrompido", autoria, agora, conversaId: turno.conversaId, turnoId: turno.id, dados: { motivo: p.motivoInterrupcao, motivo_falha: p.motivoFalha, recomeca_sem_sessao: "autocompactacao", custo_usd: p.custoUsd, ...extra } });
+  // A task, a frente e o fundo (rotina, pedido de colega): a volta leva o pedido da raiz e, na task, a passagem de bastão.
+  if (turno.trabalhoId || (await fundoNaCadeia(deps, turno))) {
+    const trabalho = turno.trabalhoId ? await deps.repos.trabalhos.buscar(turno.trabalhoId) : null;
+    if (turno.trabalhoId && (!trabalho || !trabalhoAberto(trabalho.estado))) return null;
+    const retomaTurnoId = turno.retomaTurnoId ?? turno.id;
+    if (turno.trabalhoId && trabalho?.sessaoCli) await deps.repos.trabalhos.largarSessao(turno.trabalhoId);
+    await deps.repos.turnos.largarSessao(retomaTurnoId);
+    if (retomaTurnoId !== turno.id) await deps.repos.turnos.largarSessao(turno.id);
+    await deps.repos.turnos.travarRetomadas(retomaTurnoId);
+    await deps.repos.mensagens.marcarParciaisDoTurno(turno.id);
+    const raiz = await raizDaCadeia(deps, p.assentado);
+    const volta = await enfileirarVoltaDoFundo(deps, { turno: p.assentado, retomaTurnoId, entradaTexto: entradaDaVoltaDoFundo({ turno: p.assentado, raiz, base: entradaDoRecomecoPorAutocompactacao(), sessaoRetomavel: false, falas: await falasSemResposta(deps, p.assentado) }), acordarEm: agora, agora });
+    await deps.repos.turnos.registrarMotivoRecomeco(volta.id, "autocompactacao");
+    log("aviso", "autocompactacao_recomeca_sem_sessao", { turno_id: turno.id, volta_turno_id: volta.id, trabalho_id: turno.trabalhoId ?? null });
+    return [
+      interrompido({ volta_turno_id: volta.id }),
+      evento(deps.escopo, { kind: "turno_criado", autoria, agora, conversaId: turno.conversaId, turnoId: volta.id, dados: { origem: volta.origem, agente_id: turno.agenteId, retoma_turno_id: retomaTurnoId, trabalho_id: turno.trabalhoId ?? null, acordar_em: agora } }),
+    ];
+  }
+  if (turno.origem !== "conversa" && turno.origem !== "retomada") return null;
+  // A conversa (e a retomada dela, que continua a sessão da conversa): a sessão sai e a fala da pessoa volta à fila.
+  await deps.repos.conversas.atualizarSessaoCli(turno.conversaId, null);
+  if (turno.retomaTurnoId) await deps.repos.turnos.largarSessao(turno.retomaTurnoId);
+  await deps.repos.turnos.largarSessao(turno.id);
+  await deps.repos.mensagens.marcarParciaisDoTurno(turno.id);
+  log("aviso", "autocompactacao_recomeca_sem_sessao", { turno_id: turno.id, conversa_id: turno.conversaId, origem: turno.origem });
+  if (turno.origem === "retomada" && turno.retomaTurnoId) {
+    await deps.repos.turnos.travarRetomadas(turno.id);
+    const novo = await deps.repos.turnos.enfileirar({
+      conversaId: turno.conversaId,
+      agenteId: turno.agenteId,
+      origem: "retomada",
+      retomaTurnoId: turno.id,
+      prazoEm: turno.prazoEm,
+      profundidade: turno.profundidade,
+      entradaTexto: turno.entradaTexto,
+      mensagemOrigemId: turno.mensagemOrigemId,
+      entradaAnexos: turno.entradaAnexos,
+      entradaConfianca: turno.entradaConfianca,
+      sobProcuracaoDe: turno.sobProcuracaoDe ?? null,
+      modelo: turno.modelo,
+      harness: turno.harness,
+      reenvios: turno.reenvios + 1,
+      executor: p.executor,
+      trabalhoId: null,
+    });
+    if (!novo) return null;
+    await deps.repos.turnos.registrarMotivoRecomeco(novo.id, "autocompactacao");
+    if (await deps.repos.turnos.contaminado(turno.id)) await deps.repos.turnos.contaminar(novo.id, agora);
+    return [
+      interrompido({ repete_sem_resume: true }),
+      evento(deps.escopo, { kind: "turno_criado", autoria, agora, conversaId: turno.conversaId, turnoId: novo.id, dados: { origem: "retomada", agente_id: turno.agenteId, retoma_turno_id: turno.id, repete_turno_id: turno.id, reenvios: novo.reenvios } }),
+    ];
+  }
+  return [interrompido({ repete_sem_resume: true }), ...(await repetirNaConversa(deps, { turno, executor: p.executor, agora, recomeco: "autocompactacao" }))];
 }
 
 /**

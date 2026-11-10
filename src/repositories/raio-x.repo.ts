@@ -39,6 +39,12 @@ function paraTurno(l: Linha): TurnoComRaioX {
 }
 
 /**
+ * NOD-480 (revisão do PR #721), definido em 2026-11-09: quantos turnos recentes do bot na conversa `ultimaJanela` olha.
+ * Basta um turno do Claude Code entre os últimos; uma conversa só de Codex (sem `execucao.janela`) cai na tabela por nome.
+ */
+export const TURNOS_DA_JANELA = 20;
+
+/**
  * Raio-X do turno (modo dev, 0036). As duas metades chegam em momentos diferentes — a composição na emissão do
  * plano, a execução na entrega — e cada uma faz upsert só da sua coluna. A leitura parte de `turnos`: turno que a
  * pessoa não vê (RLS) não tem Raio-X, e turno sem linha aqui (anterior à 0036) ainda mostra o custo.
@@ -66,6 +72,31 @@ export function raioXRepo(conn: Conn, escopo: Escopo) {
         left join turno_raio_x r on r.tenant_id = t.tenant_id and r.turno_id = t.id
         where t.tenant_id = ${escopo.tenantId} and t.id = ${turnoId}`;
       return l ? paraTurno(l) : null;
+    },
+
+    /**
+     * NOD-480 (emenda da ADR-040): a janela de contexto que o Claude Code informou num turno recente deste bot, nesta
+     * conversa, com o mesmo modelo (`execucao.janela`). null = nenhum dos últimos TURNOS_DA_JANELA tem a janela gravada;
+     * quem chama cai na tabela por nome.
+     * Revisão do PR #721: roda em TODA emissão de plano. Pelo bot inteiro, `turnos` não tem índice por `agente_id` (varria
+     * os turnos do tenant) e o filtro `execucao->'janela'` destoastava a execução de cada candidato (~100 kB no pior caso, contracts/raio-x.ts) antes
+     * do `limit`. Agora o recorte vem antes, pelo índice `turnos_por_conversa`, e no máximo TURNOS_DA_JANELA execuções são lidas.
+     */
+    async ultimaJanela(conversaId: string, agenteId: string, modelo: string): Promise<number | null> {
+      const [l] = await conn<{ janela: number | null }[]>`
+        select (r.execucao->>'janela')::bigint as janela
+        from (
+          select tenant_id, id, criado_em from turnos
+          where tenant_id = ${escopo.tenantId} and conversa_id = ${conversaId} and agente_id = ${agenteId} and modelo = ${modelo}
+          order by criado_em desc
+          limit ${TURNOS_DA_JANELA}
+        ) t
+        join turno_raio_x r on r.tenant_id = t.tenant_id and r.turno_id = t.id
+        where jsonb_typeof(r.execucao->'janela') = 'number'
+        order by t.criado_em desc
+        limit 1`;
+      const j = l?.janela === null || l?.janela === undefined ? null : Number(l.janela);
+      return j !== null && Number.isFinite(j) && j > 0 ? j : null;
     },
 
     /** Os turnos mais recentes da conversa, sem a composição (a faixa dev só precisa da execução). */

@@ -225,6 +225,8 @@ const CENARIOS: Record<string, EntradaPromptSistema> = {
     semTerminal: "conteudo_de_fora",
     memorias: turno1.memorias,
   },
+  // 7. NOD-480 (emenda da ADR-040): janela pequena — o catálogo de apps vai só com a contagem do que não é do bot.
+  "conversa-janela-pequena": { ...conversa("manual"), catalogoEnxuto: true },
 };
 
 /** Cenários que têm referência em __prompts__/ (o segundo-turno é montado à parte, no próprio teste). */

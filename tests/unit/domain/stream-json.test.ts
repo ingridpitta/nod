@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { EventoStream } from "../../../src/contracts/turno.ts";
 import { interpretarCodex } from "../../../src/domain/codex-stream.ts";
+import { classificarErroFornecedor } from "../../../src/domain/erro-fornecedor.ts";
 import { classificarResultado, classificarSessao, comporFala, interpretarLinhaStreamJson, NARRACAO_MAX_CHARS, reduzirSinais, SINAIS_ZERADOS, textoDaRodada } from "../../../src/domain/stream-json.ts";
 
 const FIXTURES = new URL("../../fixtures/stream-json/", import.meta.url);
@@ -179,6 +180,19 @@ describe("classificarResultado (ADR-009: estado de protocolo, nunca string de er
     // O sucesso continua usando o result como fala.
     const ok = interpretarLinhaStreamJson(JSON.stringify({ type: "result", subtype: "success", result: "Pronto.", session_id: "s", num_turns: 1 }));
     expect(classificarResultado({ eventos: [linhas[0]!, ok], exitCode: 0, signal: null, stderr: "" }).texto).toBe("Pronto.");
+  });
+
+  // Regression: o `api_error` do result (2.1.312) não chegava ao erroCru; o padrão /autocompact_thrashing/ da NOD-480 era
+  // código morto e a classe dependia só do texto em inglês. Found by /qa on 2026-11-09 (repro real, haiku, PR #721).
+  it("NOD-480: o api_error do result entra no erroCru (o código do disjuntor classifica mesmo com outro texto)", () => {
+    const linha = (result: string) => interpretarLinhaStreamJson(JSON.stringify({ type: "result", subtype: "success", is_error: true, api_error_status: null, api_error: "autocompact_thrashing", terminal_reason: "rapid_refill_breaker", result, session_id: "s", num_turns: 11 }));
+    const real = "Autocompact is thrashing: the context refilled to the limit within 3 turns of the previous compact, 3 times in a row.";
+    const r = classificarResultado({ eventos: [linha(real)], exitCode: 0, signal: null, stderr: "" });
+    expect(r).toMatchObject({ desfecho: "falha", motivoFalha: "erro_execucao" });
+    expect(r.erroCru).toContain("autocompact_thrashing");
+    expect(classificarErroFornecedor(r.erroCru)).toBe("autocompactacao");
+    // Um CLI que mude a frase mantém o código.
+    expect(classificarErroFornecedor(classificarResultado({ eventos: [linha("Context keeps refilling after compaction.")], exitCode: 0, signal: null, stderr: "" }).erroCru)).toBe("autocompactacao");
   });
 
   it("result com subtype error_max_turns → falha erro_max_turns; outro erro → erro_execucao", () => {

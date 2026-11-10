@@ -1,7 +1,7 @@
 blank_issues_enabled: false
 contact_links:
   - name: Falha de segurança
-    url: https://github.com/marlonwlv/nod-oss/security/advisories/new
+    url: https://github.com/marlonwlv/nod/security/advisories/new
     about: Relate em privado. Não abra issue pública (veja o SECURITY.md).
   - name: Dúvidas e conversa
     url: https://discord.gg/nb9K82eKc9

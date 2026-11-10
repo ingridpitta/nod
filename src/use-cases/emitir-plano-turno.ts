@@ -467,7 +467,12 @@ export const emitirPlanoTurno: CasoDeUso<EntradaEmitirPlano, PlanoTurno> = async
     && (turno.criadoEm > turnoDoInicio.criadoEm || (turno.criadoEm === turnoDoInicio.criadoEm && turno.id >= turnoDoInicio.id)));
   const pedeConfigurar = ehComandoConfigurar && depoisDoInicio && (!input.recompor ? religou === true : emReconfiguracao(agente, agora));
   const reconfiguracao = elegivel && depoisDoInicio && (pedeConfigurar || emReconfiguracao(agente, agora));
+  // NOD-480 (emenda da ADR-040): a janela que o Claude Code informou da última vez para este bot e este modelo. Falha ao
+  // ler não derruba a emissão: o orçamento cai na tabela por nome. Só o Claude Code tem o autocompact.
+  const janelaObservada = (escolha?.harness ?? "claude-cli") === "claude-cli" && modo !== "ligacao"
+    ? await emSavepoint(deps, () => deps.repos.raioX.ultimaJanela(turno.conversaId, agente.id, turno.modelo)).catch(() => null) : null;
   const parcial = montarPlano({
+    ...(janelaObservada ? { janelaObservada } : {}),
     ...(reconfiguracao ? { reconfiguracao: true } : {}),
     workspace: Boolean(deps.services.workspaces),
     workspaceVinculado: workspaceId !== null,
@@ -548,7 +553,8 @@ export const emitirPlanoTurno: CasoDeUso<EntradaEmitirPlano, PlanoTurno> = async
   // Achado 1 do Revisor: a leitura dos turnos do trabalho também fica dentro do try.
   if (trabalho && !sessaoCli && modo !== "ligacao") {
     try {
-      const teveSessao = !!trabalho.sessaoCli || (await deps.repos.turnos.doTrabalho(trabalho.id)).filter((t) => t.id !== turno.id).at(-1)?.motivoInterrupcao === "sessao_rejeitada";
+      // NOD-480: a volta da task que recomeçou numa sessão nova (autocompactação em laço) também recebe a passagem.
+      const teveSessao = !!trabalho.sessaoCli || turno.motivoRecomeco === "autocompactacao" || (await deps.repos.turnos.doTrabalho(trabalho.id)).filter((t) => t.id !== turno.id).at(-1)?.motivoInterrupcao === "sessao_rejeitada";
       if (teveSessao) {
         const passagem = montarPassagemDeBastao(await dadosDaPassagem(deps, trabalho, guardados), { entrada: parcial.entrada.texto });
         parcial.entrada = { ...parcial.entrada, texto: juntarPassagem(parcial.entrada.texto, passagem), passagem: { git: true } };

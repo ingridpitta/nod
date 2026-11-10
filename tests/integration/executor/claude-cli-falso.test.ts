@@ -508,6 +508,36 @@ describe("driver claude-cli contra o binário falso (contrato empírico 2026-09-
     });
   });
 
+  // QA do PR #721 (NOD-480): o driver leva o orçamento do plano ao processo de verdade — env (busca forçada, teto do Read)
+  // e `bashOutputMaxChars` nos settings do kit do terminal. Os testes de montarEnvDoFilho/settingsDoTerminal não pegavam
+  // um driver que esquecesse de repassar o orçamento.
+  describe("NOD-480: o orçamento da janela chega ao CLI", () => {
+    const comTerminal = (orcamento?: PlanoTurno["orcamento"]): PlanoTurno => ({ ...planoDeTeste(dir), nativas: ["Read", "Bash"], pastaDoBot: "atlas", ...(orcamento ? { orcamento } : {}) });
+    const rodar = async (plano: PlanoTurno) => {
+      const driver = criarClaudeCliDriver({ ...lig, hookPath: "/app/hook-nativas.mjs", filaDoForno: false });
+      const { instance, registro } = await instanciarCom(driver, "s3-mcp-ok", { NOD_FALSO_HELP: "--output-format --restricted --settings" });
+      expect((await instance.adapter(plano).rodarTurno(sinksEspiao().sinks)).desfecho).toBe("sucesso");
+      const r = JSON.parse(await readFile(registro, "utf8")) as Registro;
+      return { env: r.env, settings: JSON.parse(valor(r.argv, "--settings") ?? "{}") as Record<string, unknown> };
+    };
+    it("janela pequena: ENABLE_TOOL_SEARCH, teto do Read no env e bashOutputMaxChars nos settings", async () => {
+      const { env, settings } = await rodar(comTerminal({ janela: 200_000, limiar: 144_000, parteFixa: 120_000, enxuto: true, resultadoChars: 20_160, saidaBashChars: 20_160, leituraTokens: 5_760 }));
+      expect(env.ENABLE_TOOL_SEARCH).toBe("true");
+      expect(env.CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS).toBe("5760");
+      expect(settings.bashOutputMaxChars).toBe(20_160);
+      expect(settings).toHaveProperty("hooks");
+    });
+    it("1M ou sem orçamento: nada disso", async () => {
+      for (const plano of [comTerminal({ janela: 1_000_000, limiar: 784_000, parteFixa: 120_000, enxuto: false, resultadoChars: 75_000 }), comTerminal()]) {
+        const { env, settings } = await rodar(plano);
+        expect(env.ENABLE_TOOL_SEARCH).toBeUndefined();
+        expect(env.CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS).toBeUndefined();
+        expect(settings).toHaveProperty("hooks");
+        expect(settings).not.toHaveProperty("bashOutputMaxChars");
+      }
+    });
+  });
+
   describe("NOD-183 (ADR-080): prompt de texto em --system-prompt com o marcador", () => {
     const MARCADOR = "__SYSTEM_PROMPT_DYNAMIC_BOUNDARY__";
     const comPartes = () => ({ ...planoDeTeste(dir), promptSistema: "Você é a sonda do nod.\nQuem pediu: Ana.", promptSistemaPartes: { estavel: "Você é a sonda do nod.", volatil: "Quem pediu: Ana." } });

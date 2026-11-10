@@ -19,8 +19,8 @@ export type SinaisTurno = {
 /** Quatro estados (ADR-010 revisado); 'interrompido' exige motivo (CHECK na 0002). */
 export type EstadoTurno = "pendente" | "despachando" | "concluido" | "interrompido";
 
-/** NOD-312 (0119): por que o turno de conversa recomeçou sem a sessão do CLI; a regra de retomada (ADR-107) não muda. */
-export const MOTIVOS_RECOMECO = ["troca_de_conta", "troca_de_ia", "troca_de_maquina", "sessao_recusada"] as const;
+/** NOD-312 (0119): por que o turno de conversa recomeçou sem a sessão do CLI; a regra de retomada (ADR-107) não muda. NOD-480 (0158): `autocompactacao`. */
+export const MOTIVOS_RECOMECO = ["troca_de_conta", "troca_de_ia", "troca_de_maquina", "sessao_recusada", "autocompactacao"] as const;
 export type MotivoRecomeco = (typeof MOTIVOS_RECOMECO)[number];
 
 /**

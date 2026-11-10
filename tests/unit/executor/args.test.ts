@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ABRE_CONTEXTO_DO_TURNO, argsDoPromptSistema, AVISO_SEM_TERMINAL, CLAUDE_MD_DAS_PASTAS, comAvisoSemTerminal, FECHA_CONTEXTO_DO_TURNO, FLAGS_DO_TURNO, montarArgs, montarEnvDoFilho, usaSnapshotOff, usaSystemPrompt, volatilNaMensagem } from "../../../src/adapters/executor/drivers/claude-cli.ts";
+import { ABRE_CONTEXTO_DO_TURNO, argsDoPromptSistema, AVISO_SEM_TERMINAL, CLAUDE_MD_DAS_PASTAS, comAvisoSemTerminal, FECHA_CONTEXTO_DO_TURNO, FLAGS_DO_TURNO, montarArgs, montarEnvDoFilho, settingsDoTerminal, usaSnapshotOff, usaSystemPrompt, volatilNaMensagem } from "../../../src/adapters/executor/drivers/claude-cli.ts";
 import { ambienteDaLigacao, montarArgsLigacao } from "../../../src/adapters/executor/drivers/claude-ligacao.ts";
 import { FLAG_FLOORS, flagsListadasNoHelp } from "../../../src/adapters/executor/flag-floors.ts";
 import type { PlanoTurno } from "../../../src/contracts/plano-turno.ts";
@@ -129,6 +129,24 @@ describe("montarArgs — contrato empírico do claude -p (mapa-cli 2026-09-16)",
 
   it("no kit do terminal, o CLAUDE.md dos projetos autorizados entra (a variável medida em 28/09)", () => {
     expect(montarEnvDoFilho({}, "/h", 60_000, { claudeMdDasPastas: true })[CLAUDE_MD_DAS_PASTAS]).toBe("1");
+  });
+  // NOD-480 (emenda da ADR-040): o orçamento da janela no env e nos settings; sem ele, nada muda.
+  it("janela pequena: busca de ferramentas forçada e teto do Read; 1M ou sem orçamento: nada", () => {
+    const pequena = { janela: 200_000, limiar: 144_000, parteFixa: 120_000, enxuto: true, resultadoChars: 20_160, saidaBashChars: 20_160, leituraTokens: 5_760 };
+    const env = montarEnvDoFilho({}, "/h", 60_000, { orcamento: pequena });
+    expect(env.ENABLE_TOOL_SEARCH).toBe("true");
+    expect(env.CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS).toBe("5760");
+    const longa = montarEnvDoFilho({}, "/h", 60_000, { orcamento: { janela: 1_000_000, limiar: 784_000, parteFixa: 120_000, enxuto: false, resultadoChars: 75_000 } });
+    const sem = montarEnvDoFilho({}, "/h", 60_000);
+    for (const e of [longa, sem]) {
+      expect(e.ENABLE_TOOL_SEARCH).toBeUndefined();
+      expect(e.CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS).toBeUndefined();
+    }
+  });
+
+  it("janela pequena: bashOutputMaxChars nos settings do kit (a saída grande vira arquivo com trecho e caminho)", () => {
+    expect(JSON.parse(settingsDoTerminal({ comandoHook: "h", saidaBashChars: 20_160 })).bashOutputMaxChars).toBe(20_160);
+    expect(JSON.parse(settingsDoTerminal({ comandoHook: "h" }))).not.toHaveProperty("bashOutputMaxChars");
   });
 });
 

@@ -1,7 +1,7 @@
 # ADR-160: Open core por exportação, histórico zerado e Apache 2.0
 
 Status: aceita (2026-11-09, ADA-282). Decisões do Marlon: titular do copyright Marlon Wanderllich, repo público
-`marlonwlv/nod-oss`, exportar com histórico zerado (sem transferir o `gamefik/nod`).
+`marlonwlv/nod`, exportar com histórico zerado (sem transferir o `gamefik/nod`).
 
 ## Contexto
 

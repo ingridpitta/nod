@@ -4,7 +4,7 @@
 
 **Não abra issue pública.** Use um destes caminhos:
 
-1. O [relato privado de vulnerabilidade do GitHub](https://github.com/marlonwlv/nod-oss/security/advisories/new) (aba *Security* do repositório), ou
+1. O [relato privado de vulnerabilidade do GitHub](https://github.com/marlonwlv/nod/security/advisories/new) (aba *Security* do repositório), ou
 2. um e-mail para **seguranca@nodbot.ai**.
 
 Conte o que encontrou, como reproduzir, o impacto que você vê e a versão ou o commit. Se tiver uma prova de conceito, mande junto. Não acesse, altere nem apague dados de outras pessoas para provar a falha.

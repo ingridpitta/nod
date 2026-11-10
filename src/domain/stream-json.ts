@@ -260,7 +260,8 @@ export function interpretarLinhaStreamJson(linha: string): EventoStream {
       erroCru:
         subtype === "success" && o["is_error"] !== true
           ? null
-          : redigirECortar([subtype, str(o["error"]), Array.isArray(o["errors"]) ? o["errors"].map(String).join("; ") : "", str(o["result"])].filter(Boolean).join(" | "), 500),
+          // NOD-480 (QA do #721): o 2.1.312 põe o código do erro em `api_error` (`autocompact_thrashing`), fora do texto.
+          : redigirECortar([subtype, str(o["error"]), str(o["api_error"]) && `api_error: ${str(o["api_error"])}`, Array.isArray(o["errors"]) ? o["errors"].map(String).join("; ") : "", str(o["result"])].filter(Boolean).join(" | "), 500),
       sessaoCli: typeof o["session_id"] === "string" ? o["session_id"] : null,
       texto: str(o["result"]),
       custoUsd: num(o["total_cost_usd"]),
