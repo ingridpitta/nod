@@ -15,20 +15,13 @@ name: ci
 on:
   push:
     branches: [main, "rebuild/**"]
-  # definido em 2026-10-28 (fila do runner: 290 runs em 24 h, 182 cancelados por push novo nas frentes): PR rascunho não
-  # roda (os jobs pulam pelo `if` abaixo; o bot confere com `npm run check` local e chama `gh pr ready` quando quer a
-  # CI, ver AGENTS.md); ready_for_review dispara o run. PR só de documentação também não roda, menos os arquivos de
-  # docs/ que os testes leem (paridade, deploy-gcp, runbook). Na main roda sempre: o deploy depende de cada ci.
+  # definido em 2026-10-28: PR rascunho não roda (os jobs pulam pelo `if` abaixo; o bot confere com `npm run check` local e
+  # chama `gh pr ready` quando quer a CI, ver AGENTS.md); ready_for_review dispara o run. Na main roda sempre: o deploy
+  # depende de cada ci.
+  # NOD-485: sem filtro de `paths`. A main exige os checks da CI (branch protection) e um workflow que nem dispara deixa
+  # o check pendente para sempre: o PR só de documentação ficaria travado. Os runners do GitHub são gratuitos em repo público.
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      - "**"
-      - "!docs/**"
-      - "!**/*.md"
-      - "docs/paridade.md"
-      - "docs/paridade.piso.json"
-      - "docs/deploy-gcp.md"
-      - "docs/runbook-producao.md"
 
 # Push novo no mesmo PR cancela o run antigo. Na main nada é cancelado: o deploy depende de cada ci.
 concurrency:

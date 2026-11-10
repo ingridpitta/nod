@@ -57,8 +57,8 @@ abertos contra a lista de nomes internos e avisa o Marlon.
 frentes). Enquanto o PR é rascunho, confira local com `npm run check` (ou os testes do que mudou) e faça quantos
 pushes quiser. Quando quiser a CI, uma vez, com o trabalho pronto: `gh pr ready <n>` e espere com
 `gh pr checks <n> --watch`. Num rascunho esse comando volta na hora sem checks: não é falha nem CI verde. Falhou e
-precisa mexer de novo: `gh pr ready <n> --undo`, corrija e repita. PR só de documentação também não roda (menos os
-docs que os testes leem; a lista está no `ci.yml`).
+precisa mexer de novo: `gh pr ready <n> --undo`, corrija e repita. PR só de documentação também roda a CI (NOD-485: a `main` exige os checks).
+
 
 **Teste instável na CI** (2026-11-04; a CI foi para máquinas rápidas e quatro testes de tempo caíram no mesmo dia). Na
 CI cada teste que falha roda uma segunda vez antes de reprovar o job (`retry` do vitest, só com `CI=1`); o resumo do

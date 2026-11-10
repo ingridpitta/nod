@@ -126,3 +126,11 @@ describe("config-producao.ts: a config privada da produção (NOD-485)", () => {
     expect(readFileSync(cfg, "utf8")).toBe("PROJETO=nod-exemplos\n");
   });
 });
+
+describe("ci.yml × branch protection (NOD-485)", () => {
+  it("o pull_request não tem filtro de paths: PR só de docs também ganha os checks que a main exige", () => {
+    const yml = semComentarios(ler("ci.yml"));
+    const pr = yml.slice(yml.indexOf("pull_request:"), yml.indexOf("concurrency:"));
+    expect(pr).not.toMatch(/paths(-ignore)?:/);
+  });
+});
