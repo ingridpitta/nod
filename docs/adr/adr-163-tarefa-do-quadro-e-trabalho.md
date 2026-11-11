@@ -22,6 +22,15 @@ cards em Implementando trabalhava um por vez, e o card não dizia se estava roda
 3. **Sessão contínua (núcleo da ADA-10).** Etapas seguidas da mesma tarefa com o mesmo bot reabrem o mesmo trabalho
    (`sincronizarTrabalho` com `reabrir`) e continuam a sessão dele (`trabalho.sessaoCli`). Outro bot na mesma tarefa
    abre o trabalho dele.
+   **Emenda de 2026-11-11 (ADA-10, migração 0165).** O número que a pessoa e o bot veem ("Trabalho #N") passa a ser a
+   **sessão**, não o gatilho: `quadro_execucoes.sessao`, decidida no `inserir` num statement só. O mesmo bot repete a
+   última sessão dele na tarefa (etapa nova, comentário, resposta, recado, nova tentativa automática); outro bot, ou o
+   **Repetir**, abre a seguinte. O Repetir também larga a sessão do motor (`trabalhos.largarSessao`): o turno vai sem
+   `--resume`, mantendo a pasta e a worktree do trabalho. Quem volta à tarefa depois de outro bot (A→B→A) retoma a própria
+   sessão. Cada linha guarda o bot (`agente_id`) e a coluna do gatilho (a etapa, na tela: "#1 · Plano de engenharia").
+   `numero` continua o gatilho, interno (ordem, varredor, `cadeiaDoQuadroEncerrada`). Linha sem sessão (backfill ou
+   servidor de antes da 0165) vale pelo `numero`. Gatilho de reversão: se a pessoa pedir para ver cada etapa como trabalho
+   separado, a tela volta a mostrar `numero` (o dado continua lá).
 4. **Sem teto próprio (mantém a ADR-083 §4, "sem teto").** Revisto em 2026-11-10 a pedido do Marlon ("não quero
    limites"): a primeira versão do PR #698 contava os turnos `despachando` do quadro no `reivindicar` (6 por bot, 20 por
    máquina, envs `NOD_QUADRO_TETO_POR_BOT`/`_POR_MAQUINA`). Isso saiu, com as envs e o código. A tarefa do quadro não tem

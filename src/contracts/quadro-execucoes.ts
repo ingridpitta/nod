@@ -29,8 +29,17 @@ export type ClasseFalha = "transitoria" | "do_agente" | "cancelada";
 export type ExecucaoQuadro = {
   id: string;
   tarefaId: string;
-  /** 1, 2, 3… na tarefa. */
+  /** 1, 2, 3… na tarefa: um por gatilho (a ordem interna; a pessoa e o bot veem `sessao`). */
   numero: number;
+  /**
+   * ADA-10 (0165, emenda da ADR-163 §3): a sessão do bot na tarefa, o número que a tela e o bot mostram. O mesmo bot
+   * repete a dele em todas as etapas (o mesmo trabalho e o mesmo --resume); outro bot, ou o Repetir, abre a seguinte.
+   */
+  sessao: number;
+  /** ADA-10: o bot do gatilho (null = linha de antes da 0165 cujo turno já foi podado). */
+  agenteId: string | null;
+  /** ADA-10: a coluna da tarefa quando o gatilho abriu (a etapa). null = linha de antes da 0165. */
+  coluna: string | null;
   origem: OrigemExecucao;
   /** O turno raiz da cadeia. */
   turnoId: string;
@@ -64,7 +73,9 @@ export type RecadoQuadro = {
   criadoEm: number;
 };
 
-export type ExecucaoDto = Pick<ExecucaoQuadro, "id" | "numero" | "origem" | "turnoId" | "motivo" | "criadoEm"> & {
+export type ExecucaoDto = Pick<ExecucaoQuadro, "id" | "numero" | "sessao" | "coluna" | "origem" | "turnoId" | "motivo" | "criadoEm"> & {
+  /** ADA-10: o nome da etapa (a coluna do gatilho), para a linha "#3 · Plano de engenharia". null = sem coluna ou a coluna saiu. */
+  colunaNome: string | null;
   estado: EstadoExecucao;
   /** O turno da cadeia que roda agora (a retomada): os frames ao vivo vêm dele. */
   turnoAtual: string;
@@ -142,6 +153,7 @@ export const INTERVALO_NOVA_TENTATIVA_MS = 60_000;
  * CI) e, na falha, o motivo — cercado (ADR-047): é frase do servidor hoje, mas vai ao modelo como dado, não instrução.
  */
 export type TrabalhoParaBot = {
+  /** ADA-10: a sessão (não o gatilho): as etapas seguidas do mesmo bot repetem o número. */
   numero: number; estado: EstadoExecucao; esperando: boolean; motivo: string | null;
   /** Revisão 5 do PR #625: quando a nova tentativa sozinha abre (ISO; null = nenhuma agendada). */
   novaTentativaEm: string | null;

@@ -132,7 +132,7 @@ describe("ADA-4: comentário otimista", () => {
 
 describe("ADA-4: recado otimista", () => {
   const exec = (p: Partial<ExecucaoDto>): ExecucaoDto =>
-    ({ id: "a", numero: 1, estado: "rodando", origem: "inicio", turnoId: "t-a", turnoAtual: "t-a", motivo: null, criadoEm: 0, comecouEm: null, ultimaFrase: null, tentativa: null, esperando: false, novaTentativaEm: null, saida: null, volta: null, ...p });
+    ({ id: "a", numero: 1, sessao: 1, coluna: null, colunaNome: null, estado: "rodando", origem: "inicio", turnoId: "t-a", turnoAtual: "t-a", motivo: null, criadoEm: 0, comecouEm: null, ultimaFrase: null, tentativa: null, esperando: false, novaTentativaEm: null, saida: null, volta: null, ...p });
   const dados = (): ExecucoesDaTarefa => ({ execucoes: [exec({})], recados: [], conversaId: "conv", semAgente: false });
 
   function montar() {

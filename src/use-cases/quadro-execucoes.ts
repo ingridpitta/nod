@@ -144,12 +144,15 @@ export async function trabalhosDaTarefa(deps: Deps, t: TarefaQuadro): Promise<Ex
   let seguidas = 0;
   // ADA-232: a volta marcada de cada cadeia ("Volto quando… · Acordar agora"); só a do trabalho que ainda não terminou.
   const voltas = await deps.repos.quadroExecucoes.voltasDasCadeias(execs.map((e) => e.turnoId));
+  // ADA-10: o nome da etapa de cada linha ("#3 · Plano de engenharia"); a coluna que saiu do quadro fica sem nome.
+  const nomes = new Map(colunasDe(await deps.repos.quadros.buscar(t.quadroId)).map((c) => [c.id, c.nome]));
   const dtos: ExecucaoDto[] = execs.map((e) => {
     // A mesma conta de tentativasAutomaticasSeguidas: o trabalho de comentário não zera.
     if (e.origem !== "comentario") seguidas = e.origem === "automatica" ? seguidas + 1 : 0;
     const d = desfechos.get(e.turnoId);
     return {
-      id: e.id, numero: e.numero, origem: e.origem, turnoId: e.turnoId, motivo: e.motivo, criadoEm: e.criadoEm,
+      id: e.id, numero: e.numero, sessao: e.sessao, coluna: e.coluna, colunaNome: e.coluna ? nomes.get(e.coluna) ?? null : null,
+      origem: e.origem, turnoId: e.turnoId, motivo: e.motivo, criadoEm: e.criadoEm,
       estado: estadoDaExecucao(e, d),
       esperando: estadoDaExecucao(e, d) === "rodando" && esperandoNaCadeia(d),
       turnoAtual: d?.turnoAtual ?? e.turnoId,
@@ -178,7 +181,7 @@ export async function trabalhosParaBot(deps: Deps, tarefaIds: readonly string[])
     const d = desfechos.get(e.turnoId);
     const estado = estadoDaExecucao(e, d);
     const motivo = estado === "falhou" ? (e.motivo ?? (d ? motivoDaFalha(d) : null)) : null;
-    r.set(e.tarefaId, { numero: e.numero, estado, esperando: estado === "rodando" && esperandoNaCadeia(d), motivo: motivo === null ? null : cercado(motivo),
+    r.set(e.tarefaId, { numero: e.sessao, estado, esperando: estado === "rodando" && esperandoNaCadeia(d), motivo: motivo === null ? null : cercado(motivo),
       novaTentativaEm: e.novaTentativaEm === null ? null : new Date(e.novaTentativaEm).toISOString() });
   }
   return r;
@@ -240,6 +243,12 @@ async function novoTrabalho(deps: Deps, p: PedidoLote, q: Quadro, t: TarefaQuadr
     await deps.repos.quadroExecucoes.devolverTomados(t.id, pendentes.map((r) => r.id));
     return null;
   }
+  // ADA-10: o Repetir é a sessão nova que a pessoa pede. O trabalho da tarefa (a pasta, a worktree) continua o mesmo,
+  // mas a sessão do motor sai: o turno novo vai sem --resume. A nova tentativa sozinha e o recado seguem na mesma sessão.
+  // Só depois que o turno abriu, no trabalho em que ele roda (travado pelo abrirTurno): o Repetir que não abre turno (o
+  // bot sem conversa própria) devolve a falha sem apagar o contexto que a etapa seguinte retomaria. O turno novo ainda
+  // não foi despachado (a mesma transação), então nenhum plano lê a sessão velha.
+  if (origem === "repetir") await deps.repos.trabalhos.largarSessao(aberto.trabalhoId);
   // O trabalho novo toma o lugar da nova tentativa agendada (o Repetir, o recado, a própria tentativa).
   await deps.repos.quadroExecucoes.desagendarNovaTentativa({ tarefaId: t.id });
   await deps.repos.quadros.salvarTarefa(t.id, { ...t, status, turnoId: aberto.turnoId, ...(bloqueada ? { pergunta: null, voltarPara: null } : {}) });
@@ -287,7 +296,9 @@ export async function trabalhoDaTarefa(deps: Deps, p: PedidoLote, op: OpTrabalho
   const vivos = vivosDe(execs, desfechos);
   const rodando = rodandoDe(vivos);
   const events: RuntimeEvent[] = [];
+  // ADA-10: `numero` aqui é a sessão (o que a pessoa e o bot veem); `alvo` é o gatilho, para achar o estado dele.
   let trabalho: { numero: number | null; entregue?: EntregaRecado; cancelados?: number };
+  let alvo: ExecucaoQuadro | null = null;
 
   if (op.tipo === "acordar_trabalho") {
     // ADA-232 (ADR-155): "Acordar agora". A volta que dorme (hora marcada ou CI) dispara já, na mesma cadeia e sessão;
@@ -296,7 +307,8 @@ export async function trabalhoDaTarefa(deps: Deps, p: PedidoLote, op: OpTrabalho
     if (!volta) return falha("estado_invalido", "a tarefa não está esperando uma volta: não há o que acordar");
     if (!volta.turnoId) return falha("estado_invalido", "a tarefa espera um comando de fundo, que termina sozinho: não há o que acordar");
     await deps.repos.turnos.acordarVolta(volta.turnoId, deps.agora());
-    trabalho = { numero: vivos[0]?.e.numero ?? null };
+    alvo = vivos[0]?.e ?? null;
+    trabalho = { numero: alvo?.sessao ?? null };
   } else if (op.tipo === "cancelar_trabalho") {
     // Não move a tarefa (decisão da Ada): cancela e para cada trabalho vivo (no turno dele), solta o que as cadeias
     // esperavam e os recados que aguardavam. Nada vivo = nada muda.
@@ -305,7 +317,8 @@ export async function trabalhoDaTarefa(deps: Deps, p: PedidoLote, op: OpTrabalho
     const cancelados = await deps.repos.quadroExecucoes.cancelarRecados(t.id);
     // Revisão 4 do PR #625: a nova tentativa agendada (a espera depois da queda) também sai: Cancelar é parar tudo.
     await deps.repos.quadroExecucoes.desagendarNovaTentativa({ tarefaId: t.id });
-    trabalho = { numero: vivos[0]?.e.numero ?? null, cancelados };
+    alvo = vivos[0]?.e ?? null;
+    trabalho = { numero: alvo?.sessao ?? null, cancelados };
   } else {
     if (!t.agenteId) return falha("entrada_invalida", "sem agente responsável: a tarefa precisa de um bot para trabalhar (mudar_tarefa com agente)");
     // Repetir com um trabalho rodando de verdade não abre outro (o duplo clique, o Repetir do chat): cancele antes.
@@ -319,12 +332,14 @@ export async function trabalhoDaTarefa(deps: Deps, p: PedidoLote, op: OpTrabalho
         // Na fila: o recado entra no pedido do turno, que ainda não começou.
         const r = await deps.repos.quadroExecucoes.inserirRecado(t.id, op.texto, repassador(p));
         await deps.repos.quadroExecucoes.levarRecados(t.id, vivo.e.id, vivo.e.turnoId, [r.id]);
-        trabalho = { numero: vivo.e.numero, entregue: "quando_comecar" };
+        alvo = vivo.e;
+        trabalho = { numero: vivo.e.sessao, entregue: "quando_comecar" };
       } else {
         // Rodando: a sessão viva lê no próximo passo (ofertarRecadosDoQuadro). Esperando (a pessoa, o CI): entra quando
         // a retomada começar. Se não ler, vira o próximo trabalho.
         await deps.repos.quadroExecucoes.inserirRecado(t.id, op.texto, repassador(p));
-        trabalho = { numero: vivo.e.numero, entregue: esperandoNaCadeia(vivo.d) ? "quando_comecar" : "agora" };
+        alvo = vivo.e;
+        trabalho = { numero: vivo.e.sessao, entregue: esperandoNaCadeia(vivo.d) ? "quando_comecar" : "agora" };
       }
     } else {
       // Revisão 2 do PR #625: fora do andamento (Feito, Cancelado, Backlog) nada abre trabalho; a pessoa move a tarefa antes.
@@ -337,13 +352,14 @@ export async function trabalhoDaTarefa(deps: Deps, p: PedidoLote, op: OpTrabalho
       const r = await novoTrabalho(deps, p, q, t, op.tipo === "recado" ? "recado" : "repetir", op.tipo === "recado" ? op.texto : undefined);
       if (!r) return falha("entrada_invalida", "sem agente responsável que possa trabalhar: o bot não tem conversa própria");
       events.push(...r.events);
-      trabalho = { numero: r.execucao.numero, ...(op.tipo === "recado" ? { entregue: "novo" as const } : {}) };
+      alvo = r.execucao;
+      trabalho = { numero: r.execucao.sessao, ...(op.tipo === "recado" ? { entregue: "novo" as const } : {}) };
     }
   }
   events.unshift(eventoQuadro(deps, p, q, null, [t.id]));
   const atual = (await deps.repos.quadros.tarefa(t.id)) ?? t;
   const trabalhos = await trabalhosDaTarefa(deps, atual);
-  const estado = trabalhos.execucoes.find((e) => e.numero === trabalho.numero)?.estado ?? null;
+  const estado = alvo ? trabalhos.execucoes.find((e) => e.id === alvo.id)?.estado ?? null : null;
   return { data: { ok: true, quadro: await montarQuadro(deps, q), lote: null, comecaram: [], desfeito: false, trabalho: { ...trabalho, estado }, trabalhos }, events: await comMembros(deps, events) };
 }
 

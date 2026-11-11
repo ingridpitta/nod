@@ -173,7 +173,8 @@ describeIntegracao("trabalhos da tarefa do quadro (NOD-418)", () => {
       }
       expect((await m.tarefa()).status).toBe("bloqueado");
       const r = await m.op({ tipo: "repetir_trabalho" });
-      expect(r.trabalho).toMatchObject({ numero: 4, estado: "fila" });
+      // ADA-10: as 3 tentativas foram a sessão 1 (o mesmo bot); o Repetir abre a 2.
+      expect(r.trabalho).toMatchObject({ numero: 2, estado: "fila" });
       expect(await m.tarefa()).toMatchObject({ status: "fazendo", pergunta: null, voltarPara: null });
       // A conta recomeça: a próxima queda tenta de novo sozinha.
       await m.terminar("queda");
@@ -305,7 +306,7 @@ describeIntegracao("trabalhos da tarefa do quadro (NOD-418)", () => {
       const doComentario = await m.turnoDoBeto();
       await m.repos.quadroExecucoes.inserir({ tarefaId: (await m.tarefa()).id, origem: "comentario", turnoId: doComentario });
       await trx`update turnos set estado = 'despachando', despachado_em = now() where id = ${doComentario}`;
-      expect((await m.op({ tipo: "recado", texto: "use a branch y" })).trabalho).toMatchObject({ numero: 2, entregue: "agora" });
+      expect((await m.op({ tipo: "recado", texto: "use a branch y" })).trabalho).toMatchObject({ numero: 1, entregue: "agora" }); // ADA-10: o comentário do mesmo bot é a sessão 1
       // A conversa do bot e o turno do trabalho acabado não leem o recado; o do comentário lê.
       const conversa = await m.turnoDoBeto({ origem: "conversa" });
       expect(await ofertarRecadosDoQuadro(m.deps, conversa)).toEqual([]);
@@ -410,7 +411,8 @@ describeIntegracao("trabalhos da tarefa do quadro (NOD-418)", () => {
       await m.terminar("concluido");
       await m.varrer();
       const novo = await m.op({ tipo: "recado", texto: "falta o README" });
-      expect(novo.trabalho).toMatchObject({ numero: 3, entregue: "novo", estado: "fila" });
+      // ADA-10: o recado que vira trabalho segue na sessão do bot (a 1).
+      expect(novo.trabalho).toMatchObject({ numero: 1, entregue: "novo", estado: "fila" });
       expect((await m.tarefa()).status).toBe("fazendo");
     });
   });
@@ -435,12 +437,13 @@ describeIntegracao("trabalhos da tarefa do quadro (NOD-418)", () => {
       // Um trabalho de recado (sem o pedido da tarefa) e depois o Repetir: o pedido da tarefa volta, com o recado pendente.
       await m.op({ tipo: "cancelar_trabalho" });
       const doRecado = await m.op({ tipo: "recado", texto: "falta o README" });
-      expect(doRecado.trabalho).toMatchObject({ numero: 4, entregue: "novo" });
+      // ADA-10: o recado segue a sessão do bot (a 1); só o Repetir abre a seguinte.
+      expect(doRecado.trabalho).toMatchObject({ numero: 1, entregue: "novo" });
       await m.terminar("concluido");
       await m.varrer();
       await m.repos.quadroExecucoes.inserirRecado((await m.tarefa()).id, "e rode os testes");
       const repetido = await m.op({ tipo: "repetir_trabalho" });
-      expect(repetido.trabalho).toMatchObject({ numero: 5 });
+      expect(repetido.trabalho).toMatchObject({ numero: 2 }); // ADA-10: o Repetir é a sessão 2
       const quinta = await entrada();
       expect(quinta.match(/<\/tarefa>/g)).toHaveLength(1);
       expect(quinta).toContain("e rode os testes");

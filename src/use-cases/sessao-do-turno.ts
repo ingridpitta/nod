@@ -37,7 +37,9 @@ export async function propagarSessaoDoTurno(
     await deps.repos.conversas.atualizarSessaoCli(turno.conversaId, sessaoCli, executor, harness, maquinaId);
     if (contaId) await deps.repos.conversas.definirContaDaSessao(turno.conversaId, contaId);
   }
-  if (turno.trabalhoId) {
+  // ADA-10 (QA do PR marlonwlv/nod#11): o turno de antes de um Repetir (o cancelado que a máquina entrega depois) não
+  // devolve a sessão velha ao trabalho; senão o turno do Repetir sairia com --resume dela.
+  if (turno.trabalhoId && !(await deps.repos.quadroExecucoes.repetidoDepois(turno.id))) {
     // Revisão do épico (S16, 2026-10-08): o turno promovido pela rede que NÃO seguia a sessão da conversa (bifurcou, ou
     // começou uma sessão nova) devolve a sessão que tem o contexto mais novo da conversa. Ela vira também a da conversa —
     // senão a próxima mensagem bifurcava a sessão antiga (de uma promoção anterior) e perdia este turno inteiro. Só se a

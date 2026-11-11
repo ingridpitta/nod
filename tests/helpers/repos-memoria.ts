@@ -4135,6 +4135,7 @@ function reposSobre(b: BancoMemoria, escopo: Escopo): Repos {
       atuaisDasTarefas: async () => [],
       tarefasAbertas: async () => [],
       doTurnoRaiz: async () => null,
+      repetidoDepois: async () => false,
       tratar: soNoPostgres,
       gravarSaida: soNoPostgres,
       contarReacionamento: soNoPostgres,

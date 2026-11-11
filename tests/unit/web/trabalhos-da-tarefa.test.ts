@@ -2,14 +2,14 @@ import { describe, expect, it } from "vitest";
 import type { ExecucaoDto, ExecucoesDaTarefa } from "../../../src/contracts/quadro-execucoes.ts";
 import { ErroApi } from "../../../web/lib/erro-api.ts";
 import { atividadeComFrame, criarTrabalhosDaTarefa, turnoEscutado, type ApiDosTrabalhos } from "../../../web/lib/trabalhos-da-tarefa.ts";
-import { fraseDaVolta, logDoTrabalho, secaoDoTrabalho, type VistaDoTrabalho } from "../../../web/telas/trabalhos-da-tarefa.ts";
+import { anuncioDoTrabalho, fraseDaVolta, logDoTrabalho, secaoDoTrabalho, type VistaDoTrabalho } from "../../../web/telas/trabalhos-da-tarefa.ts";
 
 /** NOD-418, direção C "só o atual": o trabalho da tarefa aberta (a linha, os passos ao vivo, os anteriores, as ações). */
 
 const MAL = `<img src=x onerror="alert(1)">`;
 const hora = () => "10:00";
 const exec = (p: Partial<ExecucaoDto> & Pick<ExecucaoDto, "id" | "numero" | "estado">): ExecucaoDto =>
-  ({ origem: "inicio", turnoId: `t-${p.id}`, turnoAtual: `t-${p.id}`, motivo: null, criadoEm: 0, comecouEm: null, ultimaFrase: null, tentativa: null, esperando: false, novaTentativaEm: null, saida: null, volta: null, ...p });
+  ({ sessao: p.numero, coluna: null, colunaNome: null, origem: "inicio", turnoId: `t-${p.id}`, turnoAtual: `t-${p.id}`, motivo: null, criadoEm: 0, comecouEm: null, ultimaFrase: null, tentativa: null, esperando: false, novaTentativaEm: null, saida: null, volta: null, ...p });
 const dados = (execucoes: ExecucaoDto[], extra: Partial<ExecucoesDaTarefa> = {}): ExecucoesDaTarefa => ({ execucoes, recados: [], conversaId: "conv-beto", semAgente: false, ...extra });
 const vista = (p: Partial<VistaDoTrabalho>): VistaDoTrabalho => ({
   tarefaId: "tar", dados: null, erro: false, bloqueada: false, agenteId: "beto", conversaAtual: "conv-ana", atividade: undefined,
@@ -30,6 +30,33 @@ describe("os 5 estados", () => {
     const h = secao({ dados: dados([exec({ id: "b", numero: 2, estado: "falhou", origem: "automatica", tentativa: 2, motivo: "A máquina ficou sem contato." })]) });
     expect(h).toContain("Nova tentativa 2 de 2");
     expect(h).toContain("A máquina ficou sem contato.");
+  });
+});
+
+describe("ADA-10: o número é a sessão do bot, com a etapa", () => {
+  it("as etapas seguidas do mesmo bot repetem o # e dizem a coluna; o Repetir mostra a sessão nova", () => {
+    const h = secao({ anterioresAbertos: true, dados: dados([
+      exec({ id: "c", numero: 4, sessao: 2, estado: "rodando", origem: "repetir", colunaNome: "Implementando" }),
+      exec({ id: "b", numero: 3, sessao: 1, estado: "concluido", colunaNome: "Plano de engenharia" }),
+      exec({ id: "a", numero: 1, sessao: 1, estado: "concluido", colunaNome: "Pronto para engenharia" }),
+    ]) });
+    expect(h).toContain("#2 · Implementando · rodando");
+    expect(h).toContain("#1 · Plano de engenharia · concluído");
+    expect(h).toContain("#1 · Pronto para engenharia · concluído");
+    // O gatilho (numero) não aparece mais como número do trabalho.
+    expect(h).not.toContain("#4");
+    expect(h).not.toContain("#3");
+    expect(anuncioDoTrabalho({ numero: 4, sessao: 2, estado: "rodando", esperando: false })).toBe("Trabalho #2: rodando");
+  });
+
+  it("o nome da etapa sai escapado; sem coluna (linha de antes da 0165) fica o formato de antes", () => {
+    expect(secao({ dados: dados([exec({ id: "a", numero: 1, estado: "concluido", colunaNome: MAL })]) })).not.toContain(MAL);
+    expect(secao({ dados: dados([exec({ id: "a", numero: 1, estado: "concluido" })]) })).toContain("#1 · concluído");
+  });
+
+  it("o DTO de um servidor de antes da 0165 (sem sessao) mostra o número do gatilho", () => {
+    const { sessao: _s, ...antigo } = exec({ id: "a", numero: 3, estado: "fila" });
+    expect(anuncioDoTrabalho(antigo)).toBe("Trabalho #3: na fila");
   });
 });
 

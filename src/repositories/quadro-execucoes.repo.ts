@@ -16,6 +16,9 @@ interface LinhaExecucao {
   id: string;
   tarefa_id: string;
   numero: number;
+  sessao: number | null;
+  agente_id: string | null;
+  coluna: string | null;
   origem: OrigemExecucao;
   turno_id: string;
   motivo: string | null;
@@ -38,13 +41,17 @@ interface LinhaRecado {
   criado_em: Date;
 }
 
-const COLUNAS = "id, tarefa_id, numero, origem, turno_id, motivo, desfecho, cancelada_em, tratada_em, nova_tentativa_em, saida, sem_saida, criado_em";
+const COLUNAS = "id, tarefa_id, numero, sessao, agente_id, coluna, origem, turno_id, motivo, desfecho, cancelada_em, tratada_em, nova_tentativa_em, saida, sem_saida, criado_em";
 const COLUNAS_RECADO = "id, tarefa_id, texto, entregue_em, execucao_id, repassado_por, cancelado_em, criado_em";
 
 const paraExecucao = (l: LinhaExecucao): ExecucaoQuadro => ({
   id: l.id,
   tarefaId: l.tarefa_id,
   numero: l.numero,
+  // O servidor de antes da 0165 no ar no mesmo deploy grava sem sessão: vale o número do gatilho, como no backfill.
+  sessao: l.sessao ?? l.numero,
+  agenteId: l.agente_id,
+  coluna: l.coluna,
   origem: l.origem,
   turnoId: l.turno_id,
   motivo: l.motivo,
@@ -86,12 +93,25 @@ export function quadroExecucoesRepo(conn: Conn, escopo: Escopo) {
     or (t.status not in ('backlog', 'voce') and exists (select 1 from jsonb_array_elements(coalesce(q.colunas, '[]'::jsonb)) c
       where c->>'id' = t.status and c->>'grupo' in ('iniciado', 'feito', 'fechado'))))`;
   return {
-    /** Um trabalho novo, com o número seguinte da tarefa. O mesmo turno raiz não vira dois (null = já era trabalho). */
+    /**
+     * Um gatilho novo, com o número seguinte da tarefa. O mesmo turno raiz não vira dois (null = já era trabalho).
+     * ADA-10 (0165): a sessão sai aqui, num statement só (sem corrida entre ler e gravar): o bot do turno raiz repete a
+     * última sessão dele na tarefa; o Repetir, ou um bot sem sessão nela, abre a seguinte. A coluna é a da tarefa agora
+     * (quem chama já gravou a coluna nova antes de abrir o turno). A linha sem sessão (gravada pelo servidor de antes da
+     * 0165 no mesmo deploy) vale pelo número dela, como no backfill: a sessão nova nunca repete o número de outra.
+     */
     async inserir(e: { tarefaId: string; origem: OrigemExecucao; turnoId: string }): Promise<ExecucaoQuadro | null> {
       const [l] = await conn<LinhaExecucao[]>`
-        insert into quadro_execucoes (tenant_id, owner_id, tarefa_id, numero, origem, turno_id)
-        select ${escopo.tenantId}, ${escopo.pessoaId}, ${e.tarefaId}, coalesce(max(numero), 0) + 1, ${e.origem}, ${e.turnoId}
-        from quadro_execucoes where ${dona()} and tarefa_id = ${e.tarefaId}
+        with bot as (select agente_id from turnos where tenant_id = ${escopo.tenantId} and id = ${e.turnoId}),
+        antes as (select numero, sessao, agente_id from quadro_execucoes where ${dona()} and tarefa_id = ${e.tarefaId}),
+        dele as (select coalesce(a.sessao, a.numero) as sessao from antes a, bot b where a.agente_id = b.agente_id order by a.numero desc limit 1)
+        insert into quadro_execucoes (tenant_id, owner_id, tarefa_id, numero, sessao, agente_id, coluna, origem, turno_id)
+        select ${escopo.tenantId}, ${escopo.pessoaId}, ${e.tarefaId},
+          coalesce((select max(numero) from antes), 0) + 1,
+          coalesce(case when ${e.origem} <> 'repetir' then (select sessao from dele) end, coalesce((select max(coalesce(sessao, numero)) from antes), 0) + 1),
+          (select agente_id from bot),
+          (select status from quadro_tarefas where ${dona()} and id = ${e.tarefaId}),
+          ${e.origem}, ${e.turnoId}
         on conflict (tenant_id, tarefa_id, turno_id) do nothing
         returning ${conn.unsafe(COLUNAS)}`;
       return l ? paraExecucao(l) : null;
@@ -141,6 +161,19 @@ export function quadroExecucoesRepo(conn: Conn, escopo: Escopo) {
     async doTurnoRaiz(turnoId: string): Promise<ExecucaoQuadro | null> {
       const [l] = await conn<LinhaExecucao[]>`select ${conn.unsafe(COLUNAS)} from quadro_execucoes where ${dona()} and turno_id = ${turnoId} order by criado_em desc limit 1`;
       return l ? paraExecucao(l) : null;
+    },
+    /**
+     * ADA-10 (QA do PR marlonwlv/nod#11): a pessoa pediu Repetir no trabalho deste turno depois que ele nasceu. A sessão
+     * que ele entrega (a entrega tardia do turno cancelado) já não é a do trabalho: o Repetir a largou de propósito.
+     */
+    async repetidoDepois(turnoId: string): Promise<boolean> {
+      const [l] = await conn<{ sim: boolean }[]>`
+        select exists (select 1 from quadro_execucoes e
+          join turnos n on n.tenant_id = e.tenant_id and n.id = e.turno_id
+          join turnos v on v.tenant_id = n.tenant_id and v.id = ${turnoId}
+          where e.tenant_id = ${escopo.tenantId} and e.owner_id = ${escopo.pessoaId} and e.origem = 'repetir'
+            and n.trabalho_id = v.trabalho_id and n.id <> v.id and e.criado_em > v.criado_em) as sim`;
+      return l?.sim ?? false;
     },
     /** O fim do trabalho foi tratado: o desfecho fica gravado (vale depois da poda); `motivo` = a falha em palavras. */
     async tratar(id: string, desfecho: DesfechoExecucao, motivo: string | null): Promise<void> {
