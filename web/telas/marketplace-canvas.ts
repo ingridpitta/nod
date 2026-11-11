@@ -36,7 +36,7 @@ function lerSeFalta(): void {
 }
 
 const ICONE_CANVAS = '<span class="app-logo cv-logo" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5.5" width="10" height="7" rx="1.3"/><rect x="10.5" y="13" width="10" height="6.5" rx="1.3"/><path d="M8.5 12.5v3.5h2"/></svg></span>';
-const DESCRICAO = "Os protótipos do Gil num canvas: as jornadas lado a lado, cada tela no tamanho real, com pinos e post-its que o bot lê.";
+export const DESCRICAO_CANVAS = "Os protótipos do Gil num canvas: as jornadas lado a lado, cada tela no tamanho real, com pinos e post-its que o bot lê.";
 
 export function nivelCanvasDe(app: AppCanvasDto | null, agenteId: string): "nenhum" | NivelCanvasDto {
   return app?.acessos.find((a) => a.agenteId === agenteId)?.nivel ?? "nenhum";
@@ -56,7 +56,7 @@ export function cartaoCanvas(estado: Pick<Estado, "frota" | "sessao">, seleciona
   return `<article class="app-card${instalado ? " sit-conectado" : " sit-nao_conectado"}${selecionado ? " selected" : ""}" data-app-busca="canvas do nod protótipos design telas" id="app-${SLUG_CANVAS}">
     <button type="button" class="app-card-abrir" data-act="abrir-app" data-id="${SLUG_CANVAS}" aria-label="Ver Canvas"></button>
     <div class="app-card-heading">${ICONE_CANVAS}<span class="app-card-nome"><h3>Canvas</h3><small>Do nod</small></span>${pil}</div>
-    <p>${esc(DESCRICAO)}</p>
+    <p>${esc(DESCRICAO_CANVAS)}</p>
     <div class="app-card-actions">${acao}</div>
   </article>`;
 }
@@ -79,7 +79,7 @@ export function gavetaCanvas(estado: Pick<Estado, "frota" | "sessao">): string {
     corpo = `<p class="gaveta-desc">${atual.erro ? "Não deu para ler o Canvas agora." : "Lendo…"}</p>`;
     rodape = "";
   } else if (!instalado) {
-    corpo = `<p class="gaveta-desc">${esc(DESCRICAO)}</p>${niveis}<section class="gaveta-secao"><h3>Como funciona</h3><ol class="como"><li>Instale o Canvas: os dados ficam no nod, nada sai para outro serviço.</li><li>Escolha quais bots podem usar, e com qual nível.</li><li>O bot ganha a página Canvas na pílula e a ferramenta no chat.</li></ol></section>`;
+    corpo = `<p class="gaveta-desc">${esc(DESCRICAO_CANVAS)}</p>${niveis}<section class="gaveta-secao"><h3>Como funciona</h3><ol class="como"><li>Instale o Canvas: os dados ficam no nod, nada sai para outro serviço.</li><li>Escolha quais bots podem usar, e com qual nível.</li><li>O bot ganha a página Canvas na pílula e a ferramenta no chat.</li></ol></section>`;
     rodape = botao("instalar-canvas", "Instalar Canvas", { classe: "pri largo" });
   } else {
     const bots = meusBots(estado);

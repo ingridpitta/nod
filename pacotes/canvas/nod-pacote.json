@@ -1,0 +1,18 @@
+{
+  "formato": 1,
+  "tipo": "app",
+  "slug": "nod/canvas",
+  "nome": "Canvas",
+  "descricao": "Os protótipos do Gil num canvas: as jornadas lado a lado, cada tela no tamanho real, com pinos e post-its que o bot lê.",
+  "autor": { "nome": "nod", "url": "https://nodbot.ai" },
+  "versao": "1.0.0",
+  "nodMinimo": "1.0.0-rc.7",
+  "preco": { "modelo": "gratis" },
+  "permissoes": [
+    { "id": "canvas.ver_comentar", "motivo": "Listar e ler os canvas, comentar nas telas e resolver comentários." },
+    { "id": "canvas.criar_publicar", "motivo": "Criar canvas, publicar versões novas e importar um protótipo já publicado.", "implica": ["canvas.ver_comentar"] }
+  ],
+  "apps_conectados": [],
+  "ferramentas": ["gerir_canvas"],
+  "nativo": true
+}
