@@ -1,8 +1,9 @@
 import type { MotivoFalha, MotivoInterrupcao } from "../contracts/motivos.ts";
 import type { Executor } from "../contracts/evento.ts";
-import type { DesfechoExecucao, ExecucaoQuadro, OrigemExecucao, RecadoQuadro, SaidaTrabalho, VoltaDoTrabalho } from "../contracts/quadro-execucoes.ts";
+import type { DesfechoExecucao, ExecucaoQuadro, OrigemExecucao, QuandoVolta, RecadoQuadro, SaidaTrabalho, VoltaDoTrabalho } from "../contracts/quadro-execucoes.ts";
 import type { EstadoTurno } from "../contracts/turno.ts";
 import type { DesfechoCadeia } from "../domain/quadro-execucoes.ts";
+import { codigoDaTarefa } from "../domain/codigo-tarefa.ts";
 import type { Conn, Escopo } from "../shared/types.ts";
 import { ms, msOuNull } from "./conversao.ts";
 import { pedidoAbertoSql } from "./pedidos-de-colega.repo.ts";
@@ -28,6 +29,7 @@ interface LinhaExecucao {
   nova_tentativa_em: Date | null;
   saida: SaidaTrabalho | null;
   sem_saida: number;
+  etapa: string | null;
   criado_em: Date;
 }
 interface LinhaRecado {
@@ -41,7 +43,7 @@ interface LinhaRecado {
   criado_em: Date;
 }
 
-const COLUNAS = "id, tarefa_id, numero, sessao, agente_id, coluna, origem, turno_id, motivo, desfecho, cancelada_em, tratada_em, nova_tentativa_em, saida, sem_saida, criado_em";
+const COLUNAS = "id, tarefa_id, numero, sessao, agente_id, coluna, origem, turno_id, motivo, desfecho, cancelada_em, tratada_em, nova_tentativa_em, saida, sem_saida, etapa, criado_em";
 const COLUNAS_RECADO = "id, tarefa_id, texto, entregue_em, execucao_id, repassado_por, cancelado_em, criado_em";
 
 const paraExecucao = (l: LinhaExecucao): ExecucaoQuadro => ({
@@ -61,6 +63,7 @@ const paraExecucao = (l: LinhaExecucao): ExecucaoQuadro => ({
   novaTentativaEm: msOuNull(l.nova_tentativa_em),
   saida: l.saida,
   semSaida: l.sem_saida,
+  etapa: l.etapa,
   criadoEm: ms(l.criado_em),
 });
 const paraRecado = (l: LinhaRecado): RecadoQuadro => ({
@@ -74,7 +77,10 @@ const paraRecado = (l: LinhaRecado): RecadoQuadro => ({
   criadoEm: ms(l.criado_em),
 });
 
-export type DesfechoComFrase = DesfechoCadeia & { ultimaFrase: string | null; executor: Executor };
+/** 2026-11-10 (Passo 1): o que segura a cadeia — uma decisão da pessoa ou o pedido a um colega (o resto é o comando de fundo). */
+export type DesfechoComFrase = DesfechoCadeia & { ultimaFrase: string | null; executor: Executor; aguardaPessoa?: boolean; aguardaColega?: boolean;
+  /** 2026-11-11 ("Ver o trabalho"): o nome da máquina do turno mais novo da cadeia que uma máquina pegou (null = nenhuma ainda, ou o Mac do servidor sem chave). */
+  maquina?: string | null };
 
 /** As decisões que ainda seguram uma cadeia (a pessoa responde e a retomada nasce). O "Retomar" de uma queda não conta. */
 const DECISAO_ABERTA = "('pendente', 'reaberta', 'em_revisao')";
@@ -105,13 +111,15 @@ export function quadroExecucoesRepo(conn: Conn, escopo: Escopo) {
         with bot as (select agente_id from turnos where tenant_id = ${escopo.tenantId} and id = ${e.turnoId}),
         antes as (select numero, sessao, agente_id from quadro_execucoes where ${dona()} and tarefa_id = ${e.tarefaId}),
         dele as (select coalesce(a.sessao, a.numero) as sessao from antes a, bot b where a.agente_id = b.agente_id order by a.numero desc limit 1)
-        insert into quadro_execucoes (tenant_id, owner_id, tarefa_id, numero, sessao, agente_id, coluna, origem, turno_id)
+        insert into quadro_execucoes (tenant_id, owner_id, tarefa_id, numero, sessao, agente_id, coluna, origem, turno_id, etapa)
         select ${escopo.tenantId}, ${escopo.pessoaId}, ${e.tarefaId},
           coalesce((select max(numero) from antes), 0) + 1,
           coalesce(case when ${e.origem} <> 'repetir' then (select sessao from dele) end, coalesce((select max(coalesce(sessao, numero)) from antes), 0) + 1),
           (select agente_id from bot),
           (select status from quadro_tarefas where ${dona()} and id = ${e.tarefaId}),
-          ${e.origem}, ${e.turnoId}
+          ${e.origem}, ${e.turnoId},
+          -- 2026-11-10 (ADR-142, #725): a etapa em que o trabalho nasce (o trabalho fica preso a ela); igual à coluna da ADA-10.
+          (select status from quadro_tarefas where ${dona()} and id = ${e.tarefaId})
         on conflict (tenant_id, tarefa_id, turno_id) do nothing
         returning ${conn.unsafe(COLUNAS)}`;
       return l ? paraExecucao(l) : null;
@@ -222,7 +230,7 @@ export function quadroExecucoesRepo(conn: Conn, escopo: Escopo) {
     /** O desfecho da cadeia de cada turno raiz: o vivo, senão o mais recente, com a última fala do agente na cadeia. */
     async desfechos(ids: readonly string[]): Promise<Map<string, DesfechoComFrase>> {
       if (ids.length === 0) return new Map();
-      const ls = await conn<{ raiz: string; atual: string; estado: EstadoTurno; motivo_interrupcao: MotivoInterrupcao | null; motivo_falha: MotivoFalha | null; parado: boolean; despachado_em: Date | null; executor: Executor; frase: string | null; aguardando: boolean }[]>`
+      const ls = await conn<{ raiz: string; atual: string; estado: EstadoTurno; motivo_interrupcao: MotivoInterrupcao | null; motivo_falha: MotivoFalha | null; parado: boolean; despachado_em: Date | null; executor: Executor; frase: string | null; aguardando: boolean; aguarda_pessoa: boolean; aguarda_colega: boolean; maquina: string | null }[]>`
         with recursive desce(raiz, id, n) as (
           select id, id, 0 from turnos where tenant_id = ${escopo.tenantId} and owner_id = ${escopo.pessoaId} and id = any(${conn.array([...ids])}::uuid[])
           union all
@@ -248,10 +256,18 @@ export function quadroExecucoesRepo(conn: Conn, escopo: Escopo) {
           -- Revisão 4 do PR #625: o pedido a um colega (pedir_a_bot) que ainda não voltou também é espera — a resposta
           -- abre a retomada da cadeia. Sem isto o trabalho saía concluído (ou falho, e repetia) com o colega trabalhando.
           or exists (select 1 from mensagens h where h.tenant_id = ${escopo.tenantId}
-            and h.turno_id in (select id from desce where desce.raiz = a.raiz) and ${pedidoAbertoSql(conn, "h")})) as aguardando
+            and h.turno_id in (select id from desce where desce.raiz = a.raiz) and ${pedidoAbertoSql(conn, "h")})) as aguardando,
+        exists (select 1 from decisoes x where x.tenant_id = ${escopo.tenantId} and x.estado in ${conn.unsafe(DECISAO_ABERTA)} and x.tipo <> 'retomar_turno'
+          and x.turno_id in (select id from desce where desce.raiz = a.raiz)) as aguarda_pessoa,
+        exists (select 1 from mensagens h where h.tenant_id = ${escopo.tenantId}
+          and h.turno_id in (select id from desce where desce.raiz = a.raiz) and ${pedidoAbertoSql(conn, "h")}) as aguarda_colega,
+        -- 2026-11-11 ("Ver o trabalho"): a máquina onde o trabalho roda (ou rodou): a do turno mais novo da cadeia que foi pego.
+        (select mt.nome from desce d2 join turnos t2 on t2.tenant_id = ${escopo.tenantId} and t2.id = d2.id
+          join maquina_tokens mt on mt.tenant_id = ${escopo.tenantId} and mt.owner_id = ${escopo.pessoaId} and mt.id = t2.machine_id
+          where d2.raiz = a.raiz and t2.machine_id is not null order by t2.criado_em desc, d2.n desc limit 1) as maquina
         from atual a`;
       return new Map(
-        ls.map((l) => [l.raiz, { estado: l.estado, motivoInterrupcao: l.motivo_interrupcao, motivoFalha: l.motivo_falha, parado: l.parado, turnoAtual: l.atual, despachadoEm: msOuNull(l.despachado_em), aguardando: l.aguardando, executor: l.executor, ultimaFrase: l.frase }]),
+        ls.map((l) => [l.raiz, { estado: l.estado, motivoInterrupcao: l.motivo_interrupcao, motivoFalha: l.motivo_falha, parado: l.parado, turnoAtual: l.atual, despachadoEm: msOuNull(l.despachado_em), aguardando: l.aguardando, aguardaPessoa: l.aguarda_pessoa, aguardaColega: l.aguarda_colega, executor: l.executor, ultimaFrase: l.frase, maquina: l.maquina }]),
       );
     },
     /**
@@ -261,14 +277,14 @@ export function quadroExecucoesRepo(conn: Conn, escopo: Escopo) {
      */
     async voltasDasCadeias(raizes: readonly string[]): Promise<Map<string, VoltaDoTrabalho & { turnoId: string | null }>> {
       if (raizes.length === 0) return new Map();
-      const ls = await conn<{ raiz: string; turno_id: string | null; em: Date | null; quando: "ci" | null; pr_url: string | null; motivo: string | null }[]>`
+      const ls = await conn<{ raiz: string; turno_id: string | null; em: Date | null; quando: QuandoVolta | null; pr_url: string | null; motivo: string | null; tarefa_id: string | null; numero: number | null; linear_id: string | null; prefixo: string | null }[]>`
         with recursive desce(raiz, id, n) as (
           select id, id, 0 from turnos where tenant_id = ${escopo.tenantId} and owner_id = ${escopo.pessoaId} and id = any(${conn.array([...raizes])}::uuid[])
           union all
           select d.raiz, t.id, d.n + 1 from turnos t join desce d on t.tenant_id = ${escopo.tenantId} and t.retoma_turno_id = d.id where d.n < 50
         ),
         dorme as (
-          select distinct on (d.raiz) d.raiz, t.id as turno_id, t.acordar_em as em, t.acordar_quando as quando, t.acordar_pr_url as pr_url,
+          select distinct on (d.raiz) d.raiz, t.id as turno_id, t.acordar_em as em, t.acordar_quando as quando, t.acordar_pr_url as pr_url, t.acordar_tarefa_id as tarefa_id,
             (select m.despertar_motivo from desce d2 join turnos m on m.tenant_id = ${escopo.tenantId} and m.id = d2.id
               where d2.raiz = d.raiz and m.despertar_motivo is not null order by m.criado_em desc limit 1) as motivo
           from desce d join turnos t on t.tenant_id = ${escopo.tenantId} and t.id = d.id
@@ -276,13 +292,20 @@ export function quadroExecucoesRepo(conn: Conn, escopo: Escopo) {
           order by d.raiz, t.acordar_em
         ),
         comando as (
-          select distinct on (d.raiz) d.raiz, null::uuid as turno_id, null::timestamptz as em, null::text as quando, null::text as pr_url, x.motivo
+          select distinct on (d.raiz) d.raiz, null::uuid as turno_id, null::timestamptz as em, null::text as quando, null::text as pr_url, null::uuid as tarefa_id, x.motivo
           from desce d join esperas x on x.tenant_id = ${escopo.tenantId} and x.turno_id = d.id and x.estado = 'rodando'
           where d.raiz not in (select raiz from dorme)
           order by d.raiz, x.criado_em desc
         )
-        select * from dorme union all select * from comando`;
-      return new Map(ls.map((l) => [l.raiz, { turnoId: l.turno_id, em: msOuNull(l.em), quando: l.quando, prUrl: l.pr_url, motivo: l.motivo }]));
+        -- 2026-11-10: a espera por outra tarefa leva o código dela ao card ("Esperando ENG-12").
+        select v.raiz, v.turno_id, v.em, v.quando, v.pr_url, v.motivo, v.tarefa_id, qt.numero, qt.linear_id, qd.prefixo
+        from (select raiz, turno_id, em, quando, pr_url, tarefa_id, motivo from dorme union all select raiz, turno_id, em, quando, pr_url, tarefa_id, motivo from comando) v
+          left join quadro_tarefas qt on qt.tenant_id = ${escopo.tenantId} and qt.id = v.tarefa_id
+          left join quadros qd on qd.tenant_id = ${escopo.tenantId} and qd.id = qt.quadro_id`;
+      return new Map(ls.map((l) => [l.raiz, {
+        turnoId: l.turno_id, em: msOuNull(l.em), quando: l.quando, prUrl: l.pr_url, motivo: l.motivo,
+        ...(l.quando === "tarefa" ? { tarefa: l.tarefa_id ? codigoDaTarefa(l.prefixo, { id: l.tarefa_id, numero: l.numero, linearId: l.linear_id }) : null } : {}),
+      }]));
     },
     /**
      * O Repetir e o Cancelar soltam a cadeia antiga: as decisões abertas dela, também a `em_revisao` do revisor (ADR-115;
@@ -333,10 +356,13 @@ export function quadroExecucoesRepo(conn: Conn, escopo: Escopo) {
       return r.count;
     },
 
-    /** `repassadoPor`: o bot que repassou o pedido da pessoa feito na conversa (null = ela, pela tela). */
-    async inserirRecado(tarefaId: string, texto: string, repassadoPor: string | null = null): Promise<RecadoQuadro> {
+    /**
+     * `repassadoPor`: o bot que repassou o pedido da pessoa feito na conversa (null = ela, pela tela). `comentarioId`
+     * (0169): o "manda agora" de um comentário (o recibo dele lê a entrega).
+     */
+    async inserirRecado(tarefaId: string, texto: string, repassadoPor: string | null = null, comentarioId: string | null = null): Promise<RecadoQuadro> {
       const [l] = await conn<LinhaRecado[]>`
-        insert into quadro_recados (tenant_id, owner_id, tarefa_id, texto, repassado_por) values (${escopo.tenantId}, ${escopo.pessoaId}, ${tarefaId}, ${texto}, ${repassadoPor})
+        insert into quadro_recados (tenant_id, owner_id, tarefa_id, texto, repassado_por, comentario_id) values (${escopo.tenantId}, ${escopo.pessoaId}, ${tarefaId}, ${texto}, ${repassadoPor}, ${comentarioId})
         returning ${conn.unsafe(COLUNAS_RECADO)}`;
       return paraRecado(l!);
     },
@@ -378,6 +404,32 @@ export function quadroExecucoesRepo(conn: Conn, escopo: Escopo) {
             and e.cancelada_em is null and e.turno_id in (select id from sobe))`;
       return r.count;
     },
+    /** 2026-11-10 (0169): as tarefas dos recados de comentário já lidos entre estes ids (o recibo muda: quadro.mudou). */
+    async tarefasDosRecadosLidos(ids: readonly string[]): Promise<string[]> {
+      if (ids.length === 0) return [];
+      const ls = await conn<{ tarefa_id: string }[]>`
+        select distinct tarefa_id from quadro_recados where ${dona()} and id = any(${conn.array([...ids])}::uuid[]) and comentario_id is not null and entregue_em is not null`;
+      return ls.map((l) => l.tarefa_id);
+    },
+    /**
+     * 2026-11-10 (0169): o recibo de cada comentário que mandou recado — o agente (o do turno que leu, senão o responsável
+     * da tarefa) e o estado do recado. `aguardando` aqui é "ainda não lido": quem lê os runs decide se ainda dá para ler.
+     */
+    async recibosDosComentarios(tarefaId: string): Promise<Map<string, { agenteId: string | null; lido: boolean; cancelado: boolean; entregueEm: number | null; turnoId: string | null }>> {
+      const ls = await conn<{ comentario_id: string; agente_id: string | null; entregue_em: Date | null; cancelado: boolean; turno_id: string | null }[]>`
+        select distinct on (r.comentario_id) r.comentario_id, coalesce(t.agente_id, qt.agente_id) as agente_id, r.entregue_em, r.cancelado_em is not null as cancelado, r.entregue_turno_id as turno_id
+        from quadro_recados r
+        join quadro_tarefas qt on qt.tenant_id = r.tenant_id and qt.id = r.tarefa_id
+        left join turnos t on t.tenant_id = r.tenant_id and t.id = r.entregue_turno_id
+        where r.tenant_id = ${escopo.tenantId} and r.owner_id = ${escopo.pessoaId} and r.tarefa_id = ${tarefaId} and r.comentario_id is not null
+        order by r.comentario_id, r.criado_em desc`;
+      return new Map(ls.map((l) => [l.comentario_id, { agenteId: l.agente_id, lido: l.entregue_em !== null, cancelado: l.cancelado, entregueEm: msOuNull(l.entregue_em), turnoId: l.turno_id }]));
+    },
+    /** 2026-11-10: "Mandar como run novo": o recado do comentário que não entrou sai da fila (o comentário vira um run). */
+    async cancelarRecadoDoComentario(comentarioId: string): Promise<number> {
+      const r = await conn`update quadro_recados set cancelado_em = clock_timestamp() where ${dona()} and comentario_id = ${comentarioId} and ${pendente()}`;
+      return r.count;
+    },
     /** Os pendentes entram no pedido de um turno (o trabalho novo, ou o da fila): saem da fila, lidos por ele. */
     async levarRecados(tarefaId: string, execucaoId: string, turnoId: string, ids: readonly string[]): Promise<void> {
       if (ids.length === 0) return;
@@ -400,6 +452,10 @@ export function quadroExecucoesRepo(conn: Conn, escopo: Escopo) {
       if (ids.length === 0) return;
       await conn`update quadro_recados set entregue_em = null
         where ${dona()} and tarefa_id = ${tarefaId} and id = any(${conn.array([...ids])}::uuid[]) and execucao_id is null and entregue_turno_id is null`;
+    },
+    async cancelarRecadosDeComentario(tarefaId: string): Promise<number> {
+      const r = await conn`update quadro_recados set cancelado_em = clock_timestamp() where ${dona()} and tarefa_id = ${tarefaId} and comentario_id is not null and ${pendente()}`;
+      return r.count;
     },
     async cancelarRecados(tarefaId: string): Promise<number> {
       const r = await conn`update quadro_recados set cancelado_em = clock_timestamp() where ${dona()} and tarefa_id = ${tarefaId} and ${pendente()}`;

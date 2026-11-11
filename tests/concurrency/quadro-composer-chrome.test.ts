@@ -805,39 +805,43 @@ descrever("ADA-5: a pílula é o composer (Chrome real)", () => {
     expect(await avaliar(cdp, `sessionStorage.getItem(${JSON.stringify(`r:${k}`)})`)).toBe(null);
   });
 
-  it("QA (M11, M12): o recado aceito com a troca de tarefa no meio sai do rascunho; o digitado durante o voo fica", async () => {
+  // 2026-11-10 (#725, a linha do tempo do Multica): o bloco "Execuções" e o campo do recado saíram da tarefa aberta; o
+  // que a pessoa diz ao agente é o comentário da linha do tempo. M11 e M12 valem agora para ele.
+  it("QA (M11, M12): o comentário aceito com a troca de tarefa no meio sai do rascunho; o digitado durante o voo fica", async () => {
     await abrir();
     await avaliar(cdp, `window.__q.abrirTarefa("a", "t1")`);
-    const sel = "#qd-trab-recado";
-    await ate(`document.querySelector(${JSON.stringify(sel)})`);
+    const sel = "#quadro [data-form=comentar-tarefa] textarea";
+    const deT1 = '#quadro [data-form=comentar-tarefa][data-id="t1"] textarea';
+    await ate(`document.querySelector(${JSON.stringify(deT1)})`);
+    expect(await avaliar<boolean>(cdp, `!document.querySelector("#qd-trab-recado")`)).toBe(true);
     await focar(sel);
-    await digitar("recado um");
+    await digitar("comentário um");
     const k = await avaliar<string>(cdp, `document.querySelector(${JSON.stringify(sel)}).dataset.rascunho`);
     expect(k).toBeTruthy();
     await segurar();
     await avaliar(cdp, `document.querySelector(${JSON.stringify(sel)}).form.requestSubmit()`);
-    await ate(`window.__chamadas.some((c) => c[0] === "recado")`);
-    // A pessoa troca de tarefa no meio do envio: o campo do recado de t1 sai da tela.
+    await ate(`window.__chamadas.filter((c) => c[0] === "comentar").length === 1`);
+    // A pessoa troca de tarefa no meio do envio: o campo do comentário de t1 sai da tela.
     await avaliar(cdp, `window.__q.abrirTarefa("a", "t2")`);
-    await ate(`document.querySelector('#quadro .qd-trab-form[data-id="t2"]')`);
+    await ate(`document.querySelector('#quadro [data-form=comentar-tarefa][data-id="t2"]')`);
     await soltar();
     await esperar(150);
     expect(await avaliar(cdp, `sessionStorage.getItem(${JSON.stringify(`r:${k}`)})`)).toBe(null);
     // M12: o digitado durante o voo fica no rascunho.
     await avaliar(cdp, `window.__q.abrirTarefa("a", "t1")`);
-    await ate(`document.querySelector(${JSON.stringify(sel)})`);
+    await ate(`document.querySelector(${JSON.stringify(deT1)})`);
     await focar(sel);
-    await digitar("recado dois");
+    await digitar("comentário dois");
     await segurar();
     await avaliar(cdp, `document.querySelector(${JSON.stringify(sel)}).form.requestSubmit()`);
-    await ate(`window.__chamadas.filter((c) => c[0] === "recado").length === 2`);
-    // ADA-4: o campo do recado esvaziou no envio (otimista); o digitado no voo é o recado seguinte.
+    await ate(`window.__chamadas.filter((c) => c[0] === "comentar").length === 2`);
+    // ADA-4: o campo esvaziou no envio (otimista); o digitado no voo é o comentário seguinte.
     expect(await valor(sel)).toBe("");
     await focar(sel);
     await digitar("e três");
     // ...e troca de tarefa antes da volta: o campo sai da tela, e o texto novo fica no rascunho de t1.
     await avaliar(cdp, `window.__q.abrirTarefa("a", "t2")`);
-    await ate(`document.querySelector('#quadro .qd-trab-form[data-id="t2"]')`);
+    await ate(`document.querySelector('#quadro [data-form=comentar-tarefa][data-id="t2"]')`);
     await soltar();
     await esperar(150);
     expect(await avaliar(cdp, `sessionStorage.getItem(${JSON.stringify(`r:${k}`)})`)).toBe("e três");

@@ -569,6 +569,24 @@ export function proximaDaEtapa(colunas: readonly ColunaQuadro[], status: IdColun
   return proximaColuna(colunas, status);
 }
 
+/**
+ * Definido em 2026-11-10 (lição MUL-8231, o `handlerlessSpan` do Multica): numa coluna sem responsável, a tarefa segue com
+ * quem está até a próxima etapa que tem responsável (ou até o Feito). O turno diz isso ao bot, senão ele para no meio
+ * esperando alguém pegar. null = a coluna tem responsável, ou não há para onde seguir.
+ */
+export function ateEtapa(colunas: readonly ColunaQuadro[], status: IdColuna, agenteId: string | null): IdColuna | null {
+  const c = colunas.find((x) => x.id === status);
+  if (!c || c.responsavel) return null;
+  const vistos = new Set<IdColuna>([status]);
+  for (let id = proximaDaEtapa(colunas, status, agenteId); id && !vistos.has(id); id = proximaColuna(colunas, id)) {
+    const x = colunas.find((k) => k.id === id);
+    if (!x) return null;
+    if (x.responsavel || x.grupo === "feito") return id;
+    vistos.add(id);
+  }
+  return null;
+}
+
 /** "Precisa de ajustes" da tarefa: a volta da etapa em que ela está (null = não há para onde devolver). */
 export function voltaDaEtapa(colunas: readonly ColunaQuadro[], status: IdColuna, agenteId: string | null): IdColuna | null {
   const etapa = etapaDaColuna(colunas, status, agenteId) ?? status;

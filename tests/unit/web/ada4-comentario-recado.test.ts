@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { ComentarioDto } from "../../../src/contracts/quadro.ts";
+import type { ComentarioDto, TarefaDto } from "../../../src/contracts/quadro.ts";
 import type { ExecucaoDto, ExecucoesDaTarefa } from "../../../src/contracts/quadro-execucoes.ts";
 import { criarComentariosNaTela, type ApiDosComentarios } from "../../../web/lib/comentarios-na-tela.ts";
 import { criarTrabalhosDaTarefa, type ApiDosTrabalhos } from "../../../web/lib/trabalhos-da-tarefa.ts";
-import { comentariosDaTarefa } from "../../../web/telas/comentarios-tarefa.ts";
+import { linhaDoTempo } from "../../../web/telas/linha-do-tempo.ts";
 import { secaoDoTrabalho } from "../../../web/telas/trabalhos-da-tarefa.ts";
 import type { AgenteDoQuadro } from "../../../web/telas/quadro-real.ts";
 import { confiar } from "../../../web/telas/quadro.ts";
@@ -17,6 +17,9 @@ const hora = () => "10:00";
 const agente: AgenteDoQuadro = () => ({ avatar: confiar("<i></i>"), nome: "Ada" });
 const esperar = () => new Promise((r) => setTimeout(r, 5));
 const adiado = <T>() => { let ok!: (v: T) => void; let falha!: (e: unknown) => void; const p = new Promise<T>((a, b) => { ok = a; falha = b; }); return { p, ok, falha }; };
+/** 2026-11-10: a tarefa aberta desenha os comentários pela linha do tempo (o comentarios-tarefa.ts antigo saiu). */
+const TAR = { id: "tar", quadroId: "q", titulo: "T", descricao: "", status: "fazendo", agenteId: "ada", movimentos: [], linhas: [] } as unknown as TarefaDto;
+const htmlDe = (c: { partes: (t: TarefaDto, o: { colunas: never[]; agente: AgenteDoQuadro; nomes: string[]; passos: () => null }) => { linha: string } | undefined }): string | undefined => c.partes(TAR, { colunas: [], agente, nomes: [], passos: () => null })?.linha;
 const com = (id: string, texto: string): ComentarioDto => ({ id, quadroId: "q", tarefaId: "tar", autor: { tipo: "pessoa" } as ComentarioDto["autor"], texto, deFora: false, criadoEm: 0, autorNome: null, acionados: [] });
 
 /** O campo e o form como a tela: o mesmo campo está no form e no documento (o redesenho o mantém, aqui). */
@@ -47,8 +50,8 @@ describe("ADA-4: comentário otimista", () => {
     const f = formDe("  Ver o deploy ");
     const ida = m.c.enviar(f.form);
     expect(f.campo.value).toBe("");
-    expect(m.c.html("tar", agente, hora)).toContain("qd-com-pendente");
-    expect(m.c.html("tar", agente, hora)).toContain("enviando");
+    expect(htmlDe(m.c)).toContain("qd-com-pendente");
+    expect(htmlDe(m.c)).toContain("enviando");
     // Duplo Enter com outro texto já digitado: travado enquanto o primeiro voa.
     const f2 = formDe("de novo");
     expect(await m.c.enviar(f2.form)).toBeNull();
@@ -56,7 +59,7 @@ describe("ADA-4: comentário otimista", () => {
     m.proxima().ok({ quadro: null });
     await ida;
     expect(m.posts).toEqual(["Ver o deploy"]);
-    const h = m.c.html("tar", agente, hora)!;
+    const h = htmlDe(m.c)!;
     expect(h).not.toContain("qd-com-pendente");
     expect(h).toContain("Ver o deploy");
   });
@@ -69,7 +72,7 @@ describe("ADA-4: comentário otimista", () => {
     m.proxima().falha(rede());
     expect(await ida).toBeNull();
     expect(f.campo.value).toBe("Comentário X");
-    const h = m.c.html("tar", agente, hora)!;
+    const h = htmlDe(m.c)!;
     expect(h).toContain("Não saiu.");
     expect(h).toContain('data-act="com-tentar"');
     // Com o pendente falho, um novo Enter pode sair (não trava para sempre).
@@ -79,7 +82,7 @@ describe("ADA-4: comentário otimista", () => {
     m.proxima().ok({ quadro: null });
     await t;
     expect(m.posts).toEqual(["Comentário X", "Comentário X"]);
-    expect(m.c.html("tar", agente, hora)).not.toContain("Não saiu.");
+    expect(htmlDe(m.c)).not.toContain("Não saiu.");
   });
 
   it("a falha não pisa no que a pessoa já começou a digitar", async () => {
@@ -116,17 +119,18 @@ describe("ADA-4: comentário otimista", () => {
     await ida;
     leituras.shift()!.ok({ comentarios: [] });
     await doFrame;
-    const h = c.html("tar", agente, hora)!;
+    const h = htmlDe(c)!;
     expect(h).toContain("Junto do frame");
     expect(h).not.toContain("qd-com-pendente");
     post = adiado();
   });
 
   it("a tela: pendente sem lista não diz 'Nenhum comentário'; o texto é escapado", () => {
-    const h = comentariosDaTarefa({ tarefaId: "tar", lista: [], carga: "ok", agente, hora, pendente: { texto: "<b>x</b>", falhou: false } });
+    const linha = (carga: "ok" | "carregando", pendente: { texto: string; falhou: boolean }) => linhaDoTempo({ t: TAR, colunas: [], comentarios: [], runs: [], agente, agora: 0, nomes: [], respondendo: null, editando: null, abertos: new Set(), passos: () => null, chips: () => "", pendente, criadaPor: null, criadaEm: null, carga });
+    const h = linha("ok", { texto: "<b>x</b>", falhou: false });
     expect(h).not.toContain("Nenhum comentário ainda.");
     expect(h).toContain("&lt;b&gt;x&lt;/b&gt;");
-    expect(comentariosDaTarefa({ tarefaId: "tar", lista: [], carga: "carregando", agente, hora, pendente: { texto: "y", falhou: true } })).not.toContain("Carregando…");
+    expect(linha("carregando", { texto: "y", falhou: true })).not.toContain("Carregando…");
   });
 });
 
@@ -255,7 +259,7 @@ describe("ADA-4: revisão 2 — comentário que não trava", () => {
     await esperar();
     lerFalha = true;
     await c.enviar(formDe("Primeiro").form);
-    expect(c.html("tar", agente, hora)).not.toContain("qd-com-pendente");
+    expect(htmlDe(c)).not.toContain("qd-com-pendente");
     const f2 = formDe("Segundo");
     await c.enviar(f2.form);
     expect(posts).toEqual(["Primeiro", "Segundo"]);
@@ -272,7 +276,7 @@ describe("ADA-4: revisão 2 — comentário que não trava", () => {
     const f = formDe("Preso");
     expect(await c.enviar(f.form)).toBeNull();
     expect(f.campo.value).toBe("Preso");
-    expect(c.html("tar", agente, hora)).toContain("pode ter saído");
+    expect(htmlDe(c)).toContain("pode ter saído");
   });
 });
 
@@ -289,7 +293,7 @@ describe("ADA-4: revisão 3 — prazo vencido sem duplicata", () => {
     await esperar();
     const f = formDe("Chegou");
     expect(await c.enviar(f.form)).toBeNull();
-    const h = c.html("tar", agente, hora) ?? "";
+    const h = htmlDe(c) ?? "";
     expect(h).not.toContain('data-act="com-tentar"');
     expect(h).not.toContain("qd-com-pendente");
     expect(h).toContain("Chegou");
@@ -313,7 +317,7 @@ describe("ADA-4: revisão 4 — comentário e recado que não se perdem", () => 
     await esperar();
     const ida = c.enviar(formDe("ok").form);
     await c.reler(); // o quadro.mudou de outro lugar relê no meio
-    expect(c.html("tar", agente, hora)).toContain("qd-com-pendente");
+    expect(htmlDe(c)).toContain("qd-com-pendente");
     expect(await c.enviar(formDe("ok").form)).toBeNull();
     expect(posts).toEqual(["ok"]);
     post.ok({ quadro: null });
@@ -330,7 +334,7 @@ describe("ADA-4: revisão 4 — comentário e recado que não se perdem", () => 
     await esperar();
     const f = formDe("ok");
     await c.enviar(f.form);
-    expect(c.html("tar", agente, hora)).toContain("pode ter saído");
+    expect(htmlDe(c)).toContain("pode ter saído");
     expect(f.campo.value).toBe("ok");
   });
 
@@ -346,7 +350,7 @@ describe("ADA-4: revisão 4 — comentário e recado que não se perdem", () => 
     await ida;
     c.abrir("ag", "tar");
     await esperar();
-    const h = c.html("tar", agente, hora)!;
+    const h = htmlDe(c)!;
     expect(h).toContain("Não me perca");
     expect(h).toContain('data-act="com-tentar"');
   });
@@ -477,11 +481,11 @@ describe("ADA-4: revisão 8 — falhou na tela, troca e volta; prazo vencido sem
       c.abrir("ag", "tar");
       await esperar();
       await c.enviar(formDe("Fica comigo").form);
-      expect(c.html("tar", agente, hora)).toContain('data-act="com-tentar"');
+      expect(htmlDe(c)).toContain('data-act="com-tentar"');
       if (sair === "trocar") c.abrir("ag", "outra"); else c.fechar();
       c.abrir("ag", "tar");
       await esperar();
-      const h = c.html("tar", agente, hora)!;
+      const h = htmlDe(c)!;
       expect(h).toContain("Fica comigo");
       expect(h).toContain('data-act="com-tentar"');
     }
@@ -496,12 +500,12 @@ describe("ADA-4: revisão 8 — falhou na tela, troca e volta; prazo vencido sem
     await esperar();
     const f = formDe("Tardio");
     await c.enviar(f.form);
-    expect(c.html("tar", agente, hora)).not.toContain('data-act="com-tentar"');
+    expect(htmlDe(c)).not.toContain('data-act="com-tentar"');
     expect(await c.tentar(f.doc as unknown as Document)).toBeNull();
     expect(posts).toHaveLength(1);
     lista.push(com("c1", "Tardio"));
     await c.reler();
-    expect(c.html("tar", agente, hora)).not.toContain("qd-com-pendente");
+    expect(htmlDe(c)).not.toContain("qd-com-pendente");
   });
 
   it("recado: falha com a pessoa na tarefa (o texto voltou ao campo e foi editado), ela troca e reabre: o editado volta", async () => {
@@ -557,7 +561,7 @@ describe("ADA-4: revisão 9 — rede real e dúvida que chega", () => {
     expect(f.campo.value).toBe("Chega tarde");
     lista.push(com("c1", "Chega tarde"));
     await c.reler();
-    expect(c.html("tar", agente, hora)).not.toContain("qd-com-pendente");
+    expect(htmlDe(c)).not.toContain("qd-com-pendente");
     expect(f.campo.value).toBe("");
   });
 });

@@ -205,6 +205,8 @@ describeIntegracao("aprovação da pessoa no chat vale no quadro (ADA-15)", () =
   it("vale no quadro de qualquer bot da dona e com avancar segue para a próxima coluna", async () => {
     await withRollback(MARLON, async (trx) => {
       const m = await montar(trx);
+      // P2 (10/11): a resposta volta à coluna de onde a pergunta saiu; aqui, Fazendo (avancar segue para Em revisão).
+      await trx`update quadro_tarefas set voltar_para = 'fazendo' where id = ${(await m.tarefa()).id}`;
       const f = await m.fala(`${m.codigo} aprovado, pode seguir`);
       const t = await m.turno({ mensagemId: f.id });
       const r = await m.gerir(t.id, [m.responder({ avancar: true })]);
@@ -222,6 +224,8 @@ describeIntegracao("aprovação da pessoa no chat vale no quadro (ADA-15)", () =
     await withRollback(MARLON, async (trx) => {
       const m = await montar(trx);
       expect((await m.pessoa([{ tipo: "definir_passagem", coluna: "revisao", agente: m.nomeEng } as OpQuadro])).data).toMatchObject({ ok: true });
+      // P2 (10/11): a resposta volta à coluna de onde a pergunta saiu; aqui, Fazendo (avancar segue para Em revisão).
+      await trx`update quadro_tarefas set voltar_para = 'fazendo' where id = ${(await m.tarefa()).id}`;
       const f = await m.fala(`${m.codigo} aprovado, pode seguir`);
       const t = await m.turno({ mensagemId: f.id });
       const r = await m.gerir(t.id, [m.responder({ avancar: true })]);

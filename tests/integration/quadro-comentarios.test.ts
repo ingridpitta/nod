@@ -3,7 +3,7 @@ import type { OpQuadro } from "../../src/contracts/quadro.ts";
 import { vincularEscopo } from "../../src/db/tx.ts";
 import { criarRepos } from "../../src/repositories/index.ts";
 import type { Tx } from "../../src/shared/types.ts";
-import { comentarTarefa, verComentarios } from "../../src/use-cases/comentar-tarefa.ts";
+import { comentarTarefa, previaComentario, verComentarios } from "../../src/use-cases/comentar-tarefa.ts";
 import { enviarMensagem } from "../../src/use-cases/enviar-mensagem.ts";
 import { entregarRespostaPeer } from "../../src/use-cases/entregar-resposta-peer.ts";
 import { pedirABot } from "../../src/use-cases/pedir-a-bot.ts";
@@ -55,6 +55,21 @@ async function pedidoNaTarefa(m: Awaited<ReturnType<typeof montar>>) {
 }
 
 describeIntegracao("comentários da tarefa do quadro (NOD-417)", () => {
+  it("2026-11-10: /note fica gravado e não aciona ninguém, nem o responsável nem a @menção; a prévia diz 'nota, não aciona'", async () => {
+    await withRollback(MARLON, async (trx) => {
+      const m = await montar(trx);
+      await m.emAndamento();
+      const r = await m.comentar(`/note @${m.anaNome} lembrar do azul`);
+      if (!r.data.ok) throw new Error(r.data.detalhe);
+      expect(r.data.comecaram).toEqual([]);
+      expect(await m.pendentesDe(m.beto.agenteId)).toEqual([]);
+      expect(await m.pendentesDe(m.ana.agenteId)).toEqual([]);
+      expect(r.data.comentario?.texto).toBe(`/note @${m.anaNome} lembrar do azul`);
+      const previa = (await previaComentario(m.deps, { agenteId: m.ana.agenteId, tarefaId: (await m.tarefa()).id, texto: "/note só pra mim" })).data;
+      expect(previa).toMatchObject({ chips: [], nada: "nota, não aciona" });
+    });
+  });
+
   it("o comentário da pessoa aciona o responsável com o comentário no contexto, sem mudar a tarefa", async () => {
     await withRollback(MARLON, async (trx) => {
       const m = await montar(trx);

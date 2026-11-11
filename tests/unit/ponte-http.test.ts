@@ -180,6 +180,20 @@ describe("desktop: fronteiras HTTP", () => {
     await c.ponte.renovar({ ...pedido, turnoId: "outro" });
     expect(JSON.parse(String(f.mock.calls[2]?.[1]?.body)).trechos).toEqual([{ texto: "de outro turno" }]);
   });
+  it("ADR-165: a ferramenta sai com o resumo do argumento, redigido de novo na saída e com o teto do executor (120)", async () => {
+    const f = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ ativo: true, versaoMinimaApp: "0.1.0" })));
+    const c = criarPonteHttp({ url: "https://nod.example", chave: "k", versao: "0.1.0", fetchImpl: f });
+    c.ferramenta("x", "Bash", "t1", `deploy --token=abcdefgh123 ${"y".repeat(300)}`);
+    c.ferramenta("x", "Read", "t2");
+    c.ferramenta("x", "Grep", undefined, "turno\\.atividade");
+    await c.ponte.renovar({ turnoId: "x", machineId: "y", sinais: { attempted: true, rejected: false, promptSubmitted: true, producedOutput: true }, eventos: [] });
+    const [bash, read, grep] = JSON.parse(String(f.mock.calls[0]?.[1]?.body)).trechos as { ferramenta: string; id?: string; resumo?: string }[];
+    expect(bash).toMatchObject({ ferramenta: "Bash", id: "t1" });
+    expect(bash!.resumo).not.toContain("abcdefgh123");
+    expect(Array.from(bash!.resumo!).length).toBe(120);
+    expect(read).toEqual({ ferramenta: "Read", id: "t2" });
+    expect(grep).toEqual({ ferramenta: "Grep", resumo: "turno\\.atividade" });
+  });
   it("vigia (NOD-73): o aviso novo substitui o que ainda não saiu; o servidor só aceita nome e números", async () => {
     const f = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ ativo: true, versaoMinimaApp: "0.1.0" })));
     const c = criarPonteHttp({ url: "https://nod.example", chave: "k", versao: "0.1.0", fetchImpl: f });

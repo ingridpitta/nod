@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { TarefaDto } from "../../../src/contracts/quadro.ts";
-import { agentesComTarefa, chipsDaBarra, contarNaVista, ehFiltro, fraseDoVazio, marcar, normalizar, passaNaBusca, passaNoFiltro, termoDaBusca } from "../../../web/lib/vista-do-quadro.ts";
+import { agentesComTarefa, chipsDaBarra, contarNaVista, ehComigo, ehFiltro, fraseDoVazio, marcar, normalizar, passaNaBusca, passaNoFiltro, termoDaBusca, trabalhandoAgora } from "../../../web/lib/vista-do-quadro.ts";
+import { camposDoFiltro } from "../../../web/lib/campos-do-filtro.ts";
 
 /** NOD-460: o filtro rápido e a busca do quadro em tela cheia, sem DOM. */
 
@@ -130,5 +131,32 @@ describe("vista do quadro: o vazio inline (sem modal)", () => {
     expect(fraseDoVazio("trabalhando", "", nome)).toBe("Ninguém está trabalhando agora.");
     expect(fraseDoVazio("agente:x", "", nome)).toBe("Faustino não tem tarefa neste quadro.");
     expect(fraseDoVazio("todos", "", nome)).toBeNull();
+  });
+});
+
+describe("T5: trabalhando e comigo com uma regra só (comparação Multica × nod, 2026-11-10)", () => {
+  const funil = camposDoFiltro();
+  const ctx = { pessoaId: "p1", dona: true, agora: 0, colunas: [{ id: "rev", trava: { soPessoa: true } }] };
+  const base = { status: "fazendo", decide: null, agenteId: "a", esperaPessoa: false } as const;
+  const casos = [
+    { execucao: "rodando" as const, estadoLinha: null },
+    { execucao: null, estadoLinha: { tipo: "trabalhando" as const } },
+    { execucao: "fila" as const, estadoLinha: null },
+    { execucao: null, estadoLinha: null },
+  ];
+  it("o filtro rápido e o funil contam o mesmo que trabalhandoAgora (a frente aberta conta)", () => {
+    const agente = funil.find((d) => d.campo === "agente")!;
+    for (const c of casos) {
+      const t = { ...base, ...c } as Parameters<typeof agente.passa>[0];
+      expect(passaNoFiltro(t, "trabalhando")).toBe(trabalhandoAgora(t));
+      expect(agente.passa(t, "rodando", ctx)).toBe(trabalhandoAgora(t));
+    }
+    expect(trabalhandoAgora({ execucao: null, estadoLinha: { tipo: "trabalhando" } as never })).toBe(true);
+  });
+  it("o funil 'Esperando por mim' é o mesmo Comigo (Bloqueado e 'só a pessoa' contam)", () => {
+    const rel = funil.find((d) => d.campo === "relacao")!;
+    for (const t of [{ ...base, status: "bloqueado" }, { ...base, status: "rev" }, { ...base, esperaPessoa: true }, base]) {
+      expect(rel.passa(t as Parameters<typeof rel.passa>[0], "comigo", ctx)).toBe(ehComigo(t, ctx.colunas));
+    }
   });
 });

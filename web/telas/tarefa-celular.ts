@@ -18,15 +18,14 @@ import { esc } from "../lib/escape.ts";
 import { fraseDoMovimento, porqueNaoDesfaz } from "../lib/freios.ts";
 import { NOME_DO_STATUS, type Status } from "../lib/quadro.ts";
 import { codigoDaTarefa, linhaDoHistorico } from "../lib/quadro-dados.ts";
-import type { CargaDosComentarios } from "./comentarios-tarefa.ts";
-import { LIMITE_COMENTARIO } from "./comentarios-tarefa.ts";
+import { LIMITE_COMENTARIO, type CargaDosComentarios } from "./linha-do-tempo.ts";
 import { esperandoOutro, formResposta, fusoDoAparelho, type AgenteDoQuadro } from "./quadro-real.ts";
 import { secaoDeLabelEPrazoCelular } from "./campos-da-tarefa.ts";
+import { avisoDeParada } from "./acoes-da-tarefa.ts";
 import { anel, avatar, confiar, ICONE, ICONE_DO_STATUS, type Html } from "./quadro.ts";
+import { iconeDaPrioridade } from "./opcoes-quadro.ts";
+import { NOME_DA_PRIORIDADE, prioridadeDe } from "../lib/opcoes-do-quadro.ts";
 import { logDoTrabalho, passosDoTrabalho, vivo, type VistaDoTrabalho } from "./trabalhos-da-tarefa.ts";
-
-/** S1 (ADA-17): a tarefa não tem prazo no modelo; o chip Prazo fica atrás desta flag, desligada, até o follow-up. */
-export const PRAZO_DA_TAREFA = false;
 
 export type DadosDosComentarios = {
   lista: readonly ComentarioDto[];
@@ -54,8 +53,17 @@ export type VistaDaTarefaCelular = {
   /** A mudança que não salvou (status ou responsável): "Não salvou. Voltou para Fazendo." + Tentar de novo. */
   naoSalvou?: QualTroca | null;
   agora?: number;
-  /** 0159: o fuso de quem lê (o prazo da tarefa). Sem ele, o do aparelho. */
+  /** 0161: o fuso de quem lê (o prazo da tarefa). Sem ele, o do aparelho. */
   fuso?: string;
+  /**
+   * 2026-11-10: a MESMA linha do tempo do computador (web/telas/linha-do-tempo.ts: runs de todos os agentes, modos dos
+   * chips, custo, editar/apagar, o campo de comentário único no fim) e o chip "trabalhando" do topo. Com ela, a lista e o
+   * composer próprios do celular saem; sem ela (a API sem comentários), ficam como eram.
+   */
+  linha?: string;
+  topo?: string;
+  /** 2026-11-11: os diálogos da linha do tempo ("Ver o trabalho", o Registro de execução), os mesmos do computador. */
+  dialogo?: string;
 };
 
 const ENVIAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>';
@@ -114,6 +122,7 @@ export function citacaoDe(texto: string): { cita: { nome: string; trecho: string
 /** Quem escreveu o comentário (o mesmo critério da lista do computador, NOD-422/NOD-430). */
 export function autorDoComentario(c: ComentarioDto, agente: AgenteDoQuadro): { avatar: string; nome: string } {
   if (c.autor.tipo === "linear") return { avatar: anel((c.autorNome ?? "L").slice(0, 1), c.autorNome ?? "Linear", false), nome: `${c.autorNome ?? "Linear"} · no Linear` };
+  if (c.autor.tipo === "pessoa" && c.pedidoPor) return { avatar: anel((c.autorNome ?? "?").slice(0, 1), c.autorNome ?? "Alguém do quadro", false), nome: c.autorNome ?? "Alguém do quadro" };
   if (c.autor.tipo === "pessoa") return { avatar: anel("V", "Você", true), nome: "Você" };
   // ADR-162: a explicação do próprio quadro (a espera que ele deixou com você).
   if (c.autor.tipo === "sistema") return { avatar: anel("Q", "Quadro", false), nome: "Quadro" };
@@ -265,7 +274,8 @@ export function bandejaDeChips(v: VistaDaTarefaCelular): string {
     chip("qd-t-status", "status", `${icSt}<span>${esc(nomeSt)}</span>`, `Status: ${nomeSt}`),
     resp ? chip("qd-t-resp", "resp", `${avatar({ avatar: resp.avatar, nome: resp.nome, estado: t.execucao })}<span>${esc(resp.nome)}</span>`, `Responsável: ${resp.nome}`, false, !podeResp)
       : chip("qd-t-resp", "resp", `<span>Sem responsável</span>`, "Responsável: ninguém", true, !podeResp),
-    PRAZO_DA_TAREFA ? chip("qd-t-prazo", "prazo", `<span>Sem prazo</span>`, "Prazo: nenhum", true) : "",
+    // 2026-11-11: a Prioridade como no computador (à vista quando preenchida; vazia, mora em Ajustes): abre a folha dela.
+    prioridadeDe(t) !== "sem" ? chip("qd-t-prioridade", "prioridade", `${iconeDaPrioridade(prioridadeDe(t), false)}<span>${esc(NOME_DA_PRIORIDADE[prioridadeDe(t)])}</span>`, `Prioridade: ${NOME_DA_PRIORIDADE[prioridadeDe(t)]}`) : "",
     t.branch ? chip("qd-t-branch", "branch", `${BRANCH}<span class="qd-chip-branch">${esc(t.branch)}</span>`, `Branch: ${t.branch}`) : "",
     chip("qd-t-ajustes", "ajustes", `${AJUSTES}<span>Ajustes</span>`, "Ajustes da tarefa"),
   ].join("");
@@ -297,15 +307,16 @@ export function tarefaAbertaCelular(v: VistaDaTarefaCelular): Html {
   // ADR-162: a pergunta do bot ("Ada te perguntou"); responder aqui ou comentar dá no mesmo.
   // 2026-11-10 (pedido do Marlon, como o Multica): com os comentários na tela, a pergunta é o comentário do bot; aqui fica
   // só a linha discreta "Esperando você responder" (o composer responde). Sem eles, o bloco de antes (ADR-162).
-  const esperaNaLinha = t.esperaPessoa && !outro && !!v.coms;
-  const pergunta = esperaNaLinha ? `<p class="qd-t-espera"><span aria-hidden="true">🔔</span> Esperando você responder · a pergunta está nos comentários</p>`
+  const esperaNaLinha = t.esperaPessoa && !outro && (!!v.coms || !!v.linha);
+  const pergunta = esperaNaLinha && v.linha ? `<button type="button" class="ta-espera qd-t-espera" data-act="ir-pergunta"><span aria-hidden="true">🔔</span>Esperando você responder</button>`
+    : esperaNaLinha ? `<p class="qd-t-espera"><span aria-hidden="true">🔔</span> Esperando você responder · a pergunta está nos comentários</p>`
     : t.pergunta && (t.esperaPessoa || t.status === "bloqueado")
     ? `<section class="qd-t-pergunta"><h2 class="qd-t-sec">${t.esperaPessoa ? (outro ? `Esperando ${esc(outro)}` : `${esc(t.agenteNome ?? "O bot")} te perguntou`) : "Bloqueada"}</h2><p class="qd-voce-frase">${esc(t.pergunta)}</p>${saiu}${t.esperaPessoa && outro ? "" : formResposta(t)}</section>` : "";
   const resposta = t.resposta ? `<h2 class="qd-t-sec">Sua resposta</h2><p class="qd-t-resposta">${esc(t.resposta)}</p>` : "";
   const naoSalvou = v.naoSalvou ? `<p class="qd-cel-erro" role="alert">${esc(fraseDoNaoSalvou(v, v.naoSalvou))} <button type="button" class="qd-link" data-act="cel-tentar">Tentar de novo</button></p>` : "";
   return confiar(`<article class="qd-tarefa qd-tarefa-cel" aria-labelledby="qd-t-tit" data-tarefa="${esc(t.id)}" data-titulo="${esc(`${codigo} · ${t.titulo}`)}">` +
-    `<div class="qd-t-cab"><button type="button" class="qd-voltar" data-act="voltar-ao-quadro">${ICONE.voltar}<span>${esc(v.q.meta ?? "Quadro")}</span></button><span class="qd-t-sep" aria-hidden="true">/</span><span class="qd-id">${esc(codigo)}</span></div>` +
-    `<div class="qd-t-principal"><h1 class="qd-t-tit" id="qd-t-tit" tabindex="-1">${esc(t.titulo)}</h1>${bandejaDeChips(v)}${secaoDeLabelEPrazoCelular(t, v.q, { agora: v.agora ?? Date.now(), fuso: v.fuso ?? fusoDoAparelho() })}` +
-    `${naoSalvou}${desc}${pergunta}${resposta}${linhaDoTempo(v)}</div>` +
-    `${composerDaTarefa(v)}</article>`);
+    `<div class="qd-t-cab"><button type="button" class="qd-voltar" data-act="voltar-ao-quadro">${ICONE.voltar}<span>${esc(v.q.meta ?? "Quadro")}</span></button><span class="qd-t-sep" aria-hidden="true">/</span><span class="qd-id">${esc(codigo)}</span>${v.topo ? `<span class="ta-cab-dir">${v.topo}</span>` : ""}</div>` +
+    `<div class="qd-t-principal"><h1 class="qd-t-tit" id="qd-t-tit" tabindex="-1">${esc(t.titulo)}</h1>${avisoDeParada(t, comColunas(v.q).colunas)}${bandejaDeChips(v)}${secaoDeLabelEPrazoCelular(t, v.q, { agora: v.agora ?? Date.now(), fuso: v.fuso ?? fusoDoAparelho() })}` +
+    `${naoSalvou}${desc}${pergunta}${resposta}${v.linha ?? linhaDoTempo(v)}</div>` +
+    `${v.linha ? "" : composerDaTarefa(v)}${v.dialogo ?? ""}</article>`);
 }

@@ -7,25 +7,28 @@
  * - `pilulaDoQuadro`: a conversa no próprio quadro (passo 9 do protótipo), que fala com o bot anfitrião.
  * Todo texto (título, descrição, pergunta, resposta, meta) é dado e passa por `esc`.
  */
+import { rotuloDaSituacao, situacaoDoCard, type ComOtimista } from "../lib/estado-do-trabalho.ts";
 import type { ColunaDto, EntradaHistoricoDto, LinhaMuralDto, ModoConversa, QuadroDto, TarefaDto } from "../../src/contracts/quadro.ts";
 import type { Aceita } from "../lib/anexos.ts";
 import { esc } from "../lib/escape.ts";
 import { htmlBotaoDitado, htmlPilulaDitado } from "./ditado.ts";
 import { NOME_DO_STATUS, type Status } from "../lib/quadro.ts";
-import { comColunas, iconeDaColuna, paradaHa, porqueNaoRecebeCard, podeTerPrazo, prazoLegivelMin, inicioDoFimPreso, LIMITE_COLUNAS, type EdicaoDeColuna } from "../lib/colunas.ts";
+import { dicaDeMover, nomeNaPrevia, previaDaTarefa } from "../lib/acionamento.ts";
+import { comColunas, iconeDaColuna, paradaHa, podeTerPrazo, prazoLegivelMin, inicioDoFimPreso, LIMITE_COLUNAS, type EdicaoDeColuna } from "../lib/colunas.ts";
 import { aposDoCabecalho, botaoDeNova, campoDeRenomear, colunaNova, folhaDasColunas, menuDeMover, naFolha, type AgenteDaPassagem } from "./colunas-quadro.ts";
 import { atalhosDePrazo, codigoDaTarefa, faltaParaOPrazo, fraseDaEspera, fraseDoPrazo, linhaDoHistorico, opcoesDeStatus, respostaLonga, tarefasPorStatus, type Faixa } from "../lib/quadro-dados.ts";
 import { textoFormatado } from "../lib/texto-formatado.ts";
 import type { Sugestao } from "../lib/sugestoes-do-quadro.ts";
 import { ecoDoAgente, fraseDaTrava, fraseDoMovimento, porqueNaoDesfaz } from "../lib/freios.ts";
 import { anel, avatar, barra, card, confiar, ICONE, linha, lista, quadro, seloEmTeste, type Aviso, type Card, type ChipDaBarra, type Coluna, type ExibirDaBarra, type ExtraDaGrade, type Filtro, type Html, type QuemRoda } from "./quadro.ts";
-import { chipsDaBarra, ehComigo, fraseDoVazio, marcar, passaNaVista, termoDaBusca, type ChipDeAgente } from "../lib/vista-do-quadro.ts";
+import { chipsDaBarra, ehComigo, fraseDoVazio, marcar, passaNaVista, termoDaBusca, trabalhandoAgora, type ChipDeAgente } from "../lib/vista-do-quadro.ts";
 import { linhaDaImportacao, painelDeImportacao, type PainelImportacao } from "./card-importacao.ts";
 import { gruposPorResponsavel, opcoesEfetivas, ordenarTarefas, passaNosFiltros } from "../lib/opcoes-do-quadro.ts";
-import { ajustarCard, barraDoQuadroMinimo, campoDePrioridade, contextoDoFiltro, modalDoQuadro, nomeDoResponsavel } from "./quadro-minimo.ts";
+import { ajustarCard, barraDoQuadroMinimo, campoDePrioridade, contextoDoFiltro, menuDePrioridade, modalDoQuadro, nomeDoResponsavel } from "./quadro-minimo.ts";
 import type { UiDaBarra } from "./opcoes-quadro.ts";
 import { cabecalhoDoQuadro, formDaMeta } from "./menu-do-quadro.ts";
-import { propriedadesDeLabelEPrazo } from "./campos-da-tarefa.ts";
+import { maisPropriedade, PROPRIEDADES_OPCIONAIS, propriedadesAVista, propriedadesDeLabelEPrazo } from "./campos-da-tarefa.ts";
+import { avisoDeParada, menuDaTarefa, notaDoSelect } from "./acoes-da-tarefa.ts";
 import { colunasDoCelular, folhaDaTarefa, folhaDaVisao, folhaDoTopo, linhaDoCelular, listaDoCelular, topoDoCelular, VAZIO_DAS_MINHAS, VAZIO_DO_GRUPO, type CelularDoQuadro } from "./quadro-celular.ts";
 
 /** Quem é o agente de um id (o avatar com o mascote dele e o nome); null = não é um bot da pessoa. */
@@ -94,7 +97,8 @@ export function cardDaTarefa(t: TarefaDto, agente: AgenteDoQuadro, acesa = false
   const pr = pior ? { texto: `PR #${pior.numero}${t.prs!.length > 1 ? ` +${t.prs!.length - 1}` : ""}`, tom: tomDoPr(pior), titulo: estadoDoPr(pior) } : null;
   // ADA-232: o estado numa linha. A frente aberta conta como trabalhando; a volta marcada mostra o motivo.
   const linha = t.estadoLinha ?? null;
-  const execucao = t.execucao ?? (linha?.tipo === "trabalhando" ? "rodando" : undefined);
+  const execucao = t.execucao ?? (trabalhandoAgora(t) ? "rodando" : undefined);
+  const situacao = situacaoDoCard({ execucao: execucao ?? null, ...((t as ComOtimista).otimista ? { otimista: true as const } : {}) });
   // 2026-11-10: a espera (a pessoa, a CI, a volta marcada) vai no chip com sino; o "Esperando <nome>" saiu das tags.
   const espera = fraseDaEspera(t, o.agora ?? Date.now());
   const tags = [!pr && t.prUrl ? numeroDoPr(t.prUrl) : "", t.linearId ? "Linear" : ""].filter(Boolean);
@@ -104,13 +108,12 @@ export function cardDaTarefa(t: TarefaDto, agente: AgenteDoQuadro, acesa = false
     titulo: t.titulo,
     ...(resp ? { responsavel: resp } : {}),
     ...(execucao ? { estado: execucao } : {}),
-    // 2026-11-10: o trabalho que acabou de nascer (ou o card otimista do mover) diz "começando"; depois de 1 min, o motivo real.
-    ...(execucao === "fila" && t.agenteId && (!t.naFilaDesde || !o.agora || o.agora - t.naFilaDesde < 60_000) ? { estadoTexto: "começando" } : {}),
+    // 2026-11-10 (uma fonte só, web/lib/estado-do-trabalho.ts): "começando" só no card otimista do mover; a fila do
+    // servidor diz "na fila · motivo", o mesmo rótulo da tarefa aberta.
+    ...(situacao === "comecando" ? { estadoTexto: rotuloDaSituacao("comecando") } : {}),
+    ...(situacao === "fila" ? { estadoTexto: rotuloDaSituacao("fila", { motivoFila: t.motivoFila, naFilaDesde: t.naFilaDesde, ...(o.agora ? { agora: o.agora } : {}) }) } : {}),
     ...(linha?.tipo === "esperando" ? { esperando: { motivo: linha.motivo } } : {}),
     ...(execucao === "rodando" && o.agora && t.trabalhandoDesde ? { rodandoHa: haQuanto(t.trabalhandoDesde, o.agora) } : {}),
-    // ADA-16 (ADR-163, sem teto próprio): "na fila há 12 min · …" só com motivo real (a mesma tarefa em série ou o portão
-    // da máquina), dizendo qual; sem motivo ou com menos de um minuto, só "na fila".
-    ...(execucao === "fila" && t.motivoFila && o.agora && t.naFilaDesde && o.agora - t.naFilaDesde >= 60_000 ? { estadoTexto: `na fila ${haQuanto(t.naFilaDesde, o.agora)} · ${MOTIVO_DA_FILA[t.motivoFila]}` } : {}),
     ...(t.status === "bloqueado" ? { motivo: t.pergunta ?? "bloqueada" } : {}),
     ...(t.esperaPessoa && !outro ? { perguntou: t.pergunta ?? "" } : {}),
     ...(espera && t.status !== "bloqueado" ? { espera } : {}),
@@ -126,6 +129,16 @@ export function cardDaTarefa(t: TarefaDto, agente: AgenteDoQuadro, acesa = false
   };
 }
 
+/**
+ * 2026-11-10 (o backlog_hint do Multica, comparação Multica × nod): o Backlog estaciona — a tarefa com responsável ali
+ * não começa. Quando a coluna tem alguma, uma linha discreta diz como começar. Sem tarefa com responsável, nada.
+ */
+export function dicaDoBacklog(cs: readonly Pick<ColunaDto, "id" | "nome">[], c: Pick<ColunaDto, "id" | "nome">, tarefas: readonly Pick<TarefaDto, "agenteId">[]): string | null {
+  if (c.id !== "backlog" || !tarefas.some((t) => t.agenteId)) return null;
+  const afazer = cs.find((x) => x.id === "afazer");
+  return afazer ? `Parada no ${c.nome}: mova para ${afazer.nome} para começar.` : null;
+}
+
 /** NOD-443 (D5, D6): o nome de quem decide a pendência, quando não é quem lê; null = é quem lê (ou o quadro é de uma pessoa só). */
 export function esperandoOutro(t: TarefaDto): string | null {
   return t.esperaPessoa && t.decide && !t.decide.voce ? t.decide.nome : null;
@@ -133,12 +146,6 @@ export function esperandoOutro(t: TarefaDto): string | null {
 
 /** NOD-460: "há 2 min" do selo Trabalhando (o DTO não tem o início da execução: vale a entrada na coluna). */
 /** ADA-16 (ADR-163): o motivo real da fila da tarefa, curto, depois do "na fila há X min". */
-const MOTIVO_DA_FILA: Record<NonNullable<TarefaDto["motivoFila"]>, string> = {
-  mesma_tarefa: "termina a etapa anterior desta tarefa",
-  memoria: "a máquina está sem memória livre",
-  processador: "o processador da máquina está ocupado",
-  disco: "o disco da máquina está cheio",
-};
 
 const haQuanto = (desde: number, agora: number): string => paradaHa(desde, agora).replace(/^parada /, "");
 
@@ -305,7 +312,8 @@ export function quadroDaMeta(o: { q: QuadroDto; nome: string; agente: AgenteDoQu
   const prazoDe = new Map(cs.flatMap((c) => (c.prazoMin && podeTerPrazo(c) ? [[c.id, c.prazoMin] as const] : [])));
   // ADR-142: o "Mover para…" abre o menu só no card (e na vista) de onde veio.
   const cartoes = (ts: TarefaDto[], estreito: boolean): Card[] => ts.map((t) => {
-    const menu = o.agentes && ed?.tipo === "mover" && ed.tarefa === t.id && !!ed.estreito === estreito ? { menu: menuDeMover(cs, t, o.nome) } : {};
+    const menu = o.agentes && ed?.tipo === "mover" && ed.tarefa === t.id && !!ed.estreito === estreito ? { menu: menuDeMover(cs, t) }
+      : o.agentes && ed?.tipo === "prioridade" && ed.tarefa === t.id && !!ed.estreito === estreito ? { menu: menuDePrioridade(t), priAberta: true } : {};
     const av = o.avisos?.get(t.id);
     const marcado = termo ? { tituloHtml: confiar(marcar(t.titulo, termo)), codigoHtml: confiar(marcar(codigoDaTarefa(t), termo)) } : {};
     const base = cardDaTarefa(t, o.agente, o.acesas.has(t.id), { eco: { colunas: cs, agora: o.agora ?? Date.now() }, ...(av ? { aviso: av } : {}), ...(o.agora ? { agora: o.agora } : {}), ...(prazoDe.has(t.status) ? { prazoMin: prazoDe.get(t.status)! } : {}), responder: true });
@@ -328,6 +336,7 @@ export function quadroDaMeta(o: { q: QuadroDto; nome: string; agente: AgenteDoQu
     ...(ed?.tipo === "renomear" && ed.coluna === c.id && !naFolha(ed) ? { cab: campoDeRenomear(c, ed.erro) } : {}),
     ...(i >= preso ? { presa: larguraPresa(vistas.length - 1 - i) } : {}),
     ...(c.trava && fraseDaTrava(cs, c.trava) ? { trava: `Travada: ${fraseDaTrava(cs, c.trava)}` } : {}),
+    ...(dicaDoBacklog(cs, c, tarefas) ? { dica: dicaDoBacklog(cs, c, tarefas)! } : {}),
   }));
   const cheio = cs.length >= LIMITE_COLUNAS;
   const extras: ExtraDaGrade[] = [{ html: botaoDeNova(cheio), trilha: "var(--qd-tira)" }];
@@ -360,7 +369,8 @@ export function quadroDaMeta(o: { q: QuadroDto; nome: string; agente: AgenteDoQu
       const ts = minhas ? tarefas.filter((t) => ehComigo(t, cs)) : tarefas;
       if (minhas && !ts.length) return [];
       return [{ status: c.id, nome: c.nome, icone: iconeDaColuna(c), pessoa: c.daPessoa, recolhido: minhas ? false : recolhida, n: ts.length,
-        linhas: [...formDa(c, true), ...cartoes(ts, true).map(linhaDoCelular)], vazio: (nova?.coluna === c.id && nova.estreito) || filtrando ? "" : VAZIO_DO_GRUPO }];
+        linhas: [...formDa(c, true), ...cartoes(ts, true).map(linhaDoCelular)], vazio: (nova?.coluna === c.id && nova.estreito) || filtrando ? "" : VAZIO_DO_GRUPO,
+        ...(dicaDoBacklog(cs, c, ts) ? { dica: dicaDoBacklog(cs, c, ts)! } : {}) }];
     });
     const novaTarefa = o.podeCriar ? { novaTarefa: true } : {};
     // Colunas: as que o Exibir mostra (as recolhidas ficam de fora, como no computador), uma por tela.
@@ -371,7 +381,7 @@ export function quadroDaMeta(o: { q: QuadroDto; nome: string; agente: AgenteDoQu
     const daFolha = f?.tipo === "tarefa" ? o.q.tarefas.find((x) => x.id === f.tarefa) : undefined;
     const folhaHtml = naFolha(ed) ? folhaDasColunas(cs, ed, contagem, o.nome) : f?.tipo === "visao" ? folhaDaVisao(cel.visao)
       : f?.tipo === "tarefa" && daFolha ? folhaDaTarefa({ tarefa: daFolha, ...(f.passo ? { passo: f.passo } : {}), quem: o.agentes ?? null,
-        destinos: cs.map((c) => ({ id: c.id, nome: c.nome, icone: iconeDaColuna(c), porque: porqueNaoRecebeCard(c, o.nome) })) })
+        destinos: cs.map((c) => ({ id: c.id, nome: c.nome, icone: iconeDaColuna(c), nota: dicaDeMover(previaDaTarefa(daFolha, c.id, cs), nomeNaPrevia(cs, daFolha), false) })) })
         : f?.tipo === "topo" ? folhaDoTopo({ ...(f.passo ? { passo: f.passo } : {}), meta: o.q.meta, pessoas: !!o.pessoas,
           // Revisão 11 do NOD-422: trazer do Linear é só da dona; com a importação andando, não oferece de novo.
           trazer: o.q.voce?.papel !== "membro" && !o.importando && linhaDaImportacao(o.q.importacao)?.tipo !== "andando",
@@ -466,8 +476,6 @@ export type ExtrasDaTarefa = {
   moverPara?: string | null;
   /** O histórico da tarefa; null = ainda carregando. */
   historico?: readonly EntradaHistoricoDto[] | null;
-  /** NOD-417: a seção dos comentários (comentarios-tarefa.ts). */
-  comentarios?: string;
   /** NOD-418: o trabalho da tarefa (trabalhos-da-tarefa.ts). */
   trabalhos?: string;
   /** NOD-419: a hora curta do histórico de movimentos. */
@@ -484,9 +492,19 @@ export type ExtrasDaTarefa = {
   propriedadesExtras?: string;
   /** As seções da lateral recolhidas (prs, reg, ent, hist); quem chama decide o padrão (hist começa recolhida). */
   recolhidas?: ReadonlySet<string>;
-  /** 0159: o relógio e o fuso de quem lê (o "Vencida", o "Hoje" do prazo). Sem eles, os do aparelho. */
+  /** 0161: o relógio e o fuso de quem lê (o "Vencida", o "Hoje" do prazo). Sem eles, os do aparelho. */
   agora?: number;
   fuso?: string;
+  /**
+   * 2026-11-10 (lateral como a do Multica): a propriedade vazia some; `mostradas` = as que a pessoa trouxe pelo
+   * "+ Propriedade" nesta tela; `menuProp` = o menu dele aberto; `menu` = o ⋯ do topo; `notas` = o "Ada vai começar" sob
+   * o select; `vivo` = há run vivo (o Parar do ⋯).
+   */
+  mostradas?: ReadonlySet<string>;
+  menuProp?: boolean;
+  menu?: { aberto: boolean; status: boolean };
+  notas?: { status?: string; agente?: string };
+  vivo?: boolean;
 };
 
 /** O fuso do aparelho (o prazo da tarefa é lido nele). */
@@ -524,7 +542,8 @@ export function tarefaAberta(o: { t: TarefaDto; q: QuadroDto; agente: AgenteDoQu
   const pergunta = t.pergunta && ((t.esperaPessoa && !o.linha) || t.status === "bloqueado")
     ? `<div class="ta-pergunta"><h2 class="qd-t-sec">${t.esperaPessoa ? (outro ? `Esperando ${esc(outro)}` : `${esc(t.agenteNome ?? "O bot")} te perguntou`) : "Bloqueada"}</h2><p class="qd-voce-frase">${esc(t.pergunta)}</p>${saiu}${t.esperaPessoa && outro ? "" : formResposta(t)}</div>` : "";
   const comentarios = (o.q.comentarios ?? []).filter((c) => c.tarefaId === t.id);
-  const secComentarios = comentarios.length
+  // 2026-11-10 (um campo de comentário só): com a linha do tempo, os pedidos de quem participa entram nela como itens.
+  const secComentarios = comentarios.length && !o.linha
     ? `<h2 class="qd-t-sec">Pedidos de quem participa</h2><ol class="qd-hist">${comentarios.map((c) => `<li><span class="qd-hist-quem">${esc(c.assinatura)}</span> <span class="qd-hist-oque">${esc(c.texto)}</span></li>`).join("")}</ol>` : "";
   const resposta = t.resposta ? `<h2 class="qd-t-sec">Sua resposta</h2><p class="qd-t-resposta">${esc(t.resposta)}</p>${origemDaResposta(t)}` : "";
   // NOD-421: os PRs que o laço ligou (repo #N · estado); sem nenhum, o pr_url que o agente gravou, como antes.
@@ -554,24 +573,28 @@ export function tarefaAberta(o: { t: TarefaDto; q: QuadroDto; agente: AgenteDoQu
   const linear = t.linearId ? `<dt>Linear</dt><dd>${lin ? `<a class="qd-link" href="${esc(lin)}" target="_blank" rel="noopener noreferrer">${esc(t.linearId)}</a>` : esc(t.linearId)}</dd>` : "";
   // Espaço das propriedades que outras frentes trazem (Prioridade, Labels, Prazo): entram aqui, entre Responsável e Quadro.
   const extras = o.propriedadesExtras ?? "";
+  // 2026-11-10 (como o Multica): Status e Responsável sempre; Prioridade, Labels e Prazo só preenchidos ou trazidos pelo
+  // "+ Propriedade" (Linear, Pedida por e Branch já só apareciam com valor).
+  const aVista = propriedadesAVista(t, o.mostradas ?? new Set());
+  const escondidas = PROPRIEDADES_OPCIONAIS.map((p) => p.id).filter((id) => !aVista.has(id));
   const props = `<section class="qd-lado-sec ta-lado-sec" data-sec="props"><h2 class="qd-rotulo">Propriedades</h2><dl class="qd-props">` +
-    `<dt><label for="qd-t-status">Status</label></dt><dd>${campoStatus}</dd><dt>${rotuloResp}</dt><dd>${campoResp}</dd>` +
-    `<dt><label for="qd-t-pri">Prioridade</label></dt><dd>${campoDePrioridade(t)}</dd>` +
-    `${propriedadesDeLabelEPrazo(t, o.q, { agora: o.agora ?? Date.now(), fuso: o.fuso ?? fusoDoAparelho() })}` +
+    `<dt><label for="qd-t-status">Status</label></dt><dd>${campoStatus}${notaDoSelect("status", o.notas?.status ?? "")}</dd><dt>${rotuloResp}</dt><dd>${campoResp}${lista ? notaDoSelect("agente", o.notas?.agente ?? "") : ""}</dd>` +
+    (aVista.has("prioridade") ? `<dt><label for="qd-t-pri">Prioridade</label></dt><dd>${campoDePrioridade(t)}</dd>` : "") +
+    `${propriedadesDeLabelEPrazo(t, o.q, { agora: o.agora ?? Date.now(), fuso: o.fuso ?? fusoDoAparelho(), so: aVista })}` +
     `${extras}<dt>Quadro</dt><dd>${esc(o.q.agenteNome)}${o.q.meta ? ` · ${esc(o.q.meta)}` : ""}</dd>${campoMover}${linear}` +
     `${t.pedidoPorNome ? `<dt>Pedida por</dt><dd>${esc(t.pedidoPorNome)}</dd>` : ""}` +
-    `${t.branch ? `<dt>Branch</dt><dd><code class="qd-branch">${esc(t.branch)}</code></dd>` : ""}</dl></section>`;
+    `${t.branch ? `<dt>Branch</dt><dd><code class="qd-branch">${esc(t.branch)}</code></dd>` : ""}</dl>${maisPropriedade(escondidas, !!o.menuProp)}</section>`;
   const historico = secaoDoHistorico(o.historico);
   const secHistorico = historico ? `<section class="qd-lado-sec ta-lado-sec" data-sec="hist"><h2 class="qd-rotulo"><button type="button" class="ta-sec-tg" data-act="lado-sec" data-sec="hist" aria-expanded="${aberta("hist")}"><span class="ta-sec-seta" aria-hidden="true">${aberta("hist") ? "▾" : "▸"}</span>Histórico de campos</button></h2>${aberta("hist") ? historico.replace(/<h2 class="qd-t-sec">Histórico<\/h2>/, "") : ""}</section>` : "";
   // Sem a linha do tempo (a API sem comentários, os testes antigos): os comentários e os trabalhos como antes.
   // NOD-421: as linhas de sistema (CI, conflito, merge), discretas; na linha do tempo elas entram como eventos.
   const linhas = t.linhas?.length
     ? `<h2 class="qd-t-sec">Atividade</h2><ul class="qd-t-linhas">${t.linhas.map((l) => `<li>${esc(l.texto)} · <time datetime="${new Date(l.criadoEm).toISOString()}">${esc(horaDaLinha(l.criadoEm))}</time></li>`).join("")}</ul>` : "";
-  const meio = o.linha ?? `${linhas}${o.trabalhos ?? ""}${historicoDaTarefa(t, comColunas(o.q).colunas, o.hora)}${o.comentarios ?? ""}`;
+  const meio = o.linha ?? `${linhas}${o.trabalhos ?? ""}${historicoDaTarefa(t, comColunas(o.q).colunas, o.hora)}`;
   const lado = `${props}${secPrs}${o.registro ?? ""}${o.entregas ?? ""}${secHistorico}`;
   return confiar(`<article class="qd-tarefa qd-com-lado ta" aria-labelledby="qd-t-tit" data-tarefa="${esc(t.id)}">` +
-    `<div class="qd-t-cab"><button type="button" class="qd-voltar" data-act="voltar-ao-quadro">${ICONE.voltar}<span>${esc(o.q.meta ?? "Quadro")}</span></button><span class="qd-t-sep" aria-hidden="true">/</span><span class="qd-id">${esc(codigo)}</span><span class="ta-cab-dir">${t.esperaPessoa && !outro && o.linha ? `<button type="button" class="ta-espera" data-act="ir-pergunta"><span aria-hidden="true">🔔</span>Esperando você responder</button>` : ""}${o.topo ?? ""}</span></div>` +
-    `<div class="qd-t-corpo"><div class="qd-t-principal">${titulo}${desc}${pergunta}${resposta}${secComentarios}${meio}</div>` +
+    `<div class="qd-t-cab"><button type="button" class="qd-voltar" data-act="voltar-ao-quadro">${ICONE.voltar}<span>${esc(o.q.meta ?? "Quadro")}</span></button><span class="qd-t-sep" aria-hidden="true">/</span><span class="qd-id">${esc(codigo)}</span><span class="ta-cab-dir">${t.esperaPessoa && !outro && o.linha && o.topo === undefined ? `<button type="button" class="ta-espera" data-act="ir-pergunta"><span aria-hidden="true">🔔</span>Esperando você responder</button>` : ""}${o.topo ?? ""}${menuDaTarefa({ t, colunas: comColunas(o.q).colunas, aberto: !!o.menu?.aberto, status: !!o.menu?.status, vivo: !!o.vivo, podeMover: !!o.destinos?.length })}</span></div>` +
+    `<div class="qd-t-corpo"><div class="qd-t-principal">${titulo}${avisoDeParada(t, comColunas(o.q).colunas)}${desc}${pergunta}${resposta}${secComentarios}${meio}</div>` +
     `<aside class="qd-lado" aria-label="Detalhes da tarefa">${lado}</aside></div>${o.dialogo ?? ""}</article>`);
 }
 

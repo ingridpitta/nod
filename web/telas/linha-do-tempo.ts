@@ -4,14 +4,22 @@
  * movimentos (NOD-419) e as linhas de sistema como eventos discretos. HTML puro; todo texto de fora passa por `esc`, e o
  * texto de agente (frase, motivo, passo) passa antes por `redigir` (segredo sai antes de cortar).
  */
-import type { ColunaDto, ComentarioDto, TarefaDto } from "../../src/contracts/quadro.ts";
+import type { ColunaDto, ComentarioDto, ComentarioQuadroDto, TarefaDto } from "../../src/contracts/quadro.ts";
+import type { LabelDto } from "../../src/contracts/quadro-labels.ts";
+import type { AtividadeTarefa } from "../../src/contracts/quadro-pela-conversa.ts";
 import type { ChipDoComentario, ModoAcionar, PreviaComentarioDto, RunDaTarefa } from "../../src/contracts/quadro-comentarios.ts";
+import { NOME_DA_ORIGEM, rotuloCompletoDoRun, situacaoDoRun, voltaDoRun } from "../lib/estado-do-trabalho.ts";
+import { textoDoPasso, type PassosDoRun } from "../lib/passos-do-run.ts";
+import { listaDePassos } from "./passos-do-run.ts";
 import { esc } from "../lib/escape.ts";
-import { porqueNaoDesfaz } from "../lib/freios.ts";
+import { nomeDe, porqueNaoDesfaz } from "../lib/freios.ts";
+import { eventosDeCampos, juntarAtividades, pedidoNaLinha } from "./eventos-da-linha.ts";
 import type { AgenteDoQuadro } from "./quadro-real.ts";
 import { anel } from "./quadro.ts";
 
 export const LIMITE_COMENTARIO = 4000;
+/** A leitura dos comentários da tarefa aberta (era de web/telas/comentarios-tarefa.ts, removido em 2026-11-10). */
+export type CargaDosComentarios = "carregando" | "ok" | "erro";
 
 /* ---------- Pequenos formatos ---------- */
 
@@ -107,6 +115,8 @@ type Autor = { avatar: string; nome: string; meu: boolean; agenteId: string | nu
 
 export function autorDoComentario(c: ComentarioDto, agente: AgenteDoQuadro): Autor {
   if (c.autor.tipo === "linear") return { avatar: anel((c.autorNome ?? "L").slice(0, 1), c.autorNome ?? "Linear", false), nome: `${c.autorNome ?? "Linear"} · no Linear`, meu: false, agenteId: null };
+  // 2026-11-11: quem participa do quadro (pessoa com `pedidoPor`) assina com o nome dele ("Ana, pela Lia"); não é seu.
+  if (c.autor.tipo === "pessoa" && c.pedidoPor) return { avatar: anel((c.autorNome ?? "?").slice(0, 1), c.autorNome ?? "Alguém do quadro", false), nome: c.autorNome ?? "Alguém do quadro", meu: false, agenteId: null };
   if (c.autor.tipo === "pessoa") return { avatar: anel("V", "Você", true), nome: "Você", meu: true, agenteId: null };
   // ADR-162: a espera que o próprio quadro deixou (o bot parou sem saída, o freio) é do quadro, não de um bot.
   if (c.autor.tipo === "sistema") return { avatar: anel("Q", "Quadro", false), nome: "Quadro", meu: false, agenteId: null };
@@ -174,11 +184,16 @@ export function campoDeComentario(o: { tarefaId: string; raiz: string | null; ch
 
 /* ---------- Os itens da linha ---------- */
 
-export type EventoDaLinha = { id: string; em: number; html: string };
+/** `chave` (2026-11-10): quem + a ação; eventos seguidos com a mesma chave em 2 min viram um só com "×N" (eventos-da-linha.ts). */
+export type EventoDaLinha = { id: string; em: number; html: string; chave?: string };
 
-/** Os movimentos (NOD-419) e as linhas de sistema como eventos discretos; o Desfazer só no último que ainda vale. */
-export function eventosDaTarefa(t: TarefaDto, cs: readonly ColunaDto[], agora: number): EventoDaLinha[] {
-  const nome = (id: string) => cs.find((c) => c.id === id)?.nome ?? id;
+/**
+ * Os movimentos (NOD-419) e as linhas de sistema como eventos discretos; o Desfazer só no último que ainda vale.
+ * 2026-11-10: e as mudanças de prioridade, prazo e labels que os lotes fizeram (`extra.atividade`).
+ */
+export function eventosDaTarefa(t: TarefaDto, cs: readonly ColunaDto[], agora: number, extra?: { atividade?: readonly AtividadeTarefa[]; labels?: readonly LabelDto[] }): EventoDaLinha[] {
+  // 2026-11-10: `voce` não é coluna (ADR-162): o movimento diz "Esperando você", não o id cru.
+  const nome = (id: string) => nomeDe(cs, id);
   const evs: EventoDaLinha[] = [];
   for (const m of t.movimentos ?? []) {
     if (m.tipo === "acionou") continue; // o run aparece no lugar
@@ -191,15 +206,17 @@ export function eventosDaTarefa(t: TarefaDto, cs: readonly ColunaDto[], agora: n
     const desfeito = m.desfeitoEm !== null;
     const bt = !porque ? ` <button type="button" class="qd-link ta-ev-acao" data-act="tarefa-desfazer-movimento" data-id="${esc(m.id)}">Desfazer</button>` : "";
     const motivo = m.motivo ? `<span class="ta-ev-motivo"> · ${esc(trecho(m.motivo, 160))}</span>` : "";
-    evs.push({ id: m.id, em: m.criadoEm, html: `<li class="ta-ev${desfeito ? " ta-ev-desfeito" : ""}"><span class="ta-ev-ponto" aria-hidden="true"></span><span><b>${esc(quem)}</b> ${esc(oque + extra)}${motivo}${desfeito ? `<span class="qd-sr"> (desfeito)</span>` : ""}</span>${horaEv(m.criadoEm, agora)}${bt}</li>` });
+    evs.push({ id: m.id, em: m.criadoEm, chave: `${quem}|${m.tipo}|${m.de !== m.para ? "coluna" : m.agenteAntes !== m.agenteDepois ? "responsavel" : "outro"}`, html: `<li class="ta-ev${desfeito ? " ta-ev-desfeito" : ""}"><span class="ta-ev-ponto" aria-hidden="true"></span><span><b>${esc(quem)}</b> ${esc(oque + extra)}${motivo}${desfeito ? `<span class="qd-sr"> (desfeito)</span>` : ""}</span>${horaEv(m.criadoEm, agora)}${bt}</li>` });
   }
-  for (const l of t.linhas ?? []) evs.push({ id: `l-${l.criadoEm}-${l.texto.slice(0, 12)}`, em: l.criadoEm, html: `<li class="ta-ev"><span class="ta-ev-ponto" aria-hidden="true"></span><span>${esc(l.texto)}</span>${horaEv(l.criadoEm, agora)}</li>` });
+  for (const l of t.linhas ?? []) evs.push({ id: `l-${l.criadoEm}-${l.texto.slice(0, 12)}`, em: l.criadoEm, chave: `sistema|${l.texto}`, html: `<li class="ta-ev"><span class="ta-ev-ponto" aria-hidden="true"></span><span>${esc(l.texto)}</span>${horaEv(l.criadoEm, agora)}</li>` });
+  evs.push(...eventosDeCampos(extra?.atividade ?? [], extra?.labels ?? [], (em) => horaEv(em, agora)));
   return evs;
 }
 
-const horaEv = (em: number, agora: number): string => `<time class="ta-ev-hora" datetime="${new Date(em).toISOString()}" title="${esc(new Date(em).toLocaleString("pt-BR"))}">${esc(tempoRelativo(em, agora))}</time>`;
+export const horaEv = (em: number, agora: number): string => `<time class="ta-ev-hora" datetime="${new Date(em).toISOString()}" title="${esc(new Date(em).toLocaleString("pt-BR"))}">${esc(tempoRelativo(em, agora))}</time>`;
 
-export type PassoAoVivo = { ultimo: string | null; n: number; lista: readonly { rotulo: string; estado: string }[] };
+/** Os passos de um run (o cache da rota + frames: web/lib/passos-do-run.ts). */
+export type PassoAoVivo = PassosDoRun;
 
 export type DadosDaLinha = {
   t: TarefaDto;
@@ -215,16 +232,27 @@ export type DadosDaLinha = {
   editando: string | null;
   /** Os runs abertos (o cabeçalho compacto expandido). */
   abertos: ReadonlySet<string>;
-  /** Os passos ao vivo de um run (o turno que roda agora); null = ninguém escuta. */
-  passos: (turnoAtual: string) => PassoAoVivo | null;
+  /** Os passos de um run (pelo turno raiz); null = nada lido nem escutado ainda. */
+  passos: (turno: string, nPersistidos?: number) => PassoAoVivo | null;
+  /** Os runs com a lista inteira de passos aberta ("mostrar N anteriores"). */
+  todosPassos?: ReadonlySet<string>;
+  /** O run cujo Parar pede confirmação (o 2º clique para). */
+  parando?: string | null;
   /** O HTML dos chips de cada campo (por chave: a raiz ou "nova"). */
   chips: (chave: string) => string;
   pendente: { texto: string; falhou: boolean; duvida?: boolean; paiId?: string | null } | null;
   criadaPor: string | null;
   criadaEm: number | null;
-  carga: "carregando" | "ok" | "erro";
+  carga: CargaDosComentarios;
   /** A pessoa fechou o reply que abre sozinho embaixo da pergunta do bot. */
   fechouPergunta?: boolean;
+  /** 2026-11-10: os lotes da tarefa (as mudanças de prioridade, prazo e labels) e o catálogo de labels (o nome). */
+  atividade?: readonly AtividadeTarefa[];
+  labels?: readonly LabelDto[];
+  /** 2026-11-10 (um campo só): os pedidos de quem participa (quadro_tarefa_comentarios), só leitura, com o nome. */
+  pedidos?: readonly ComentarioQuadroDto[];
+  /** Os blocos de atividade recolhidos que a pessoa abriu (a chave é o id do primeiro evento do bloco). */
+  atividadesAbertas?: ReadonlySet<string>;
 };
 
 /**
@@ -234,6 +262,9 @@ export type DadosDaLinha = {
  */
 export function comentarioDaPergunta(t: Pick<TarefaDto, "esperaPessoa" | "pergunta">, comentarios: readonly ComentarioDto[]): string | null {
   if (!t.esperaPessoa) return null;
+  // 0169: a pergunta gravada como tal (a mais nova); o casamento pelo texto fica para os comentários de antes da marca.
+  const marcada = [...comentarios].reverse().find((c) => c.pergunta && !c.apagado);
+  if (marcada) return marcada.paiId ?? marcada.id;
   const raizes = comentarios.filter((c) => !c.paiId && !c.apagado && (c.autor.tipo === "agente" || c.autor.tipo === "sistema")).reverse();
   const p = (t.pergunta ?? "").trim();
   return (p ? raizes.find((c) => c.texto.trim().endsWith(p)) : undefined)?.id ?? raizes[0]?.id ?? null;
@@ -241,36 +272,78 @@ export function comentarioDaPergunta(t: Pick<TarefaDto, "esperaPessoa" | "pergun
 
 const vivo = (r: RunDaTarefa): boolean => r.estado === "fila" || r.estado === "rodando";
 
-/** O run concluído que deu origem a este comentário de agente (o bloco compacta no cabeçalho dele). */
-function casarRuns(itens: readonly ComentarioDto[], runs: readonly RunDaTarefa[]): Map<string, RunDaTarefa> {
+/**
+ * O run concluído que deu origem a este comentário de agente (o bloco compacta no cabeçalho dele). 0169: pelo turno do
+ * comentário (a ligação exata); o comentário de antes da marca cai na janela de antes (entre o início e o fim + 120 s).
+ */
+export function casarRuns(itens: readonly ComentarioDto[], runs: readonly RunDaTarefa[]): Map<string, RunDaTarefa> {
   const usados = new Set<string>();
   const porComentario = new Map<string, RunDaTarefa>();
   for (const r of runs) {
     if (r.estado !== "concluido") continue;
-    const c = itens.find((x) => !porComentario.has(x.id) && x.autor.tipo === "agente" && x.autor.agenteId === r.agenteId && x.criadoEm >= r.criadoEm && x.criadoEm <= (r.terminouEm ?? Infinity) + 120_000);
+    const doAgente = (x: ComentarioDto) => !porComentario.has(x.id) && x.autor.tipo === "agente" && x.autor.agenteId === r.agenteId && !x.apagado;
+    const exato = [...itens].reverse().find((x) => doAgente(x) && x.turnoId === r.turnoId);
+    const c = exato ?? itens.find((x) => doAgente(x) && !x.turnoId && x.criadoEm >= r.criadoEm && x.criadoEm <= (r.terminouEm ?? Infinity) + 120_000);
     if (c && !usados.has(r.turnoId)) { porComentario.set(c.id, r); usados.add(r.turnoId); }
   }
   return porComentario;
 }
 
-function blocoDoRun(r: RunDaTarefa, d: DadosDaLinha): string {
-  const a = avatarDoRun(r, d.agente);
-  const t = duracao(tempoDoRun(r, d.agora));
-  const ao = d.passos(r.turnoAtual);
-  const estado = r.estado === "rodando" ? `está trabalhando · ${t}` : r.estado === "fila" ? "na fila" : r.estado === "falhou" ? "falhou" : r.estado === "cancelado" ? "cancelado" : `terminou · ${t}`;
-  const titulo = r.estado === "falhou" && r.motivo ? ` title="${esc(trecho(r.motivo, 300))}"` : "";
-  const ultimo = vivo(r) ? (ao?.ultimo ? trecho(ao.ultimo, 140) : r.estado === "rodando" ? "Começando…" : "") : r.estado === "falhou" ? trecho(r.motivo, 200) : trecho(r.ultimaFrase, 200, true);
-  const linhaVivo = `<p class="ta-run-passo"${vivo(r) ? ` data-run-vivo="${esc(r.turnoAtual)}"` : ""}>${esc(ultimo)}</p>`;
-  const aberto = d.abertos.has(r.turnoId);
-  const lista = aberto && ao?.lista.length ? `<ol class="ta-run-passos">${ao.lista.slice(-40).map((p) => `<li data-estado="${esc(p.estado)}">${esc(trecho(p.rotulo, 140))}</li>`).join("")}</ol>` : "";
-  const tg = ao?.n ? `<button type="button" class="qd-link ta-run-tg" data-act="run-abrir" data-turno="${esc(r.turnoId)}" aria-expanded="${aberto}">${aberto ? "▾" : "›"} ${ao.n} ${ao.n === 1 ? "passo" : "passos"}</button>` : "";
-  const g = gasto(r);
-  return `<li class="ta-run" data-ancora="run-${esc(r.turnoId)}" data-estado="${r.estado}" data-turno="${esc(r.turnoId)}"><span class="ta-run-av" aria-hidden="true">${a.avatar}</span><div class="ta-run-corpo">` +
-    `<p class="ta-run-cab"${titulo}><b>${esc(a.nome)}</b> <span class="ta-run-est">${esc(estado)}</span>${g && !vivo(r) ? `<span class="ta-run-gasto"> · ${esc(g)}</span>` : ""}${horaEv(r.criadoEm, d.agora)}</p>` +
-    (ultimo || vivo(r) ? linhaVivo : "") + tg + lista + `</div></li>`;
+/** Os "manda agora" que o agente deste run leu, no ponto em que leu (a linha "Você acrescentou" dentro do run). */
+function recadosDoRun(r: RunDaTarefa, d: DadosDaLinha): { em: number; texto: string }[] {
+  return d.comentarios.filter((c) => c.recibo?.estado === "lido" && c.recibo.agenteId === r.agenteId && c.recibo.entregueEm !== null && c.recibo.entregueEm >= r.criadoEm && c.recibo.entregueEm <= (r.terminouEm ?? Infinity))
+    .map((c) => ({ em: c.recibo!.entregueEm!, texto: trecho(c.texto, 120) }));
 }
 
-/** O cabeçalho compacto do run que respondeu (expansível: o tempo, o gasto e a última frase). */
+/** O toggle "› N passos" e a lista (aberta). O número vem do servidor (nPassos) ou do cache, o maior. */
+function passosDoBloco(r: RunDaTarefa, d: DadosDaLinha, aberto: boolean): string {
+  const ao = d.passos(r.turnoId, r.nPassos ?? 0);
+  const n = Math.max(ao?.n ?? 0, r.nPassos ?? 0);
+  if (!n) return "";
+  const tg = `<button type="button" class="qd-link ta-run-tg" data-act="run-abrir" data-turno="${esc(r.turnoId)}" aria-expanded="${aberto}">${aberto ? "▾" : "›"} ${n} ${n === 1 ? "passo" : "passos"}</button>`;
+  return tg + (aberto ? listaDePassos({ turno: r.turnoId, lista: ao?.lista ?? [], recados: recadosDoRun(r, d), todos: d.todosPassos?.has(r.turnoId) ?? false, lendo: !ao?.carregado }) : "");
+}
+
+/** Repetir, Parar (com confirmação no 2º clique) e "Ver o trabalho", como o bloco do Multica. */
+export function acoesDoRun(r: RunDaTarefa, d: Pick<DadosDaLinha, "parando">): string {
+  const bt = (act: string, rot: string, extra = "") => `<button type="button" class="qd-link ta-run-ac${extra}" data-act="${act}" data-turno="${esc(r.turnoId)}">${rot}</button>`;
+  const vivoAgora = vivo(r);
+  const acoes = [
+    ...(vivoAgora ? [d.parando === r.turnoId ? bt("run-parar", "Confirmar parar", " ta-com-ac-perigo") : bt("run-parar", "Parar")] : []),
+    ...(!vivoAgora || r.esperando ? [bt("run-repetir", "Repetir")] : []),
+    bt("run-ver", "Ver o trabalho"),
+  ];
+  return `<p class="ta-run-acoes">${acoes.join('<span aria-hidden="true"> · </span>')}</p>`;
+}
+
+/** O tempo que o tick troca sozinho (a cada 1 s, só o texto deste span). */
+const tempoVivo = (r: RunDaTarefa, agora: number): string => `<span class="ta-run-tempo" data-run-desde="${r.comecouEm ?? r.criadoEm}">${esc(duracao(agora - (r.comecouEm ?? r.criadoEm)))}</span>`;
+
+function blocoDoRun(r: RunDaTarefa, d: DadosDaLinha): string {
+  const a = avatarDoRun(r, d.agente);
+  const ao = d.passos(r.turnoId, r.nPassos ?? 0);
+  // Uma fonte só (web/lib/estado-do-trabalho.ts): as mesmas palavras do card, do chip e do Registro.
+  const sit = situacaoDoRun(r);
+  const rot = rotuloCompletoDoRun(r, d.agora);
+  const tempo = sit === "trabalhando" ? ` · ${tempoVivo(r, d.agora)}` : !vivo(r) && r.estado !== "cancelado" ? ` · ${esc(duracao(tempoDoRun(r, d.agora)))}` : "";
+  const gatilho = r.origem && r.origem !== "comentario" ? `<span class="ta-run-gat"> · ${esc(NOME_DA_ORIGEM[r.origem])}</span>` : "";
+  const titulo = r.estado === "falhou" && r.motivo ? ` title="${esc(trecho(r.motivo, 300))}"` : "";
+  const ultimoPersistido = r.ultimoPasso ? textoDoPasso(r.ultimoPasso) : null;
+  const ultimo = vivo(r) ? (sit === "trabalhando" ? trecho(ao?.ultimo ?? ultimoPersistido, 140) || "Começando…" : "")
+    : r.estado === "falhou" ? (r.precisaDeVoce ? "" : trecho(r.motivo, 200)) : r.estado === "cancelado" ? "" : trecho(r.ultimaFrase, 200, true);
+  const linhaVivo = ultimo || sit === "trabalhando" ? `<p class="ta-run-passo"${vivo(r) ? ` data-run-vivo="${esc(r.turnoAtual)}"` : ""}>${esc(ultimo)}</p>` : "";
+  // A falha que pede a pessoa (login, cota, configuração) mostra o erro inline, não só no tooltip.
+  const erro = r.estado === "falhou" && r.precisaDeVoce ? `<p class="ta-run-erro">${esc(trecho(r.motivo, 300))}</p>` : "";
+  const volta = r.espera ? voltaDoRun(r.espera, d.agora) : null;
+  const voltaHtml = volta ? `<p class="ta-run-volta">${esc(volta)}${r.espera?.podeAcordar ? ` <span aria-hidden="true">·</span> <button type="button" class="qd-link" data-act="run-acordar" data-turno="${esc(r.turnoId)}">Acordar agora</button>` : ""}</p>` : "";
+  const juntos = (r.comentariosJuntos?.length ?? 0) >= 2 ? `<p class="ta-run-nota">inclui ${r.comentariosJuntos!.length} comentários</p>` : "";
+  const g = gasto(r);
+  return `<li class="ta-run" id="run-${esc(r.turnoId)}" data-estado="${r.estado}"${r.esperando ? ' data-esperando="1"' : ""} data-turno="${esc(r.turnoId)}"><span class="ta-run-av" aria-hidden="true">${a.avatar}</span><div class="ta-run-corpo">` +
+    `<p class="ta-run-cab"${titulo}><b>${esc(a.nome)}</b> <span class="ta-run-est">${esc(rot)}</span>${tempo}${gatilho}${g && !vivo(r) ? `<span class="ta-run-gasto"> · ${esc(g)}</span>` : ""}${horaEv(r.criadoEm, d.agora)}</p>` +
+    juntos + voltaHtml + linhaVivo + erro + passosDoBloco(r, d, d.abertos.has(r.turnoId)) + acoesDoRun(r, d) + `</div></li>`;
+}
+
+/** O cabeçalho compacto do run que respondeu (expansível: o tempo, o gasto, os passos e as ações). */
 function runNoCabecalho(r: RunDaTarefa, d: DadosDaLinha): string {
   const aberto = d.abertos.has(r.turnoId);
   return `<button type="button" class="ta-run-mini" data-act="run-abrir" data-turno="${esc(r.turnoId)}" aria-expanded="${aberto}">trabalhou ${esc(duracao(tempoDoRun(r, d.agora)))} ${aberto ? "▾" : "›"}</button>`;
@@ -278,11 +351,22 @@ function runNoCabecalho(r: RunDaTarefa, d: DadosDaLinha): string {
 
 function detalheDoRun(r: RunDaTarefa, d: DadosDaLinha): string {
   if (!d.abertos.has(r.turnoId)) return "";
-  const ao = d.passos(r.turnoAtual);
   const g = gasto(r);
-  const lista = ao?.lista.length ? `<ol class="ta-run-passos">${ao.lista.slice(-40).map((p) => `<li data-estado="${esc(p.estado)}">${esc(trecho(p.rotulo, 140))}</li>`).join("")}</ol>` : "";
-  return `<div class="ta-run-det"><p>${esc([`${duracao(tempoDoRun(r, d.agora))}`, g || "sem custo registrado"].join(" · "))}</p>${lista}</div>`;
+  return `<div class="ta-run-det" id="run-${esc(r.turnoId)}"><p>${esc([`${duracao(tempoDoRun(r, d.agora))}`, g || "sem custo registrado"].join(" · "))}</p>${passosDoBloco(r, d, true)}${acoesDoRun(r, d)}</div>`;
 }
+
+/** O recibo do "manda agora" no comentário: "entregue ao X · lido", aguardando, ou "X não recebeu · Mandar como run novo". */
+export function reciboDoComentario(c: ComentarioDto): string {
+  const r = c.recibo;
+  if (!r) return "";
+  const nome = r.agenteNome ?? "o agente";
+  if (r.estado === "lido") return `<p class="ta-com-recibo" data-estado="lido">entregue a ${esc(nome)} · lido</p>`;
+  if (r.estado === "aguardando") return `<p class="ta-com-recibo" data-estado="aguardando">esperando ${esc(nome)} ler</p>`;
+  return `<p class="ta-com-recibo" data-estado="nao_entrou">${esc(nome)} não recebeu (o run acabou antes) · <button type="button" class="qd-link" data-act="com-reenviar" data-id="${esc(c.id)}">Mandar como run novo</button></p>`;
+}
+
+/** O comentário abriu um run que ainda vive (editar oferece "refazer com o texto novo"). */
+const temRunVivo = (c: ComentarioDto, runs: readonly RunDaTarefa[]): boolean => runs.some((r) => vivo(r) && (r.comentariosJuntos ?? (r.comentarioId ? [r.comentarioId] : [])).includes(c.id));
 
 function cardDoComentario(c: ComentarioDto, d: DadosDaLinha, run: RunDaTarefa | undefined, raiz: string, aguardando = false): string {
   const a = autorDoComentario(c, d.agente);
@@ -295,9 +379,9 @@ function cardDoComentario(c: ComentarioDto, d: DadosDaLinha, run: RunDaTarefa | 
     (a.meu ? `<button type="button" class="ta-com-ac" data-act="com-editar" data-id="${esc(c.id)}">Editar</button><button type="button" class="ta-com-ac" data-act="com-apagar" data-id="${esc(c.id)}">Apagar</button>` : "") + `</span>`;
   const corpo = d.editando === c.id
     ? `<form class="ta-editar" data-form="editar-comentario" data-id="${esc(c.id)}" data-tarefa="${esc(c.tarefaId)}"><label class="qd-sr" for="ta-ed-${esc(c.id)}">Editar comentário</label><textarea id="ta-ed-${esc(c.id)}" class="qd-com-in ta-editar-in" name="texto" maxlength="${LIMITE_COMENTARIO}" required>${esc(c.texto)}</textarea>` +
-      `<span class="ta-editar-pe"><button type="button" class="qd-link" data-act="com-editar-cancelar">Cancelar</button><button type="submit" class="qd-com-bt">Salvar</button></span></form>`
+      `<span class="ta-editar-pe"><button type="button" class="qd-link" data-act="com-editar-cancelar">Cancelar</button>${temRunVivo(c, d.runs) ? `<button type="submit" class="qd-link" name="refazer" value="1" title="Cancela o run que este comentário abriu e começa de novo com o texto novo">Salvar e refazer</button>` : ""}<button type="submit" class="qd-com-bt">Salvar</button></span></form>`
     : `<p class="ta-com-txt">${comMencoes(esc(c.texto), d.nomes)}</p>`;
-  const acionou = c.acionados.length ? `<p class="ta-com-acao">acionou ${esc(c.acionados.join(", "))}</p>` : "";
+  const acionou = c.acionados.length ? `<p class="ta-com-acao">acionou ${esc(c.acionados.join(", "))}</p>` : reciboDoComentario(c);
   return `<article class="ta-com" id="com-${esc(c.id)}"><span class="ta-com-av" aria-hidden="true">${a.avatar}</span><div class="ta-com-corpo">` +
     `<p class="ta-com-cab"><span class="ta-com-nome">${esc(a.nome)}</span>${run ? runNoCabecalho(run, d) : ""}${quando}${editado}${aguardando ? `<span class="ta-aguarda">aguardando sua resposta</span>` : ""}${acoes}</p>` +
     (run ? detalheDoRun(run, d) : "") + corpo + acionou + `</div></article>`;
@@ -323,9 +407,9 @@ export function linhaDoTempo(d: DadosDaLinha): string {
   // A pergunta do bot: o reply dela já vem aberto (até a pessoa fechar) e o cabeçalho diz "aguardando sua resposta".
   const pergunta = comentarioDaPergunta(d.t, d.comentarios);
   const respondendo = d.respondendo ?? (pergunta && !d.fechouPergunta ? pergunta : null);
-  type Item = { em: number; html: string };
-  const topo: Item[] = eventosDaTarefa(d.t, d.colunas, d.agora).map((e) => ({ em: e.em, html: e.html }));
-  if (d.criadaPor && d.criadaEm) topo.push({ em: d.criadaEm - 1, html: `<li class="ta-ev"><span class="ta-ev-ponto" aria-hidden="true"></span><span><b>${esc(d.criadaPor)}</b> criou a tarefa</span>${horaEv(d.criadaEm, d.agora)}</li>` });
+  type Item = { em: number; html: string; ev?: { id: string; chave: string } };
+  const topo: Item[] = eventosDaTarefa(d.t, d.colunas, d.agora, d).map((e) => ({ em: e.em, html: e.html, ev: { id: e.id, chave: e.chave ?? e.id } }));
+  if (d.criadaPor && d.criadaEm) topo.push({ em: d.criadaEm - 1, ev: { id: "criada", chave: "criada" }, html: `<li class="ta-ev"><span class="ta-ev-ponto" aria-hidden="true"></span><span><b>${esc(d.criadaPor)}</b> criou a tarefa</span>${horaEv(d.criadaEm, d.agora)}</li>` });
   const threads = new Map<string, Item[]>();
   for (const c of d.comentarios) {
     const r = raizDe(c);
@@ -356,7 +440,8 @@ export function linhaDoTempo(d: DadosDaLinha): string {
     topo.push({ em: c.criadoEm, html: `<li class="ta-th${c.id === pergunta ? " ta-th-pergunta" : ""}">${cardDoComentario(c, d, casados.get(c.id), c.id, c.id === pergunta)}${resps || pe ? `<ol class="ta-resps">${resps}</ol>${pe}` : ""}</li>` });
   }
   if (d.pendente && !(d.pendente.paiId && porId.has(d.pendente.paiId))) topo.push({ em: Infinity, html: `<li class="ta-th">${pendenteDe(d.pendente)}</li>` });
-  const itens = topo.sort((a, b) => a.em - b.em).map((i) => i.html).join("");
+  for (const p of d.pedidos ?? []) topo.push({ em: p.criadoEm, html: pedidoNaLinha(p, (em) => horaEv(em, d.agora)) });
+  const itens = juntarAtividades(topo.sort((a, b) => a.em - b.em), d.atividadesAbertas ?? new Set());
   const estado = d.carga === "carregando" && !itens ? `<p class="qd-com-vazio">Carregando…</p>` : d.carga === "erro" ? `<p class="qd-com-vazio">Não consegui ler os comentários.</p>` : "";
   return `<section class="ta-tempo qd-coms" aria-labelledby="ta-tempo-tit"><h2 class="ta-sec" id="ta-tempo-tit">Atividade</h2>${estado}` +
     (itens ? `<ol class="ta-lista">${itens}</ol>` : "") +

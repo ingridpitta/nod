@@ -6,6 +6,7 @@
  * O log ao vivo junta os frames do turno que roda agora na cadeia do trabalho (`turnoAtual`: depois de uma queda é a
  * retomada) com as mesmas funções da conversa (comTexto, comFerramenta, comFimDaAcao); vale desde que a tarefa abriu.
  */
+import type { MotivoDaFila } from "./estado-do-trabalho.ts";
 import type { QuadroDto } from "../../src/contracts/quadro.ts";
 import type { ExecucoesDaTarefa } from "../../src/contracts/quadro-execucoes.ts";
 import { anuncioDoTrabalho, logDoTrabalho, passosDoTrabalho, secaoDoTrabalho, vivo, type VistaDoTrabalho } from "../telas/trabalhos-da-tarefa.ts";
@@ -13,11 +14,12 @@ import { PRAZO_DO_ENVIO_MS, comPrazo } from "./com-prazo.ts";
 import { ErroApi, ehRecusaDoServidor } from "./erro-api.ts";
 import { GESTO_MS } from "./quadro.ts";
 import { comFerramenta, comFimDaAcao, comTexto, SEM_NOME_DA_FERRAMENTA, type AtividadeTurno, type FerramentaEmUso } from "./atividade.ts";
+import { criarPassosDosRuns, type ApiDosPassos } from "./passos-do-run.ts";
 
 export type SaidaDoTrabalho = { ok?: boolean; quadro?: QuadroDto | null; trabalho?: { entregue?: "agora" | "quando_comecar" | "novo" }; trabalhos?: ExecucoesDaTarefa; detalhe?: string };
 
 /** O pedaço da API dos trabalhos (opcional na ApiDoQuadro: sem ele, a seção não aparece). */
-export interface ApiDosTrabalhos {
+export interface ApiDosTrabalhos extends ApiDosPassos {
   trabalhosDaTarefa?(agenteId: string, tarefaId: string): Promise<ExecucoesDaTarefa>;
   repetirTrabalho?(agenteId: string, tarefaId: string): Promise<SaidaDoTrabalho>;
   cancelarTrabalho?(agenteId: string, tarefaId: string): Promise<SaidaDoTrabalho>;
@@ -93,7 +95,11 @@ export function criarTrabalhosDaTarefa(o: {
   escreverNoLog?: (escrever: () => void) => void;
   /** 2026-11-10: o último passo de um run vivo mudou (a linha do tempo troca só o texto do bloco dele). */
   aoPasso?: (turno: string, ultimo: string | null) => void;
+  /** 2026-11-10 (Passo 2): a lista de passos de um run mudou (a rota chegou, um frame com o run aberto): `raiz` é o run. */
+  aoPassos?: (raiz: string) => void;
 }) {
+  // Os passos persistidos de cada run (rota + frames por seq). Não zera ao fechar: reabrir mostra na hora.
+  const passosRuns = criarPassosDosRuns({ api: () => o.api(), aoMudar: (raiz) => o.aoPassos?.(raiz) });
   let alvo: { agenteId: string; tarefaId: string } | null = null;
   let dados: ExecucoesDaTarefa | null = null;
   let erro = false;
@@ -263,12 +269,12 @@ export function criarTrabalhosDaTarefa(o: {
     /** ADA-12: a primeira leitura da tarefa aberta ainda não chegou. */
     carregando: (): boolean => !!alvo && !!api() && dados === null && !erro,
     /** A seção; undefined = a API não tem os trabalhos (ou outra tarefa). */
-    html(tarefaId: string, h: { bloqueada: boolean; agenteId: string | null; conversaAtual: string | null; hora: (em: number) => string }): string | undefined {
+    html(tarefaId: string, h: { bloqueada: boolean; agenteId: string | null; conversaAtual: string | null; motivoFila?: MotivoDaFila | null; hora: (em: number) => string }): string | undefined {
       if (!api() || alvo?.tarefaId !== tarefaId) return undefined;
       const atual = dados?.execucoes[0];
       return secaoDoTrabalho({
         tarefaId, dados, erro, bloqueada: h.bloqueada, agenteId: h.agenteId, conversaAtual: h.conversaAtual,
-        atividade: atual ? atividades.get(atual.turnoAtual) : undefined, passosAbertos: passos, anterioresAbertos: anteriores, aviso, ocupado, recadoPendente,
+        atividade: atual ? atividades.get(atual.turnoAtual) : undefined, passosAbertos: passos, anterioresAbertos: anteriores, aviso, ocupado, recadoPendente, motivoFila: h.motivoFila ?? null,
       }, h.hora);
     },
     /** ADA-17: a mesma vista, sem HTML (o celular desenha cada execução como uma linha da atividade, #294). */
@@ -280,10 +286,19 @@ export function criarTrabalhosDaTarefa(o: {
         atividade: atual ? atividades.get(atual.turnoAtual) : undefined, passosAbertos: passos, anterioresAbertos: anteriores, aviso, ocupado, recadoPendente,
       };
     },
-    /** 2026-11-10: os passos ao vivo de um turno (o bloco do run na linha do tempo); null = ninguém escutou. */
-    passosDe(turno: string) { return passoAoVivo(atividades.get(turno)); },
-    /** 2026-11-10: os turnos dos runs vivos que a linha do tempo mostra (os frames deles também contam). */
-    escutar(ids: readonly string[]): void { escutados = new Set(ids); },
+    /** 2026-11-10 (Passo 2): os passos de um run (pelo turno raiz): o cache da rota completado pelos frames. */
+    passosDe(raiz: string, nPersistidos = 0) { return passosRuns.de(raiz, nPersistidos); },
+    /** Lê os passos persistidos do run (o abrir do bloco, a transcrição, o run vivo à vista). */
+    carregarPassos(raiz: string, forcar = false): void { if (alvo) passosRuns.carregar(alvo.agenteId, alvo.tarefaId, raiz, forcar); },
+    /**
+     * 2026-11-10: os runs vivos que a linha do tempo mostra (os frames deles também contam). Recalculado a cada releitura
+     * dos runs (bug 3: o run de @menção que sai da fila passa a ser escutado sem esperar outro desenho).
+     */
+    escutar(runs: readonly { turnoId: string; turnoAtual: string }[]): void {
+      escutados = new Set(runs.map((r) => r.turnoAtual));
+      passosRuns.ligar(runs);
+      if (alvo) for (const r of runs) passosRuns.carregar(alvo.agenteId, alvo.tarefaId, r.turnoId);
+    },
     aoFrame(f: FrameDoTrabalho): void {
       if (!alvo) return;
       const d = f.dados;
@@ -292,7 +307,11 @@ export function criarTrabalhosDaTarefa(o: {
         return;
       }
       const turno = texto(d["turnoId"]);
-      if (f.tipo === "turno.iniciado" || f.tipo === "turno.encerrado" || f.tipo === "turno.interrompido" || f.tipo === "turno.falhou") {
+      // A falha chega como turno.encerrado ou turno.interrompido ("turno.falhou" é o tipo da mensagem, não frame).
+      // Passo 2: os passos do run escutado (a retomada cai no run pelo turno atual).
+      const doRun = passosRuns.aoFrame(f);
+      if (doRun && turno) { o.aoPasso?.(turno, passosRuns.de(doRun)?.ultimo ?? null); o.aoPassos?.(doRun); }
+      if (f.tipo === "turno.iniciado" || f.tipo === "turno.encerrado" || f.tipo === "turno.interrompido") {
         // O começo, o fim e a retomada de um turno da cadeia mudam o estado; um turno de outro lugar não.
         if (!dados || !turno || dados.execucoes.some((e) => e.turnoAtual === turno || e.turnoId === turno) || f.tipo === "turno.iniciado") relerLogo();
         return;
@@ -304,8 +323,6 @@ export function criarTrabalhosDaTarefa(o: {
       const nova = atividadeComFrame(antes, f);
       if (!nova || nova === antes) return;
       atividades.set(turno, nova);
-      // O último passo do bloco do run na linha do tempo troca sozinho (só o texto da linha).
-      o.aoPasso?.(turno, passoAoVivo(nova)?.ultimo ?? null);
       // Só o log muda: o resto da tarefa (e o recado que a pessoa digita) fica. No gesto, espera o dedo (ADA-7).
       if (doTrabalho && logAdiado === null) escreverLog(Date.now());
     },

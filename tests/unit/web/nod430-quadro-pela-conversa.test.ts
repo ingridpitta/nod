@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { ComentarioDto } from "../../../src/contracts/quadro.ts";
-import type { AtividadeTarefa } from "../../../src/contracts/quadro-pela-conversa.ts";
 import type { PayloadPropostaQuadroExclusao } from "../../../src/contracts/quadro-exclusao.ts";
 import { textoFormatado } from "../../../web/lib/texto-formatado.ts";
 import { renderCardQuadroExclusao } from "../../../web/telas/card-quadro-exclusao.ts";
-import { comentariosDaTarefa } from "../../../web/telas/comentarios-tarefa.ts";
+import { linhaDoTempo } from "../../../web/telas/linha-do-tempo.ts";
 import { renderSuaVez } from "../../../web/telas/sua-vez.ts";
 import { estadoInicial, type Estado } from "../../../web/estado/reducer.ts";
 import type { SuaVezDto } from "../../../src/contracts/api.ts";
@@ -65,24 +64,25 @@ describe("o card de excluir o quadro na Sua vez (NOD-430, revisão 1)", () => {
 describe("assinatura na tarefa aberta (NOD-430)", () => {
   const agente = ((id: string) => (id === "ada" ? { avatar: "", nome: "Ada" } : null)) as never;
   const com = (o: Partial<ComentarioDto>): ComentarioDto => ({ id: "c1", quadroId: "q", tarefaId: T, autor: { tipo: "agente", agenteId: "ada" }, texto: "Olhei", deFora: false, criadoEm: 0, autorNome: "Ada", acionados: [], ...o });
+  // 2026-11-10: a tarefa aberta desenha os comentários pela linha do tempo (o comentarios-tarefa.ts antigo saiu).
+  const linha = (lista: ComentarioDto[], o: { criadaPor?: string | null; criadaEm?: number | null } = {}) => linhaDoTempo({
+    t: { id: T, quadroId: "q", titulo: "T", descricao: "", status: "fazendo", agenteId: "ada", movimentos: [], linhas: [] } as never, colunas: [], comentarios: lista, runs: [], agente, agora: Date.UTC(2026, 10, 2, 14), nomes: ["Ada"],
+    respondendo: null, editando: null, abertos: new Set(), passos: () => null, chips: () => "", pendente: null, criadaPor: o.criadaPor ?? null, criadaEm: o.criadaEm ?? null, carga: "ok",
+  });
   it("comentário a pedido da pessoa assina Você, pela Ada; o do bot sozinho, Ada", () => {
-    const h = comentariosDaTarefa({ tarefaId: T, lista: [com({ pedidoPor: "pessoa" }), com({ id: "c2", texto: "Sozinha" })], carga: "ok" as never, agente, hora: () => "10:00" });
+    const h = linha([com({ pedidoPor: "pessoa" }), com({ id: "c2", texto: "Sozinha" })]);
     expect(h).toContain("Você, pela Ada");
     expect(h.split("Você, pela Ada").length - 1).toBe(1);
   });
-  it("a Atividade e o Criada por vêm antes dos comentários", () => {
-    const atividade: AtividadeTarefa[] = [{ loteId: "l1", resumo: "Criou Login", quem: "Você, pela Ada", criadoEm: 0 }];
-    const h = comentariosDaTarefa({ tarefaId: T, lista: [com({})], carga: "ok" as never, agente, hora: () => "10:00", atividade, criadaPor: "Você, pela Ada" });
-    expect(h).toContain("Atividade");
-    expect(h).toContain("Criada por");
-    expect(h.indexOf("Criou Login")).toBeLessThan(h.indexOf("Olhei"));
+  it("quem criou a tarefa vem antes dos comentários", () => {
+    const h = linha([com({ criadoEm: 120_000 })], { criadaPor: "Você, pela Ada", criadaEm: 60_000 });
+    expect(h).toContain("<b>Você, pela Ada</b> criou a tarefa");
+    expect(h.indexOf("criou a tarefa")).toBeLessThan(h.indexOf("Olhei"));
   });
-  it("revisão 1: a hora da Atividade e do comentário leva o datetime ISO no <time>", () => {
-    const em = Date.UTC(2026, 10, 2, 13, 5);
-    const atividade: AtividadeTarefa[] = [{ loteId: "l1", resumo: "Criou Login", quem: "Você", criadoEm: em }];
-    const h = comentariosDaTarefa({ tarefaId: T, lista: [com({ criadoEm: em + 60_000 })], carga: "ok" as never, agente, hora: () => "10:00", atividade });
-    expect(h).toContain('<time datetime="2026-11-02T13:05:00.000Z">10:00</time>');
-    expect(h).toContain('<time datetime="2026-11-02T13:06:00.000Z">10:00</time>');
+  it("revisão 1: a hora do comentário leva o datetime ISO no <time>", () => {
+    const em = Date.UTC(2026, 10, 2, 13, 6);
+    const h = linha([com({ criadoEm: em })]);
+    expect(h).toContain('<time datetime="2026-11-02T13:06:00.000Z"');
     expect(h).not.toContain("<time>");
   });
 });

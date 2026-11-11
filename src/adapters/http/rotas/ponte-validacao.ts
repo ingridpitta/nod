@@ -52,6 +52,8 @@ export function objeto(v: unknown): Record<string, unknown> {
 export function texto(v: unknown, max = TEXTO_ENTREGA_MAX_CHARS): v is string { return typeof v === "string" && v.length <= max; }
 /** NOD-353: o id do tool_use (Claude `toolu_…`, Codex `call_…`): só letras, dígitos, `_` e `-`. */
 const idDaChamada = (v: unknown): v is string => typeof v === "string" && /^[A-Za-z0-9_-]{1,100}$/.test(v);
+/** ADR-165: o resumo do argumento é uma linha curta (o executor manda até 120); texto maior que 1000 é recusado, não cortado. */
+const resumoDoTrecho = (v: unknown): string | null => (typeof v === "string" && v.trim() !== "" && v.length <= 1_000 ? v : null);
 /**
  * Trechos do turno vivo. São efêmeros: um item fora do formato é descartado sozinho e uma lista acima
  * dos tetos vira vazia, sem nunca derrubar a renovação (que é o lease do turno).
@@ -69,10 +71,16 @@ export function trechos(v: unknown): TrechoVivo[] {
       if (s) saida.push(o.ocioso === undefined ? { subagentes: s } : { subagentes: s, ocioso: o.ocioso });
       continue;
     }
-    // NOD-353: a ferramenta com o id da chamada e o fim dela — os outros trechos de duas chaves.
-    if (Object.keys(o).length === 2 && "ferramenta" in o && "id" in o) {
+    // NOD-353: a ferramenta com o id da chamada e o fim dela — os outros trechos de duas chaves. ADR-165: e o `resumo`
+    // (opcional, de três chaves com o id): fora do formato ele cai e a ferramenta segue sem ele; o corte em 160 e a
+    // segunda redação são do frameDaFerramenta.
+    const chaves = Object.keys(o);
+    if ("ferramenta" in o && (chaves.length === 2 || chaves.length === 3) && chaves.every((k) => k === "ferramenta" || k === "id" || k === "resumo") && ("id" in o || "resumo" in o)) {
       // id fora do formato: a ferramenta segue sem id (fecha na próxima, como no app antigo).
-      if (nomeDeFerramenta(o.ferramenta)) saida.push(idDaChamada(o.id) ? { ferramenta: o.ferramenta, id: o.id } : { ferramenta: o.ferramenta });
+      if (nomeDeFerramenta(o.ferramenta)) {
+        const resumo = resumoDoTrecho(o.resumo);
+        saida.push({ ferramenta: o.ferramenta, ...(idDaChamada(o.id) ? { id: o.id } : {}), ...(resumo ? { resumo } : {}) });
+      }
       continue;
     }
     if (Object.keys(o).length === 2 && "fim" in o && "falhou" in o) {

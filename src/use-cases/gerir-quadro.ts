@@ -2,7 +2,7 @@ import type { CasoNod } from "../contracts/servicos.ts";
 import type { QuadroDto, ResultadoGerirQuadro } from "../contracts/quadro.ts";
 import { LIMITE_ACIONAMENTOS_HORA } from "../domain/freios-quadro.ts";
 import type { LinkDeTarefa } from "../contracts/quadro-pela-conversa.ts";
-import { ehOpDeTrabalho, lerOps, MAX_COMECOS_POR_LOTE } from "../domain/quadro.ts";
+import { ehOpDeTrabalho, lerOps } from "../domain/quadro.ts";
 import { citaTarefa, ERROS_FALA } from "../domain/fala-da-pessoa.ts";
 import { proporColunas } from "./colunas-do-quadro.ts";
 import type { IssueLinear } from "../contracts/quadro-importacao.ts";
@@ -241,7 +241,7 @@ async function decidirGerirQuadro(deps: Deps, input: EntradaGerirQuadro, modo: M
   // As colunas são da pessoa (ADR-140): o bot só mexe nelas a pedido dela, na conversa — não no turno de uma tarefa,
   // rotina ou pedido de colega (revisão do PR #615, o mesmo corte do Desfazer de lote alheio).
   const COLUNA = new Set(["criar_coluna", "renomear_coluna", "mover_coluna", "remover_coluna", "substituir_colunas", "definir_passagem", "travar_coluna"]);
-  // 0159: o catálogo de labels também (o nome de uma label entra no turno das tarefas, como o de uma coluna).
+  // 0161: o catálogo de labels também (o nome de uma label entra no turno das tarefas, como o de uma coluna).
   if (ops.some((o) => o.tipo === "criar_label" || o.tipo === "editar_label" || o.tipo === "remover_label") && !naConversa(turno)) {
     return recusa("entrada_invalida", "as labels do quadro só mudam a pedido da pessoa, num turno em que ela falou com você (não numa tarefa, rotina ou pedido de colega). Para marcar a tarefa, use uma das labels que já existem");
   }
@@ -416,11 +416,12 @@ async function decidirGerirQuadro(deps: Deps, input: EntradaGerirQuadro, modo: M
     if (r.data.freados) partes.push(`Ninguém foi acionado: esta tarefa passou de ${LIMITE_ACIONAMENTOS_HORA} acionamentos na última hora (freio). O comentário ficou gravado; diga à pessoa e espere a resposta dela.`);
     else if (!r.data.seguradas) partes.push(comecaram.length ? `Acionou: ${comecaram.map((c) => c.agenteNome).join(", ")}${juntados ? ` (${juntados === 1 ? "um já estava" : `${juntados} já estavam`} na fila para esta tarefa e o comentário se juntou ao trabalho dele)` : ""}.` : "Ninguém foi acionado: o comentário aciona o responsável da tarefa (numa thread, o agente da thread) e os @nomes de outros bots do quadro, nunca quem escreveu; @todos não aciona o responsável.");
   } else if (comecaram.length && !feito) partes.push(`Começaram: ${comecaram.map((c) => c.agenteNome).join(", ")} (cada um recebeu a tarefa como pedido).`);
+  for (const s of r.data.seguemNaEtapa ?? []) partes.push(`${s.agenteNome} segue trabalhando na etapa de antes (não foi parado): termina o que faz, sem mudar mais o status. Diga isso à pessoa (para parar junto, o mover leva parar_anterior true).`);
   if (r.data.mandadosAgora) partes.push("O comentário entrou no turno em andamento do responsável (lê no próximo passo).");
   if (r.data.comentario && "paiId" in r.data.comentario && r.data.comentario.paiId) partes.push(`Ficou na thread ${r.data.comentario.paiId} (para responder nela, responder_a com esse id).`);
   else if (r.data.comentario) partes.push(`Para responder a este comentário na mesma thread: responder_a "${r.data.comentario.id}".`);
   if (r.data.seguradas && r.data.comentario) partes.push("A corrente de bots chegou ao limite: o comentário ficou gravado e ninguém foi acionado.");
-  else if (r.data.seguradas) partes.push(`${r.data.seguradas === 1 ? "Uma tarefa ficou" : `${r.data.seguradas} tarefas ficaram`} na espera sem começar: a corrente de bots chegou ao limite ou o lote passou de ${MAX_COMECOS_POR_LOTE} começos. Diga à pessoa: ela começa a tarefa pela conversa com você (mudar_tarefa com status afazer, num turno dela).`);
+  else if (r.data.seguradas) partes.push(`${r.data.seguradas === 1 ? "Uma tarefa ficou" : `${r.data.seguradas} tarefas ficaram`} na espera sem começar: a corrente de bots chegou ao limite. Diga à pessoa: ela começa a tarefa pela conversa com você (mudar_tarefa com status afazer, num turno dela).`);
   // ADA-15: o card guarda a fala literal da pessoa, com o link da mensagem; o texto do bot não entra.
   if (comFala && lote) partes.push("A resposta no card é a fala literal da pessoa, com o link para a mensagem; o histórico guarda de qual fala veio.");
   if (r.data.ajustada) partes.push("Um passo de coluna foi para a posição válida mais próxima: as colunas só mudam de lugar dentro do próprio grupo.");

@@ -6,7 +6,7 @@
  */
 import type { ColunaDto, QuadroDto, TarefaDto } from "../../src/contracts/quadro.ts";
 import { acionaNaColuna, iconeDaColuna } from "../lib/colunas.ts";
-import { agentesComTarefa, ehComigo, type Filtro } from "../lib/vista-do-quadro.ts";
+import { agentesComTarefa, ehComigo, trabalhandoAgora, type Filtro } from "../lib/vista-do-quadro.ts";
 import { esc } from "../lib/escape.ts";
 import { NOME_DA_PRIORIDADE, PRIORIDADES, chipsDosFiltros, haQuantoTempo, opcoesAjustadas, prioridadeDe, CAMPOS_PADRAO, prazoEmMs, prazoDa, type CampoDoFiltro, type DescritorDeCampo, type TarefaDoFiltro, type CondicaoDoFiltro, type ContextoDoFiltro, type OpcoesEfetivas } from "../lib/opcoes-do-quadro.ts";
 import type { UiDaBarra } from "./opcoes-quadro.ts";
@@ -18,9 +18,8 @@ type AgenteDoQuadro = (agenteId: string) => { avatar: Html; nome: string } | nul
 const VOCE_AV = (): Html => anel("V", "Você", true);
 const SEM_AV = (): Html => anel("–", "Sem responsável");
 
-/** O nome e o avatar de um responsável ("voce", "sem" ou o id do bot). */
+/** O nome e o avatar de um responsável ("sem" ou o id do bot; ADR-162: a espera da pessoa não é responsável). */
 export function nomeDoResponsavel(chave: string, q: QuadroDto, agente: AgenteDoQuadro): { nome: string; avatar: Html } {
-  if (chave === "voce") return { nome: "Você", avatar: VOCE_AV() };
   if (chave === "sem") return { nome: "Sem responsável", avatar: SEM_AV() };
   const a = agente(chave);
   if (a) return a;
@@ -30,7 +29,7 @@ export function nomeDoResponsavel(chave: string, q: QuadroDto, agente: AgenteDoQ
 
 /** Quem lê o quadro (a dona ou quem participa) e o relógio, para "Relação comigo" e "Data". */
 export function contextoDoFiltro(q: QuadroDto, agora: number): ContextoDoFiltro {
-  return { pessoaId: q.voce?.pessoaId ?? q.dona?.pessoaId ?? null, dona: !q.voce || q.voce.papel === "dona", agora };
+  return { pessoaId: q.voce?.pessoaId ?? q.dona?.pessoaId ?? null, dona: !q.voce || q.voce.papel === "dona", agora, colunas: q.colunas };
 }
 
 const nomeDaPessoa = (q: QuadroDto, id: string): string =>
@@ -42,7 +41,7 @@ const nomeDaPessoa = (q: QuadroDto, id: string): string =>
  */
 export function valoresDoFiltro(q: QuadroDto, cs: readonly ColunaDto[], agente: AgenteDoQuadro, campos: readonly DescritorDeCampo[] = CAMPOS_PADRAO): ValoresDoFiltro {
   const ts = q.tarefas as readonly TarefaDoFiltro[];
-  const ordemResp = (k: string): number => (k === "voce" ? 1 : k === "sem" ? 2 : 0);
+  const ordemResp = (k: string): number => (k === "sem" ? 1 : 0);
   const r: Partial<Record<CampoDoFiltro, ValorDoFiltro[]>> = {};
   for (const d of campos) {
     if (d.temDado && !d.temDado(ts)) continue;
@@ -69,7 +68,7 @@ export function barraDoQuadroMinimo(o: { q: QuadroDto; cs: readonly ColunaDto[];
   const { q, ui } = o;
   const valores = valoresDoFiltro(q, o.cs, o.agente);
   const nomeDoValor = (c: CondicaoDoFiltro): string => valores[c.campo]?.find((v) => v.valor === c.valor)?.nome ?? c.valor;
-  const rodando = new Set(q.tarefas.filter((t) => t.execucao === "rodando" && t.agenteId).map((t) => t.agenteId!));
+  const rodando = new Set(q.tarefas.filter((t) => trabalhandoAgora(t) && t.agenteId).map((t) => t.agenteId!));
   const quem: QuemNoQuadro[] = agentesComTarefa(q.tarefas).map((c) => {
     const r = nomeDoResponsavel(c.agenteId, q, o.agente);
     return { filtro: `agente:${c.agenteId}`, nome: r.nome, avatar: r.avatar, n: c.n, rodando: rodando.has(c.agenteId), ativo: o.filtro === `agente:${c.agenteId}` };
@@ -105,7 +104,7 @@ const DESCRICAO_NO_CARD = 240;
 export function ajustarCard(c: Card, t: TarefaDto, op: OpcoesEfetivas, q: QuadroDto, agora: number): Card {
   const p = op.props;
   const r: Card = { ...c };
-  if (p.has("prioridade")) r.prioridade = iconeDaPrioridade(prioridadeDe(t));
+  if (p.has("prioridade")) { r.prioridade = iconeDaPrioridade(prioridadeDe(t)); r.prioridadeNome = NOME_DA_PRIORIDADE[prioridadeDe(t)]; }
   if (p.has("descricao") && t.descricao.trim()) r.descricao = t.descricao.trim().slice(0, DESCRICAO_NO_CARD);
   if (!p.has("responsavel")) delete r.responsavel;
   if (p.has("datas")) r.atualizado = `Atualizado ${haQuantoTempo(t.mudadoEm, agora)}`;
@@ -134,13 +133,21 @@ export function modalDoQuadro(o: { ui: UiDaBarra; q: QuadroDto; cs: readonly Col
   const lista = o.agentes ?? agentesComTarefa(o.q.tarefas).map((c) => ({ id: c.agenteId, nome: nomeDoResponsavel(c.agenteId, o.q, o.agente).nome }));
   return modalDaNovaTarefa({
     m, quadro: o.q.nome?.trim() || o.q.meta?.trim() || `Quadro de ${o.nome}`, mac: ehMac(),
-    colunas: o.cs.filter((c) => c.id !== "voce").map((c) => ({ id: c.id, nome: c.nome, icone: iconeDe({ status: c.id, icone: iconeDaColuna(c), pessoa: c.daPessoa }) })),
+    colunas: o.cs.map((c) => ({ id: c.id, nome: c.nome, icone: iconeDe({ status: c.id, icone: iconeDaColuna(c), pessoa: c.daPessoa }) })),
     agentes: lista.map((a) => ({ ...a, avatar: o.agente(a.id)?.avatar ?? anel(a.nome.slice(0, 1).toUpperCase(), a.nome) })),
     dica,
   });
 }
 
 /** NOD-463: a Prioridade nas Propriedades da tarefa aberta (o select nativo; quem ouve a troca é web/lib/quadro-na-tela.ts). */
+/** 2026-11-10: o seletor de prioridade do card (as barrinhas); a atual vem marcada. Mesmo menu do "Mover para…". */
+export function menuDePrioridade(t: Pick<TarefaDto, "id" | "titulo" | "prioridade">): Html {
+  const atual = prioridadeDe(t);
+  const itens = PRIORIDADES.map((p) => `<button type="button" role="menuitem" class="qd-menu-it${p === atual ? " qm-pri-atual" : ""}" data-act="tarefa-prioridade-para" data-tarefa="${esc(t.id)}" data-valor="${p}"${p === atual ? ' aria-current="true"' : ""}>` +
+    `${iconeDaPrioridade(p, false)}<span>${esc(NOME_DA_PRIORIDADE[p])}</span></button>`).join("");
+  return confiar(`<div class="qd-menu qd-menu-mover qd-menu-pri" role="menu" id="qd-menu" aria-label="${esc(`Prioridade de ${t.titulo}`)}">${itens}</div>`);
+}
+
 export function campoDePrioridade(t: Pick<TarefaDto, "id" | "prioridade">): string {
   const atual = prioridadeDe(t);
   return `<span class="qm-t-pri">${iconeDaPrioridade(atual, false)}<select id="qd-t-pri" class="qd-sel" data-campo="prioridade" data-id="${esc(t.id)}">` +

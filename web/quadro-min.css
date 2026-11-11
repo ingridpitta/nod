@@ -36,6 +36,13 @@
 .qm-pri { display: inline-grid; place-items: center; flex: none; width: 14px; height: 14px; color: var(--ink-2); }
 .qm-pri-sem { color: var(--ink-3); opacity: .7; }
 .qm-pri-urgente { color: var(--danger); }
+/* 2026-11-10: as barrinhas do card editável abrem o seletor (sem fundo; o hover só acende o contorno). Acima do clique do card. */
+.qm-pri-bt { position: relative; z-index: 1; display: inline-grid; place-items: center; width: 20px; height: 20px; margin: -3px; padding: 0; border: 1px solid transparent; border-radius: 6px; background: none; cursor: pointer; }
+.qm-pri-bt:hover, .qm-pri-bt[aria-expanded="true"] { border-color: var(--line); }
+.qm-pri-bt:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.qd-menu-pri { width: 180px; }
+.qd-menu-pri .qm-pri-atual { color: var(--ink); font-weight: 600; }
+@media (hover: none) { .qm-pri-bt { width: 32px; height: 32px; margin: -9px; } }
 
 /* O selo "Trabalhando" com o avatar pequeno de quem roda (no lugar da bolinha). */
 .qm-selo { gap: 5px; }

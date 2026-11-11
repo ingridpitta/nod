@@ -6,11 +6,11 @@ import { COLUNAS_PADRAO, colunasDto } from "../../../src/domain/colunas.ts";
 import { alturaDoTeclado, ligarTecladoVisivel } from "../../../web/lib/teclado-visivel.ts";
 import { casaNaBusca, folhaDeAjustes, folhaDeCancelar, folhaDeStatus, folhaDoBranch, folhaDoResponsavel } from "../../../web/telas/folhas-da-tarefa.ts";
 import { tarefaAberta } from "../../../web/telas/quadro-real.ts";
-import { LIMITE_COMENTARIO } from "../../../web/telas/comentarios-tarefa.ts";
+import { LIMITE_COMENTARIO } from "../../../web/telas/linha-do-tempo.ts";
 import { engolirCliqueDoToque, focaveisVisiveis } from "../../../web/lib/folha-gestos.ts";
 import { confiar } from "../../../web/telas/quadro.ts";
 import {
-  PRAZO_DA_TAREFA, bandejaDeChips, fimDaTrocaCel, citacaoDe, composerDaTarefa, linhaDaExecucao, linhaDoTempo, separarExecucoes, tarefaAbertaCelular, textoDaResposta, trechoDe,
+  bandejaDeChips, fimDaTrocaCel, citacaoDe, composerDaTarefa, linhaDaExecucao, linhaDoTempo, separarExecucoes, tarefaAbertaCelular, textoDaResposta, trechoDe,
   type VistaDaTarefaCelular,
 } from "../../../web/telas/tarefa-celular.ts";
 import type { VistaDoTrabalho } from "../../../web/telas/trabalhos-da-tarefa.ts";
@@ -53,8 +53,7 @@ describe("ADA-17: a tarefa aberta no celular", () => {
     expect(h).toContain('data-titulo="VER-1 · Tarefa um"');
   });
 
-  it("critério 2: a bandeja tem Status, Responsável e Ajustes; Branch só com branch; Prazo atrás da flag desligada (S1)", () => {
-    expect(PRAZO_DA_TAREFA).toBe(false);
+  it("critério 2: a bandeja tem Status, Responsável e Ajustes; Branch só com branch (o prazo mora na seção de labels e prazo, 0161)", () => {
     const sem = bandejaDeChips(v());
     expect(sem).toContain('id="qd-t-status"');
     expect(sem).toContain('data-folha="status"');
@@ -352,5 +351,31 @@ describe("ADA-17: o CSS do celular (lido como texto; celular.test.ts garante que
     const sel = ".stage.qd-no-quadro:has(.qd-tarefa-cel) .cabecalho.topo-encolhido[data-titulo]::after";
     expect(ultimo(sel, "content")).toBe("attr(data-titulo)");
     expect(ultimo(sel, "white-space")).toBe("nowrap");
+  });
+});
+
+describe("2026-11-11: a tarefa no celular com o aviso do Backlog e a Prioridade do computador (PR #725)", () => {
+  it("no Backlog com responsável, o aviso de parada do computador (avisoDeParada) aparece sob o título", () => {
+    const h = String(tarefaAbertaCelular(v({ t: t({ status: "backlog" }) })));
+    expect(h).toContain('<p class="ta-parada">Parada no Backlog: o responsável só começa quando ela for para A fazer</p>');
+    expect(String(tarefaAbertaCelular(v({ t: t({ status: "backlog", agenteId: null }) })))).not.toContain("ta-parada");
+  });
+
+  it("a Prioridade preenchida vira um chip da bandeja que abre a folha dela; vazia, fica em Ajustes", () => {
+    const h = bandejaDeChips(v({ t: t({ prioridade: "urgente" }) }));
+    expect(h).toMatch(/<button type="button" class="qd-chip qd-chip-cel" id="qd-t-prioridade" data-act="cel-folha" data-folha="prioridade" data-id="t1" aria-haspopup="dialog" aria-label="Prioridade: Urgente">/);
+    expect(h.indexOf("qd-t-prioridade")).toBeGreaterThan(h.indexOf("qd-t-resp"));
+    expect(bandejaDeChips(v())).not.toContain("qd-t-prioridade");
+    expect(folhaDeAjustes({ t: t(), q: q(), nomeStatus: "Fazendo", nomeResp: "Vera", podeResp: true, podeMover: false })).toContain('data-folha-acao="abrir-prioridade"');
+  });
+});
+
+describe("2026-11-11: os diálogos da linha do tempo na tarefa do celular", () => {
+  it("o diálogo de Ver o trabalho (e o Registro) entra na tarefa do celular, como no computador", () => {
+    const d = `<dialog open class="ta-dialogo ta-trans" id="ta-trans"><p class="ta-lado-nota">máquina nod-motor-teste</p></dialog>`;
+    const h = String(tarefaAbertaCelular(v({ linha: "<section></section>", dialogo: d })));
+    expect(h).toContain(d);
+    expect(h.indexOf(d)).toBeLessThan(h.lastIndexOf("</article>"));
+    expect(String(tarefaAbertaCelular(v()))).not.toContain("ta-trans");
   });
 });

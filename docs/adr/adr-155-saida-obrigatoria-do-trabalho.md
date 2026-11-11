@@ -20,12 +20,43 @@ tarefa. No card isso aparece vazio ("parado sem motivo"), sem dizer se o bot esp
    saída". Duas seguidas → Precisa de você com "o bot parou 2x sem saída".
 4. **Volta quando a CI terminar:** `me_chame_as` ganha `quando: "ci"`, ligado ao PR da tarefa; o varredor confere os
    checks e acorda a cadeia, com expiração de 24 h.
+   **Emenda de 2026-11-10 (comparação Multica × nod, os wakeups `--until-pr merged/conflicts` e `--until-issue`):** o mesmo
+   varredor acorda também `quando: "merge"` (o PR da tarefa saiu de aberto), `quando: "conflito"` (o PR aberto ficou com
+   conflito, ou saiu de aberto) e `quando: "tarefa"` com `tarefa` (código ou id de outra tarefa do mesmo quadro) e `estado`
+   opcional (`feito` = grupo Feito, `revisao`, `bloqueado`; sem ele, o primeiro dos três). Cancelar ou apagar a outra
+   tarefa também acorda. A condição mora em `turnos.acordar_quando`/`acordar_pr_url`/`acordar_tarefa_id`/
+   `acordar_tarefa_estado` (0171), a regra em `voltaPorEventoPronta`. O card mostra "Esperando o merge", "Esperando
+   conflito" e "Esperando ENG-12"; a expiração continua 24 h.
 5. **Freios:** mesma volta 3x sem novidade pausa (regra existente de voltas); retomadas e novas tentativas passam a
    contar no teto de 12 acionamentos por tarefa por hora; o freio de ir e voltar continua.
 6. **O zelador deixa de cobrar** tarefa com volta marcada ou trabalho vivo; continua cobrando prazo.
 7. **O card mostra um estado numa linha:** trabalhando · esperando + motivo · precisa de você · bloqueado. Frente aberta
    pela tarefa conta como trabalhando. No detalhe, "Volto quando…" com a ação registrada `quadro.acordar_trabalho`
    ("Acordar agora"), viva na tela e no `gerir_quadro`.
+
+### Emenda (2026-11-10, ADR-142): o trabalho preso à etapa
+
+Quando a tarefa sai da etapa em que o trabalho nasceu por outro (a pessoa ou outro bot) e o turno não foi parado, ele
+termina preso à etapa dele e não muda mais o status. Sem saída própria (nenhuma), a saída gravada é **andou**: a tarefa
+andou, e ele não é reacionado nem levado a Precisa de você. As saídas explícitas (Precisa de você, Bloqueado, volta)
+continuam valendo como antes.
+
+## Emenda de 2026-11-10 (comparação Multica × nod, P1, P4 e P8)
+
+8. **Onde a regra vale (P1).** Vale em toda coluna em que o trabalho anda: A fazer e o `andando` do domínio
+   (`src/domain/quadro.ts`: todo o grupo iniciado menos Bloqueado e a espera da pessoa — Fazendo, **Em revisão** e as
+   colunas de andamento da pessoa). Antes o varredor tinha uma regra própria (só A fazer e Fazendo), e o bot acionado
+   pela passagem em Em revisão (ADR-142) que parava sem saída era gravado como "fora" e valia como "andou".
+9. **Turno aberto por comentário (P4).** O comentário que aciona o **responsável** abre um trabalho da tarefa (origem
+   `comentario`); desde esta emenda ele também grava a saída e é cobrado pelas 4 saídas, e é o trabalho atual da tarefa
+   em toda coluna que aciona (não só Fazendo). **Critério da exceção** (`cobraTurnoDeComentario`): o turno que parou sem
+   saída mas **comentou na tarefa** durante o turno só respondeu (a pergunta ou a consulta da pessoa teve resposta; no
+   Multica responder não muda status) e não é cobrado — a saída não se grava, e saída nula nunca reaciona. O bot
+   @mencionado que não é o responsável não vira trabalho da tarefa e nunca é cobrado (a tarefa não é dele). Calado e sem
+   saída, o turno de comentário do responsável é cobrado como qualquer outro.
+10. **A ida à espera pelo varredor entra nos movimentos (P8).** Bloqueado ou a marca de espera da pessoa postos pelo
+    varredor gravam o movimento (`mover`; o freio do reacionamento, `freio`), como o lote: o card ganha o Desfazer e
+    `entradasNaEspera` acha a entrada.
 
 ## Consequências
 

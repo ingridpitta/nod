@@ -9,7 +9,7 @@
 import { esc } from "../lib/escape.ts";
 import type { VisaoDoQuadro } from "../../src/contracts/raio-x.ts";
 import type { Status } from "../lib/quadro.ts";
-import { aviso, avataresDoCard, confiar, formDoResponder, ICONE, iconeDe, quandoDoCard, rotuloDoCard, seloTrabalhando, type Card, type Html } from "./quadro.ts";
+import { aviso, avataresDoCard, confiar, formDoResponder, ICONE, iconeDe, prioridadeDoCard, quandoDoCard, rotuloDoCard, seloTrabalhando, type Card, type Html } from "./quadro.ts";
 
 /** O vazio do grupo aberto, inline (sem modal): diz o que fazer. */
 export const VAZIO_DO_GRUPO = "Nada por aqui. Toque em + para criar.";
@@ -21,6 +21,8 @@ export type GrupoDoCelular = {
   n?: number; recolhido?: boolean;
   /** "" = não diz nada (com filtro ou busca, a linha do vazio sobre a lista diz uma vez só). */
   vazio?: string;
+  /** 2026-11-11: a dica do Backlog do computador (dicaDoBacklog): "Parada no Backlog: mova para A fazer para começar." */
+  dica?: string;
 };
 
 /** A linha da tarefa: o título (até 2 linhas) e, embaixo, o ID com o estado; à direita, o avatar (vazio, tracejado). */
@@ -30,7 +32,10 @@ export function linhaDoCelular(c: Card): Html {
     : c.motivo ? `<span class="qd-cl-est qd-e-bloqueado" title="${esc(`bloqueada: ${c.motivo}`)}">${ICONE.pausa}<span>${esc(c.motivo)}</span></span>`
       : c.estado === "rodando" ? seloTrabalhando(c.rodandoHa) : "";
   const avatar = av.html ? `<span class="qd-cl-av qd-avs">${av.html}</span>` : `<span class="qd-cl-av qd-cl-av-vazio" aria-hidden="true"></span>`;
-  const classe = ["qd-cl", c.menu && "qd-com-menu", c.aviso && "qd-com-aviso", c.classe && esc(c.classe)].filter(Boolean).join(" ");
+  // 2026-11-11: a prioridade do card do computador (prioridadeDoCard: o botão das barrinhas no card editável, o mesmo
+  // menuDePrioridade em `menu`), fora do botão da linha (botão dentro de botão não vale), antes do avatar.
+  const pri = c.prioridade ? `<span class="qd-cl-pri">${prioridadeDoCard(c)}</span>` : "";
+  const classe = ["qd-cl", pri && "qd-cl-com-pri", c.menu && "qd-com-menu", c.aviso && "qd-com-aviso", c.classe && esc(c.classe)].filter(Boolean).join(" ");
   return confiar(`<li class="${classe}" data-tarefa="${esc(c.id)}">` +
     `<button type="button" class="qd-cl-bt" data-act="abrir-tarefa" data-id="${esc(c.id)}" aria-label="${esc(rotuloDoCard(c))}">` +
     `<span class="qd-cl-tit">${c.tituloHtml ?? esc(c.titulo)}</span>` +
@@ -38,8 +43,11 @@ export function linhaDoCelular(c: Card): Html {
     // Revisão do PR #700 (plano §7): o toque longo não existe no TalkBack/VoiceOver; o mesmo menu sai deste botão, que só
     // o leitor de tela (e o Tab, com o contorno) encontra.
     `<button type="button" class="qd-cl-acoes qd-sr" data-act="cel-menu-tarefa" data-id="${esc(c.id)}" aria-haspopup="dialog" aria-label="${esc(`Ações de ${c.titulo}`)}">${ICONE.mais}</button>` +
-    `${avatar}${c.menu ?? ""}${formDoResponder(c, "linha")}</li>`);
+    `${pri}${avatar}${c.menu ?? ""}${formDoResponder(c, "linha")}</li>`);
 }
+
+/** A dica do grupo (a mesma linha discreta da coluna do computador, `.qd-col-dica`). */
+const dicaDoGrupo = (gr: GrupoDoCelular): string => (gr.dica ? `<p class="qd-col-dica qd-cg-dica">${esc(gr.dica)}</p>` : "");
 
 /** A lista agrupada: um grupo por coluna (aberto ou recolhido, como na lista estreita), o + cria no grupo. */
 export function listaDoCelular(o: { grupos: readonly GrupoDoCelular[]; rotulo: string; novaTarefa?: boolean }): Html {
@@ -50,7 +58,7 @@ export function listaDoCelular(o: { grupos: readonly GrupoDoCelular[]; rotulo: s
     const cab = `<h3 class="qd-cg-cab"><button type="button" class="qd-cg-bt" data-act="abrir-coluna" data-status="${esc(gr.status)}" aria-expanded="${!gr.recolhido}">` +
       `${iconeDe(gr)}<span class="qd-cg-nome">${esc(gr.nome)}</span><span class="qd-cg-n">${n}</span>${gr.recolhido ? ICONE.chev : ""}</button>${mais}</h3>`;
     const corpo = gr.linhas.length ? gr.linhas.join("") : gr.vazio === "" ? "" : `<li class="qd-cl-vazio">${esc(gr.vazio ?? VAZIO_DO_GRUPO)}</li>`;
-    return `<section class="qd-cg${gr.recolhido ? " qd-cg-recolhido" : ""}" aria-label="${esc(gr.nome)}">${cab}${gr.recolhido ? "" : `<ul class="qd-cg-lista">${corpo}</ul>`}</section>`;
+    return `<section class="qd-cg${gr.recolhido ? " qd-cg-recolhido" : ""}" aria-label="${esc(gr.nome)}">${cab}${gr.recolhido ? "" : `${dicaDoGrupo(gr)}<ul class="qd-cg-lista">${corpo}</ul>`}</section>`;
   }).join("");
   return confiar(`<div class="qd-cel-lista" role="region" aria-label="${esc(o.rotulo)}">${g}</div>`);
 }
@@ -82,7 +90,7 @@ export function colunasDoCelular(o: { grupos: readonly GrupoDoCelular[]; rotulo:
     const corpo = gr.linhas.length ? gr.linhas.join("") : gr.vazio === "" ? "" : `<li class="qd-cl-vazio">${esc(gr.vazio ?? VAZIO_DO_GRUPO)}</li>`;
     return `<section class="qd-cc" data-status="${esc(gr.status)}" aria-roledescription="coluna" aria-label="${esc(`${gr.nome}, ${i + 1} de ${n}`)}">` +
       `<h3 class="qd-cg-cab"><span class="qd-cg-bt">${iconeDe(gr)}<span class="qd-cg-nome">${esc(gr.nome)}</span><span class="qd-cg-n">${qtd}</span></span>${mais}</h3>` +
-      `<ul class="qd-cg-lista">${corpo}</ul></section>`;
+      `${dicaDoGrupo(gr)}<ul class="qd-cg-lista">${corpo}</ul></section>`;
   }).join("");
   const pontos = n <= 1 ? ""
     : n <= PONTOS_MAX ? `<div class="qd-cel-pontos" aria-hidden="true">${o.grupos.map((_, i) => `<span class="qd-cel-ponto${i === 0 ? " qd-cel-ponto-on" : ""}"></span>`).join("")}</div>`
@@ -136,7 +144,8 @@ export function folhaDaVisao(visao: VisaoDoQuadro): Html {
  */
 export const PRAZO_DA_TAREFA = false;
 
-export type DestinoDoMover = { id: string; nome: string; icone: Status; porque?: string | null };
+/** `nota`: o que mover faz (a regra única, web/lib/acionamento.ts): "Passa para Ze 1, que começa agora". */
+export type DestinoDoMover = { id: string; nome: string; icone: Status; porque?: string | null; nota?: string | null };
 export type QuemAtribuir = { id: string; nome: string };
 
 /**
@@ -153,7 +162,7 @@ export function folhaDaTarefa(o: { tarefa: { id: string; titulo: string; status:
       const atual = d.id === t.status;
       const act = atual ? `data-act="cel-fechar"` : `data-act="tarefa-mover-para" data-coluna="${esc(d.id)}" data-tarefa="${id}"`;
       const des = !atual && d.porque ? ` aria-disabled="true" title="${esc(d.porque)}"` : "";
-      return `<button type="button" role="menuitemradio" class="qd-cel-it" ${act} aria-checked="${atual}"${des}>${iconeDe({ status: d.id, icone: d.icone })}<span>${esc(d.nome)}</span>${marca(atual)}</button>`;
+      return `<button type="button" role="menuitemradio" class="qd-cel-it" ${act} aria-checked="${atual}"${des}>${iconeDe({ status: d.id, icone: d.icone })}<span>${esc(d.nome)}</span>${!atual && d.nota ? `<small class="qd-cel-nota">${esc(d.nota)}</small>` : ""}${marca(atual)}</button>`;
     }).join("");
     return confiar(folha(`Mover ${t.titulo} para`, `<div class="qd-cel-menu" role="menu" aria-label="${esc(`Mover ${t.titulo} para`)}">${itens}</div>`));
   }
@@ -169,7 +178,6 @@ export function folhaDaTarefa(o: { tarefa: { id: string; titulo: string; status:
   const itens = [
     it("cel-tarefa-passo", "Mover para…", ' data-passo="mover" aria-haspopup="menu"'),
     o.quem ? it("cel-tarefa-passo", "Atribuir", ' data-passo="atribuir" aria-haspopup="menu"') : "",
-    PRAZO_DA_TAREFA ? it("cel-tarefa-prazo", "Prazo") : "",
     it("cel-copiar-link", "Copiar link"),
   ].join("");
   return confiar(folha(t.titulo, `<p class="qd-cel-folha-tit">${esc(t.titulo)}</p><div class="qd-cel-menu" role="menu" aria-label="${esc(`Ações de ${t.titulo}`)}">${itens}</div>`));

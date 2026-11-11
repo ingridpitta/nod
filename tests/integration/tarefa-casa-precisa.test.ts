@@ -69,6 +69,20 @@ describeIntegracao("ADA-28: um único Precisa de você", () => {
       }),
     ));
 
+  it("P6 (10/11): o lote que não põe a marca (aqui, o turno já parado) não liga a decisão nem grava a linha", () =>
+    comFlag(() =>
+      withRollback(MARLON, async (trx) => {
+        const m = await montar(trx);
+        const status = (await m.repos.quadros.tarefa(m.tarefa.id))!.status;
+        // O Parar chegou entre a pergunta e o lote: o lote recusa ("este turno foi parado").
+        await trx`update turnos set parar_solicitado_em = now() where id = ${m.tarefa.turnoId}`;
+        const pedido = await m.perguntar(m.tarefa.turnoId!);
+        expect((await m.repos.decisoes.buscar(pedido.data.decisao_id))?.tarefaId ?? null).toBeNull();
+        expect((await m.repos.quadros.tarefa(m.tarefa.id))?.status).toBe(status);
+        expect(await m.linhas()).toHaveLength(0);
+      }),
+    ));
+
   it("responder no card fecha a decisão e acorda o bot uma vez só (a retomada da decisão, sem o turno da resposta)", () =>
     comFlag(() =>
       withRollback(MARLON, async (trx) => {

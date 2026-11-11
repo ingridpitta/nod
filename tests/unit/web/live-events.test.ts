@@ -231,6 +231,21 @@ describe("live-events: interface de 4 campos sobre EventSource (ADR-016)", () =>
       expect(m.eventos.filter((e) => e.tipo === "frame")).toHaveLength(1);
     });
 
+    it("2026-11-10: ultimoDado anda com frame e ping, não com o open (o proxy que abre e segura o stream)", () => {
+      const m = montar();
+      m.live.connect();
+      expect(m.live.ultimoDado()).toBe(0);
+      m.fontes[0]?.disparar("open");
+      expect(m.live.ultimoDado()).toBe(0);
+      m.avancar(10_000);
+      m.fontes[0]?.frame(frame(4));
+      const depoisDoFrame = m.live.ultimoDado();
+      expect(depoisDoFrame).toBeGreaterThan(0);
+      m.avancar(5_000);
+      m.fontes[0]?.disparar("ping", { data: "{}" });
+      expect(m.live.ultimoDado()).toBe(depoisDoFrame + 5_000);
+    });
+
     it("um ping antes do prazo não reabre; 45 s de silêncio depois do último ping reabre", () => {
       const m = montar();
       m.live.connect();

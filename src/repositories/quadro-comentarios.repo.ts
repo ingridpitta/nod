@@ -17,9 +17,11 @@ interface LinhaComentario {
   pai_id: string | null;
   editado_em: Date | null;
   apagado_em: Date | null;
+  turno_id: string | null;
+  pergunta: boolean;
 }
 
-const COLUNAS = "c.id, c.quadro_id, c.tarefa_id, c.autor, c.autor_agente_id, c.pedido_por, c.texto, c.de_fora, c.criado_em, c.pai_id, c.editado_em, c.apagado_em";
+const COLUNAS = "c.id, c.quadro_id, c.tarefa_id, c.autor, c.autor_agente_id, c.pedido_por, c.texto, c.de_fora, c.criado_em, c.pai_id, c.editado_em, c.apagado_em, c.turno_id, c.pergunta";
 /** O texto que fica no lugar do comentário apagado (o CHECK do texto não aceita vazio; o DTO devolve vazio). */
 const MARCA_APAGADO = "(apagado)";
 
@@ -35,11 +37,12 @@ const paraComentario = (l: LinhaComentario): ComentarioTarefa => ({
   pedidoPor: l.pedido_por,
 });
 
-/** 2026-11-10 (0159): a thread e a marca de editado/apagado, que vão no DTO. */
-const extras = (l: LinhaComentario) => ({ paiId: l.pai_id, editadoEm: l.editado_em ? ms(l.editado_em) : null, apagado: l.apagado_em !== null });
+/** 2026-11-10 (0162): a thread e a marca de editado/apagado, que vão no DTO. */
+const extras = (l: LinhaComentario) => ({ paiId: l.pai_id, editadoEm: l.editado_em ? ms(l.editado_em) : null, apagado: l.apagado_em !== null, turnoId: l.turno_id, ...(l.pergunta ? { pergunta: true } : {}) });
 
 /** Um comentário da thread como a rota do domínio o lê (agenteDaThread): quem escreveu e os agentes que ele acionou. */
-export type MensagemDaThread = { id: string; autorAgenteId: string | null; acionados: string[]; autorNome: string | null; texto: string; apagado: boolean };
+/** `deFora`: escrito por um bot ou por quem participa do quadro: quem o lê no contexto da thread recebe dado de fora. */
+export type MensagemDaThread = { id: string; autorAgenteId: string | null; acionados: string[]; autorNome: string | null; texto: string; apagado: boolean; deFora: boolean };
 
 /**
  * definido em 2026-11-02 (NOD-417): os comentários das tarefas do quadro (0138). Só primitivas: quem comenta e aciona é
@@ -48,13 +51,21 @@ export type MensagemDaThread = { id: string; autorAgenteId: string | null; acion
 export function quadroComentariosRepo(conn: Conn, escopo: Escopo) {
   const dona = () => conn`c.tenant_id = ${escopo.tenantId} and c.owner_id = ${escopo.pessoaId}`;
   return {
-    async inserir(c: { quadroId: string; tarefaId: string; autor: AutorLote | { tipo: "sistema" }; texto: string; deFora: boolean; pedidoPor?: string | null; paiId?: string | null }): Promise<ComentarioTarefa & { paiId: string | null }> {
-      const pedidoPor = c.autor.tipo === "agente" && c.pedidoPor ? c.pedidoPor : null;
+    async inserir(c: { quadroId: string; tarefaId: string; autor: AutorLote | { tipo: "sistema" }; texto: string; deFora: boolean; pedidoPor?: string | null; paiId?: string | null; turnoId?: string | null; pergunta?: boolean; /** Quem participa do quadro (autor pessoa com `pedidoPor`): o nome que assina, "Ana" ou "Ana, pela Lia". */ autorNome?: string | null }): Promise<ComentarioTarefa & { paiId: string | null }> {
+      // O bot a pedido de uma pessoa (NOD-430) e, desde 2026-11-11, a pessoa que participa do quadro (autor pessoa, com o nome).
+      const pedidoPor = (c.autor.tipo === "agente" || c.autor.tipo === "pessoa") && c.pedidoPor ? c.pedidoPor : null;
+      const autorNome = c.autor.tipo === "pessoa" && pedidoPor ? (c.autorNome ?? null) : null;
       const [l] = await conn<LinhaComentario[]>`
-        insert into quadro_comentarios as c (tenant_id, owner_id, quadro_id, tarefa_id, autor, autor_agente_id, pedido_por, texto, de_fora, pai_id)
-        values (${escopo.tenantId}, ${escopo.pessoaId}, ${c.quadroId}, ${c.tarefaId}, ${c.autor.tipo}, ${c.autor.tipo === "agente" ? c.autor.agenteId : null}, ${pedidoPor}, ${c.texto}, ${c.deFora}, ${c.paiId ?? null})
+        insert into quadro_comentarios as c (tenant_id, owner_id, quadro_id, tarefa_id, autor, autor_agente_id, pedido_por, autor_nome, texto, de_fora, pai_id, turno_id, pergunta)
+        values (${escopo.tenantId}, ${escopo.pessoaId}, ${c.quadroId}, ${c.tarefaId}, ${c.autor.tipo}, ${c.autor.tipo === "agente" ? c.autor.agenteId : null}, ${pedidoPor}, ${autorNome}, ${c.texto}, ${c.deFora}, ${c.paiId ?? null}, ${c.turnoId ?? null}, ${c.pergunta ?? false})
         returning ${conn.unsafe(COLUNAS)}`;
       return { ...paraComentario(l!), paiId: l!.pai_id };
+    },
+    /** 2026-11-11: quantos comentários quem participa (autor pessoa, `pedido_por`) deixou na tarefa: o teto por pessoa. */
+    async contarDeQuemParticipa(tarefaId: string, pessoaId: string): Promise<number> {
+      const [l] = await conn<{ n: number }[]>`
+        select count(*)::int as n from quadro_comentarios c where ${dona()} and c.tarefa_id = ${tarefaId} and c.autor = 'pessoa' and c.pedido_por = ${pessoaId}`;
+      return l?.n ?? 0;
     },
     /** Um comentário da tarefa (a raiz de uma resposta, o que se edita ou apaga). */
     async buscar(tarefaId: string, id: string): Promise<(ComentarioTarefa & { paiId: string | null; apagado: boolean; turnos: string[] }) | null> {
@@ -64,13 +75,13 @@ export function quadroComentariosRepo(conn: Conn, escopo: Escopo) {
     },
     /** A thread inteira (a raiz e as respostas, em ordem), com os agentes que cada comentário acionou. */
     async thread(raizId: string): Promise<MensagemDaThread[]> {
-      const ls = await conn<{ id: string; autor_agente_id: string | null; acionados: string[]; autor_nome: string | null; texto: string; apagado: boolean }[]>`
-        select c.id, c.autor_agente_id, coalesce(c.autor_nome, a.nome) as autor_nome, c.texto, c.apagado_em is not null as apagado,
+      const ls = await conn<{ id: string; autor_agente_id: string | null; acionados: string[]; autor_nome: string | null; texto: string; apagado: boolean; de_fora: boolean }[]>`
+        select c.id, c.autor_agente_id, coalesce(c.autor_nome, a.nome) as autor_nome, c.texto, c.apagado_em is not null as apagado, c.de_fora,
           array(select t.agente_id from turnos t where t.tenant_id = c.tenant_id and t.id = any(c.turnos) order by t.criado_em) as acionados
         from quadro_comentarios c left join agentes a on a.tenant_id = c.tenant_id and a.id = c.autor_agente_id
         where ${dona()} and (c.id = ${raizId} or c.pai_id = ${raizId})
         order by (c.id = ${raizId}) desc, c.criado_em, c.id`;
-      return ls.map((l) => ({ id: l.id, autorAgenteId: l.autor_agente_id, acionados: l.acionados ?? [], autorNome: l.autor_nome, texto: l.apagado ? "" : l.texto, apagado: l.apagado }));
+      return ls.map((l) => ({ id: l.id, autorAgenteId: l.autor_agente_id, acionados: l.acionados ?? [], autorNome: l.autor_nome, texto: l.apagado ? "" : l.texto, apagado: l.apagado, deFora: l.de_fora }));
     },
     /**
      * A thread em que o turno raiz `turnoId` foi acionado nesta tarefa (a raiz dela), para a resposta do agente cair na

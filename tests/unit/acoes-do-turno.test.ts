@@ -145,7 +145,8 @@ describe("NOD-353 (revisão 3 do #523): o Falhou ao vivo de ponta a ponta", () =
   it("desktop e motor: o repasse leva o id e o isError à ponte; o laço local publica o mesmo par de frames", () => {
     const alvo = { ferramenta: vi.fn(), fimDaFerramenta: vi.fn() };
     for (const ev of [uso("t1", "Bash"), fim("t1", true), fim("t2", false), ok("x")]) repassarAcaoDoEvento(alvo, "turno", ev);
-    expect(alvo.ferramenta.mock.calls).toEqual([["turno", "Bash", "t1"]]);
+    // ADR-165: o quarto argumento é o resumo do input (aqui sem campo conhecido: undefined).
+    expect(alvo.ferramenta.mock.calls).toEqual([["turno", "Bash", "t1", undefined]]);
     expect(alvo.fimDaFerramenta.mock.calls).toEqual([["turno", "t1", true], ["turno", "t2", false]]);
     expect(frameVivoDoEvento(fim("t1", true))).toEqual({ tipo: "turno.acao_fim", dados: { id: "t1", falhou: true } });
     expect(frameVivoDoEvento(uso("t1", "Bash"))).toMatchObject({ tipo: "turno.atividade", dados: { nome: "Bash", id: "t1" } });

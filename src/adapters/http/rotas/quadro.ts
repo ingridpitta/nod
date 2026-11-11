@@ -8,7 +8,9 @@ import { ErroDeDominio } from "../../../domain/erro.ts";
 import { previaComentario, verComentarios } from "../../../use-cases/comentar-tarefa.ts";
 import { buscarPreviaNoLinear, conferirPreviaDaTela, previaDaTela } from "../../../use-cases/importar-linear.ts";
 import { verTrabalhos } from "../../../use-cases/quadro-execucoes.ts";
+import { verPassosDoRun } from "../../../use-cases/passos-do-run.ts";
 import { historicoDaTarefa, listarQuadros, verQuadro, verTarefaPorCodigo } from "../../../use-cases/quadro.ts";
+import { previaDoMover } from "../../../use-cases/previa-do-mover.ts";
 import { muralDoQuadro, quadrosCompartilhados, verQuadroPorId } from "../../../use-cases/quadro-pessoas.ts";
 import { TABELA_ERROS } from "../erros.ts";
 import type { Ctx, Rota } from "../roteador.ts";
@@ -22,6 +24,7 @@ const LID = "(?<lid>[^/]+)";
 const CID = "(?<cid>[^/]+)";
 const QID = "(?<qid>[^/]+)";
 const PID = "(?<pid>[^/]+)";
+const TURNO = "(?<turno>[^/]+)";
 /** O id da coluna (o nome também serve, como na conversa). O roteador já decodificou: decodificar de novo quebra "100%". */
 const coluna = (cid: string | undefined) => cid ?? "";
 const texto = (v: unknown) => (typeof v === "string" ? v : undefined);
@@ -97,12 +100,12 @@ export function cacheDaPrevia(agora: () => number = Date.now) {
  * NOD-443 (revisão 1, achado 8): o PATCH da tarefa lê só os campos da tarefa. O resto do corpo (anfitriaoId, quadroId,
  * executor) não chega à ação: o quadro vem da URL.
  */
-const CAMPOS_DA_TAREFA = ["titulo", "descricao", "status", "agente", "pr_url", "prioridade", "pergunta", "excluir", "labels", "por_labels", "tirar_labels", "prazo_em"] as const;
+const CAMPOS_DA_TAREFA = ["titulo", "descricao", "status", "agente", "pr_url", "prioridade", "pergunta", "excluir", "parar_anterior", "labels", "por_labels", "tirar_labels", "prazo_em"] as const;
 function camposDaTarefa(c: Record<string, unknown>): Partial<Record<(typeof CAMPOS_DA_TAREFA)[number], never>> {
   return Object.fromEntries(CAMPOS_DA_TAREFA.filter((k) => k in c).map((k) => [k, c[k]])) as never;
 }
 
-/** 0159: as labels e o prazo da tarefa nova no corpo (ausente não mexe; o tipo é do lerOp). */
+/** 0161: as labels e o prazo da tarefa nova no corpo (ausente não mexe; o tipo é do lerOp). */
 const labelsEPrazo = (c: Record<string, unknown>) => ({ ...(c.labels !== undefined ? { labels: c.labels as string[] } : {}), ...(c.prazo_em !== undefined ? { prazo_em: c.prazo_em as string | null } : {}) });
 
 /** ADA-14: o nome e o projeto do quadro no corpo (ausente não mexe; o tipo é do lerOp). */
@@ -226,10 +229,16 @@ export function rotasQuadro(d: DepsRotas): Rota[] {
     } },
     { metodo: "PATCH", acao: "quadro.editar_comentario", padrao: new RegExp(`^/agentes/${ID}/quadro/tarefas/${TID}/comentarios/${CID}$`), async handler(ctx) {
       const c = corpoObjeto(await ctx.corpo());
-      ctx.json(200, await executar(ctx.escopo, EXECUTORES_QUADRO["quadro.editar_comentario"], { ...base(ctx), tarefa: ctx.params.tid ?? "", comentario: ctx.params.cid ?? "", texto: c.texto as string }));
+      ctx.json(200, await executar(ctx.escopo, EXECUTORES_QUADRO["quadro.editar_comentario"], { ...base(ctx), tarefa: ctx.params.tid ?? "", comentario: ctx.params.cid ?? "", texto: c.texto as string, ...(c.refazer === true ? { refazer: true } : {}) }));
     } },
     { metodo: "DELETE", acao: "quadro.apagar_comentario", padrao: new RegExp(`^/agentes/${ID}/quadro/tarefas/${TID}/comentarios/${CID}$`), async handler(ctx) {
       ctx.json(200, await executar(ctx.escopo, EXECUTORES_QUADRO["quadro.apagar_comentario"], { ...base(ctx), tarefa: ctx.params.tid ?? "", comentario: ctx.params.cid ?? "" }));
+    } },
+    // ADR-165: os passos persistidos de um run da tarefa (turno raiz), paginados por `depois` (o seq do último já lido). Só lê.
+    { metodo: "GET", padrao: new RegExp(`^/agentes/${ID}/quadro/tarefas/${TID}/runs/${TURNO}/passos$`), async handler(ctx) {
+      const q = new URL(ctx.req.url ?? "/", "http://127.0.0.1").searchParams.get("depois");
+      if (q !== null && !/^\d{1,15}$/.test(q)) throw new ErroDeDominio("entrada_invalida", { cause: "depois" });
+      ctx.json(200, await executar(ctx.escopo, verPassosDoRun, { agenteId: ctx.params.id ?? "", tarefaId: ctx.params.tid ?? "", turnoId: ctx.params.turno ?? "", depois: q === null ? null : Number(q) }));
     } },
     // NOD-418: os trabalhos da tarefa (a lista ao vivo), Repetir, Cancelar e o recado. A resposta traz `trabalhos`.
     { metodo: "GET", padrao: new RegExp(`^/agentes/${ID}/quadro/tarefas/${TID}/trabalhos$`), async handler(ctx) {
@@ -258,6 +267,10 @@ export function rotasQuadro(d: DepsRotas): Rota[] {
         if (!r) throw erro;
         ctx.json(r.status, r.corpo);
       }
+    } },
+    // 2026-11-10 (ADR-142): o diálogo de handoff lê o que soltar na coluna faz (só leitura; mover é o PATCH da tarefa).
+    { metodo: "GET", padrao: new RegExp(`^/agentes/${ID}/quadro/tarefas/${TID}/previa-mover/(?<coluna>[a-z0-9-]{1,48})$`), async handler(ctx) {
+      ctx.json(200, await executar(ctx.escopo, previaDoMover, { agenteId: ctx.params.id ?? "", tarefaId: ctx.params.tid ?? "", coluna: ctx.params.coluna ?? "" }));
     } },
     { metodo: "GET", padrao: new RegExp(`^/agentes/${ID}/quadro/tarefas/${TID}/historico$`), async handler(ctx) {
       ctx.json(200, await executar(ctx.escopo, historicoDaTarefa, { agenteId: ctx.params.id ?? "", tarefaId: ctx.params.tid ?? "" }));
@@ -289,7 +302,7 @@ export function rotasQuadro(d: DepsRotas): Rota[] {
       const destino = new URL(ctx.req.url ?? "/", "http://127.0.0.1").searchParams.get("destino");
       ctx.json(200, await executar(ctx.escopo, EXECUTORES_QUADRO["quadro.remover_coluna"], { ...base(ctx), coluna: coluna(ctx.params.cid), ...(destino ? { destino } : {}) }));
     } },
-    // 0159: o catálogo de labels do quadro (só a dona; pôr e tirar label na tarefa é o PATCH da tarefa).
+    // 0161: o catálogo de labels do quadro (só a dona; pôr e tirar label na tarefa é o PATCH da tarefa).
     { metodo: "POST", acao: "quadro.criar_label", padrao: new RegExp(`^/agentes/${ID}/quadro/labels$`), async handler(ctx) {
       const c = corpoObjeto(await ctx.corpo());
       ctx.json(201, await executar(ctx.escopo, EXECUTORES_QUADRO["quadro.criar_label"], { ...base(ctx), nome: c.nome as string, ...(c.cor !== undefined ? { cor: c.cor as string } : {}) }));

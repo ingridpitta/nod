@@ -9,6 +9,7 @@ import { meChameAs } from "../../src/use-cases/me-chame-as.ts";
 import { aplicarLoteQuadro, montarQuadro, type PedidoLote } from "../../src/use-cases/quadro.ts";
 import { acordarVoltasDeCi, cuidarDasExecucoesDoQuadro, trabalhoDaTarefa } from "../../src/use-cases/quadro-execucoes.ts";
 import { abrirFrentes } from "../../src/use-cases/frentes.ts";
+import { comentarTarefa } from "../../src/use-cases/comentar-tarefa.ts";
 import { varrerAvisosDosQuadros } from "../../src/use-cases/avisos-quadro.ts";
 import { LIMITE_ACIONAMENTOS_HORA } from "../../src/domain/freios-quadro.ts";
 import { contexto, depsSobre } from "../helpers/deps-l7.ts";
@@ -91,6 +92,24 @@ describeIntegracao("ADA-232: saída obrigatória do trabalho da tarefa", () => {
     });
   });
 
+  it("P8 (10/11): a ida à espera pelo varredor entra nos movimentos: entradasNaEspera a acha e a pessoa desfaz", async () => {
+    await withRollback(MARLON, async (trx) => {
+      const m = await montar(trx);
+      const raiz = await m.pegar();
+      await m.assentar(raiz.id, []);
+      await m.varrer();
+      const segunda = await m.pegar();
+      await m.assentar(segunda.id, []);
+      await m.varrer();
+      const t = await m.tarefa();
+      expect(t.status).toBe("voce");
+      const entradas = await m.repos.quadros.entradasNaEspera(t.quadroId);
+      expect(entradas.find((x) => x.tarefaId === t.id)).toMatchObject({ tipo: "mover", para: "voce", de: t.voltarPara });
+      await m.lote([{ tipo: "desfazer_movimento", tarefa: "T" }]);
+      expect((await m.tarefa()).status).toBe(t.voltarPara);
+    });
+  });
+
   // ADA-289 (P1 do Dante): o varredor tinha um "andando" só de A fazer e Fazendo; o bot acionado em Em revisão (pela
   // passagem da coluna, ADR-142) que parava calado era gravado como "andou" e nunca era cobrado (ADR-155 §1/§3).
   it("Em revisão também cobra a saída: o bot acionado lá que para sem saída grava nenhuma e é reacionado", async () => {
@@ -117,8 +136,8 @@ describeIntegracao("ADA-232: saída obrigatória do trabalho da tarefa", () => {
     await withRollback(MARLON, async (trx) => {
       const m = await montar(trx);
       const raiz = await m.pegar();
-      // ADA-289: Em revisão agora é "andando" (P1); o andou vem do PR e do status mudados depois do despacho, não mais de
-      // a tarefa ter saído do andamento. O despacho volta ao agora real, como no teste abaixo.
+      // P1 (10/11): o PR leva a tarefa a Em revisão, que agora anda (é cobrada); o "andou" sai do PR ganho durante o turno,
+      // não mais de a Revisão contar como "fora". O despacho volta ao agora real, como no teste abaixo.
       await trx`update turnos set despachado_em = clock_timestamp() where id = ${raiz.id}`;
       await m.lote([{ tipo: "mudar_tarefa", tarefa: "T", pr_url: "https://github.com/gamefik/nod/pull/677" }]);
       await m.assentar(raiz.id, ["mcp__nod__gerir_quadro"]);
@@ -220,6 +239,60 @@ describeIntegracao("ADA-232: saída obrigatória do trabalho da tarefa", () => {
       expect((await m.turnosDoBeto()).filter((t) => t.origem === "retomada")).toHaveLength(0);
       expect((await m.tarefa()).status).toBe("backlog");
     });
+  });
+
+  it("P1 (comparação Multica, 10/11): o bot acionado pela passagem em Em revisão que para sem saída é cobrado como em Fazendo", async () => {
+    await withRollback(MARLON, async (trx) => {
+      const m = await montar(trx);
+      await m.pegar();
+      // A pessoa põe a Ana na Revisão e manda a tarefa para lá: a passagem aciona a Ana na coluna (ADR-142). O turno do
+      // Beto é parado (parar_anterior): sem isso ele seguiria vivo, preso à etapa dele, e o varredor esperaria por ele.
+      await m.lote([{ tipo: "definir_passagem", coluna: "revisao", agente: m.ana.agenteId }, { tipo: "mudar_tarefa", tarefa: "T", status: "revisao", parar_anterior: true }]);
+      const t = await m.tarefa();
+      expect(t.status).toBe("revisao");
+      const revisao = await m.pegar();
+      expect(revisao.id).toBe(t.turnoId);
+      await m.assentar(revisao.id, ["Bash"]);
+      const exec = (await m.execs()).find((e) => e.turnoId === revisao.id)!;
+      expect(exec.saida).toBe("nenhuma");
+      await m.varrer();
+      const daAna = await m.repos.turnos.listarDaConversa(m.ana.conversaId, 50);
+      const retomada = daAna.find((x) => x.origem === "retomada" && x.retomaTurnoId === revisao.id);
+      expect(retomada?.entradaTexto.startsWith(AVISO_SEM_SAIDA)).toBe(true);
+    });
+  });
+
+  it("P4 (10/11, ADR-155 §6): o turno de comentário do responsável que para calado é cobrado; o que só respondeu na tarefa, não", async () => {
+    for (const respondeu of [false, true]) {
+      await withRollback(MARLON, async (trx) => {
+        const m = await montar(trx);
+        const raiz = await m.pegar();
+        // O trabalho anda (PR → Em revisão) e termina; depois a pessoa comenta e aciona o Beto, responsável.
+        await trx`update turnos set despachado_em = clock_timestamp() where id = ${raiz.id}`;
+        await m.lote([{ tipo: "mudar_tarefa", tarefa: "T", pr_url: "https://github.com/gamefik/nod/pull/677" }]);
+        await m.assentar(raiz.id, ["mcp__nod__gerir_quadro"]);
+        await m.varrer();
+        // O relógio do teste: tudo na transação grava com o mesmo now(); o que veio antes do comentário vai 1 h para trás.
+        await trx`update quadro_tarefa_historico set criado_em = now() - interval '1 hour'`;
+        await trx`update quadro_lotes set criado_em = now() - interval '1 hour'`;
+        const c = await comentarTarefa(m.deps, m.p, { tipo: "comentar", tarefa: "T", texto: "Beto, qual o status do lint?" });
+        expect(c.data.ok).toBe(true);
+        const doComentario = await m.pegar();
+        expect((await m.execs()).find((e) => e.turnoId === doComentario.id)?.origem).toBe("comentario");
+        expect((await m.tarefa()).turnoId).toBe(doComentario.id);
+        await trx`update turnos set despachado_em = now() - interval '1 second' where id = ${doComentario.id}`;
+        if (respondeu) {
+          const r = await comentarTarefa(m.deps, { ...m.p, autor: { tipo: "agente", agenteId: m.beto.agenteId }, turnoId: doComentario.id }, { tipo: "comentar", tarefa: "T", texto: "o lint passou" });
+          expect(r.data.ok).toBe(true);
+        }
+        await m.assentar(doComentario.id, []);
+        const exec = (await m.execs()).find((e) => e.turnoId === doComentario.id)!;
+        expect(exec.saida).toBe(respondeu ? null : "nenhuma");
+        await m.varrer();
+        const cobrado = (await m.turnosDoBeto()).some((x) => x.origem === "retomada" && x.retomaTurnoId === doComentario.id && x.entradaTexto.startsWith(AVISO_SEM_SAIDA));
+        expect(cobrado).toBe(!respondeu);
+      });
+    }
   });
 
   it("saída de verdade zera a série: parar sem saída de novo depois reaciona outra vez", async () => {
@@ -491,6 +564,91 @@ describeIntegracao("ADA-232: o card numa linha (estadoLinha) e a volta no detalh
     await withRollback(MARLON, async (trx) => {
       const ls = await trx<{ indexdef: string }[]>`select indexdef from pg_indexes where schemaname = current_schema() and tablename = 'trabalhos'`;
       expect(ls.some((l) => /\(tenant_id, tarefa_id\)/.test(l.indexdef))).toBe(true);
+    });
+  });
+});
+
+/** 2026-11-10 (os wakeups do Multica): merge, conflito e outra tarefa do quadro, pelo mesmo varredor da volta por CI. */
+describeIntegracao("volta por evento: merge, conflito e outra tarefa", () => {
+  async function comVolta(trx: Tx, args: Record<string, unknown>, comPr = true) {
+    const m = await montar(trx);
+    const raiz = await m.pegar();
+    if (comPr) await m.lote([{ tipo: "mudar_tarefa", tarefa: "T", pr_url: PR }]);
+    const r = await meChameAs(m.deps, { turnoId: raiz.id, agenteId: m.beto.agenteId, conversaId: m.beto.conversaId, motivo: "esperar", ...args } as Parameters<typeof meChameAs>[1]);
+    const gravarPr = async (estado: PrDaTarefa["estado"], conflito = false) => {
+      const t = await m.tarefa();
+      await m.repos.quadros.salvarPr(t.quadroId, t.id, { repo: "gamefik/nod", numero: 677, url: PR, branch: "b", estado, ci: "ok", conflito });
+    };
+    return { m, raiz, r: r.data as { ok: boolean; erro?: string; instrucao: string }, gravarPr };
+  }
+
+  it("merge: PR aberto (mesmo com CI ok) dorme; mergeado acorda, e a volta diz o que esperava", async () => {
+    await withRollback(MARLON, async (trx) => {
+      const { m, raiz, r, gravarPr } = await comVolta(trx, { quando: "merge" });
+      expect(r.ok).toBe(true);
+      expect(r.instrucao).toContain("mergeado");
+      await m.assentar(raiz.id, ["mcp__nod__me_chame_as"]);
+      const volta = (await m.turnosDoBeto()).find((t) => t.origem === "retomada" && t.estado === "pendente")!;
+      expect(volta.entradaTexto).toContain(`${PR} fosse mergeado`);
+      await gravarPr("aberto");
+      expect(await acordarVoltasDeCi(m.deps)).toBe(0);
+      await gravarPr("mergeado");
+      expect(await acordarVoltasDeCi(m.deps)).toBe(1);
+    });
+  });
+
+  it("conflito: sem conflito dorme; com conflito acorda; o card leva a espera por conflito", async () => {
+    await withRollback(MARLON, async (trx) => {
+      const { m, raiz, r, gravarPr } = await comVolta(trx, { quando: "conflito" });
+      expect(r.ok).toBe(true);
+      await m.assentar(raiz.id, ["mcp__nod__me_chame_as"]);
+      const q = await montarQuadro(m.deps, (await m.repos.quadros.doAgente(m.ana.agenteId))!);
+      const linha = q!.tarefas.find((t) => t.titulo === "T")!.estadoLinha;
+      expect(linha).toMatchObject({ tipo: "esperando", volta: { quando: "conflito" } });
+      await gravarPr("aberto", false);
+      expect(await acordarVoltasDeCi(m.deps)).toBe(0);
+      await gravarPr("aberto", true);
+      expect(await acordarVoltasDeCi(m.deps)).toBe(1);
+    });
+  });
+
+  it("merge e conflito sem PR na tarefa são recusados com instrução", async () => {
+    await withRollback(MARLON, async (trx) => {
+      const { r } = await comVolta(trx, { quando: "merge" }, false);
+      expect(r).toMatchObject({ ok: false, erro: "sem_pr" });
+    });
+  });
+
+  it("tarefa: espera outra tarefa do quadro pelo código; acorda quando ela chega no estado, e o card mostra o código", async () => {
+    await withRollback(MARLON, async (trx) => {
+      const m0 = await montar(trx);
+      await m0.lote([{ tipo: "criar_tarefa", titulo: "Outra" }]);
+      const q0 = (await m0.repos.quadros.doAgente(m0.ana.agenteId))!;
+      const outra = (await m0.repos.quadros.tarefas(q0.id)).find((t) => t.titulo === "Outra")!;
+      const qDto = await montarQuadro(m0.deps, q0);
+      const codigo = qDto!.tarefas.find((t) => t.id === outra.id)!.codigo;
+      const raiz = await m0.pegar();
+      const r = await meChameAs(m0.deps, { turnoId: raiz.id, agenteId: m0.beto.agenteId, conversaId: m0.beto.conversaId, motivo: "esperar a Outra", quando: "tarefa", tarefa: codigo, estado: "revisao" } as Parameters<typeof meChameAs>[1]);
+      expect((r.data as { ok: boolean }).ok).toBe(true);
+      await m0.assentar(raiz.id, ["mcp__nod__me_chame_as"]);
+      const linha = (await montarQuadro(m0.deps, q0))!.tarefas.find((t) => t.titulo === "T")!.estadoLinha;
+      expect(linha).toMatchObject({ tipo: "esperando", volta: { quando: "tarefa", tarefa: codigo } });
+      // Em Fazendo ainda não; em Em revisão acorda.
+      await m0.lote([{ tipo: "mudar_tarefa", tarefa: "Outra", status: "fazendo", sem_iniciar: true }]);
+      expect(await acordarVoltasDeCi(m0.deps)).toBe(0);
+      await m0.lote([{ tipo: "mudar_tarefa", tarefa: "Outra", status: "revisao", sem_iniciar: true }]);
+      expect(await acordarVoltasDeCi(m0.deps)).toBe(1);
+    });
+  });
+
+  it("tarefa: sem código, código de fora do quadro ou a própria tarefa são recusados (sem_tarefa)", async () => {
+    await withRollback(MARLON, async (trx) => {
+      const m = await montar(trx);
+      const raiz = await m.pegar();
+      const pedir = (extra: Record<string, unknown>) => meChameAs(m.deps, { turnoId: raiz.id, agenteId: m.beto.agenteId, conversaId: m.beto.conversaId, motivo: "x", quando: "tarefa", ...extra } as Parameters<typeof meChameAs>[1]);
+      expect((await pedir({})).data).toMatchObject({ ok: false, erro: "sem_tarefa" });
+      expect((await pedir({ tarefa: "ZZZ-999" })).data).toMatchObject({ ok: false, erro: "sem_tarefa" });
+      expect((await pedir({ tarefa: (await m.tarefa()).id })).data).toMatchObject({ ok: false, erro: "sem_tarefa" });
     });
   });
 });

@@ -10,6 +10,7 @@ import type { PlanoTurno } from "../../contracts/plano-turno.ts";
 import type { SubagenteVivo, TarefaDoBot } from "../../contracts/turno.ts";
 import { versaoAceita } from "../../domain/versao-app.ts";
 import { log } from "../../obs/log.ts";
+import { RESUMO_NO_EXECUTOR_MAX, redigirResumo } from "../../domain/resumo-do-passo.ts";
 import { ENTREGA_ESPERA_INICIAL_MS, ENTREGA_ESPERA_MAX_MS, ENTREGA_PERSISTENCIA_MS, LEASE_MS, TOLERANCIA_REINICIO_MS } from "../../shared/constantes.ts";
 import { lerOpcoesRemover } from "../../shared/opcoes-remover.ts";
 
@@ -429,8 +430,15 @@ export function criarPonteHttp(o: { url: string; chave: string; versao: string; 
       trechos.set(turnoId, fila);
       aparar(turnoId);
     },
-    /** NOD-353: `id` é o do tool_use, para a tela fechar esta chamada quando o resultado voltar. */
-    ferramenta(turnoId: string, nome: string, id?: string) { trechos.set(turnoId, [...(trechos.get(turnoId) ?? []), id ? { ferramenta: nome, id } : { ferramenta: nome }]); aparar(turnoId); },
+    /**
+     * NOD-353: `id` é o do tool_use, para a tela fechar esta chamada quando o resultado voltar. ADR-165: `resumo` é a linha
+     * do argumento (`resumoDaFerramenta`); redigido de novo aqui, na saída do Mac, com o teto do executor.
+     */
+    ferramenta(turnoId: string, nome: string, id?: string, resumo?: string) {
+      const r = resumo ? redigirResumo(resumo, RESUMO_NO_EXECUTOR_MAX) : "";
+      trechos.set(turnoId, [...(trechos.get(turnoId) ?? []), { ferramenta: nome, ...(id ? { id } : {}), ...(r ? { resumo: r } : {}) }]);
+      aparar(turnoId);
+    },
     /** NOD-353: a chamada `id` terminou; `falhou` = tool_result.isError. */
     fimDaFerramenta(turnoId: string, id: string, falhou: boolean) { trechos.set(turnoId, [...(trechos.get(turnoId) ?? []), { fim: id, falhou }]); aparar(turnoId); },
     /** A lista inteira substitui a que ainda não saiu: só a mais nova importa. */

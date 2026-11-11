@@ -3,8 +3,9 @@ import type { EstadoDoAlvo, ModoAcionar, PorqueAciona } from "../contracts/quadr
 
 /**
  * Quem um comentário da tarefa aciona (definido em 2026-11-10, as regras da issue do Multica sobre o NOD-417). Puro: o
- * caso de uso (src/use-cases/comentar-tarefa.ts) grava e abre os turnos; a prévia do campo (os chips antes de enviar,
- * src/use-cases/previa-comentario.ts) chama ESTA função com os mesmos dados, para a tela nunca prometer outra coisa.
+ * caso de uso (src/use-cases/comentar-tarefa.ts, comentarTarefa) grava e abre os turnos; a prévia do campo (os chips antes
+ * de enviar, previaComentario no mesmo arquivo) chama `rotaNaTarefa` com os mesmos dados, para a tela nunca prometer outra
+ * coisa (revisto em 2026-11-10: a prévia montava a rota à parte e esquecia a resposta à espera da pessoa).
  *
  * 1. O comentário aciona o responsável em qualquer coluna (Feito também), sem precisar de @.
  * 2. A resposta numa thread vai ao agente daquela thread (quem respondeu ou foi acionado na raiz), não ao responsável.
@@ -12,6 +13,7 @@ import type { EstadoDoAlvo, ModoAcionar, PorqueAciona } from "../contracts/quadr
  * 4. @todos é anúncio: tira as rotas implícitas (responsável e agente da thread); a menção explícita no mesmo comentário
  *    ainda aciona.
  * 5. O autor nunca se aciona; o Nod nunca (ADR-081); quem a pessoa marcou "não acionar" sai depois da conta.
+ * 6. /note no começo: ninguém (o /note do Multica).
  */
 
 export type AlvoDoComentario = { agenteId: string; porque: PorqueAciona };
@@ -21,6 +23,15 @@ const LETRA = /[\p{L}\p{N}_]/u;
 const TODOS = /(^|[^\p{L}\p{N}_])@(todos|all)(?![\p{L}\p{N}_])/iu;
 
 export const mencionaTodos = (texto: string): boolean => TODOS.test(texto);
+
+/**
+ * 2026-11-10 (o /note do Multica, comparação Multica × nod): o comentário que começa com /note é anotação e não aciona
+ * ninguém (nem o responsável, nem a thread, nem @menção), nem conta como resposta à pergunta do bot.
+ */
+const NOTA = /^\s*\/note(?![\p{L}\p{N}_])/iu;
+export const ehNota = (texto: string): boolean => NOTA.test(texto);
+/** A frase da prévia do /note (a tela espelha; tests/unit/web/previa-comentario.test.ts confere). */
+export const NOTA_NAO_ACIONA = "nota, não aciona";
 
 /**
  * O agente da thread: do comentário mais novo ao mais velho, o primeiro escrito por um agente que não é quem comenta
@@ -48,7 +59,10 @@ export function rotaDoComentario(p: {
   agenteDaThread?: string | null;
   nods?: ReadonlySet<string>;
   suprimidos?: ReadonlySet<string>;
+  /** /note: anotação, não aciona ninguém (ehNota). */
+  nota?: boolean;
 }): AlvoDoComentario[] {
+  if (p.nota) return [];
   const autorId = p.autor.tipo === "agente" ? p.autor.agenteId : null;
   const implicito: AlvoDoComentario | null = p.todos ? null
     : p.naThread && p.agenteDaThread ? { agenteId: p.agenteDaThread, porque: "thread" }
@@ -64,6 +78,51 @@ export function rotaDoComentario(p: {
     vistos.add(a.agenteId);
     return a.agenteId !== autorId && !p.nods?.has(a.agenteId) && !p.suprimidos?.has(a.agenteId);
   });
+}
+
+/**
+ * A rota do comentário com o estado da tarefa (definido em 2026-11-10): a ÚNICA conta que o envio e a prévia fazem.
+ * - ADR-162: o comentário da pessoa na tarefa que espera por ela (sem ser um pedir_a_bot) é a resposta; quem chama o
+ *   responsável é o `responder`, então ele sai da rota implícita (`respondeEspera`), senão abriria dois turnos.
+ * - Revisão 3 do PR #622: o bot que atende um pedido aberto do responsável nesta tarefa não o aciona de novo (`naoRepetir`):
+ *   a resposta já volta a ele pelo peer; nem como agente da thread.
+ * - `escolhas` "nao" (os chips da pessoa) tiram o alvo depois da conta; a prévia não passa escolhas (mostra todos).
+ */
+export function rotaNaTarefa(p: {
+  autor: AutorLote;
+  responsavelId: string | null;
+  /** A tarefa está com a marca de esperando a pessoa (status `voce`). */
+  esperaPessoa: boolean;
+  /** O bot que comenta atende um pedido aberto do responsável nesta tarefa. */
+  responsavelPediu: boolean;
+  mencionados: readonly string[];
+  alvos?: readonly string[];
+  todos: boolean;
+  naThread: boolean;
+  agenteDaThread: string | null;
+  nods: ReadonlySet<string>;
+  escolhas?: Readonly<Record<string, ModoAcionar>>;
+  /** /note: anotação, não aciona ninguém nem responde a espera (ehNota). */
+  nota?: boolean;
+}): { rota: AlvoDoComentario[]; respondeEspera: boolean } {
+  const naoRepetir = p.responsavelPediu ? p.responsavelId : null;
+  const escolhas = p.autor.tipo === "pessoa" ? p.escolhas ?? {} : {};
+  const suprimidos = new Set(Object.entries(escolhas).filter(([, m]) => m === "nao").map(([id]) => id));
+  const respondeEspera = p.autor.tipo === "pessoa" && p.esperaPessoa && !p.alvos?.length && !p.nota;
+  if (respondeEspera && p.responsavelId) suprimidos.add(p.responsavelId);
+  const rota = rotaDoComentario({
+    autor: p.autor,
+    responsavelId: naoRepetir ? null : p.responsavelId,
+    mencionados: p.mencionados,
+    ...(p.alvos ? { alvos: p.alvos } : {}),
+    todos: p.todos,
+    naThread: p.naThread,
+    agenteDaThread: p.agenteDaThread === naoRepetir ? null : p.agenteDaThread,
+    nods: p.nods,
+    suprimidos,
+    ...(p.nota ? { nota: true } : {}),
+  });
+  return { rota, respondeEspera };
 }
 
 /**

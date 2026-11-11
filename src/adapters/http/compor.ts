@@ -29,6 +29,7 @@ import { CAUSAS_DO_MAC, type CausaDoMac, type Inventario } from "../../contracts
 import { sondaFoiLenta } from "../../domain/sonda-lenta.ts";
 import type { PlanoTurno } from "../../contracts/plano-turno.ts";
 import { dadosDoFrameDoPlano } from "./frame-do-plano.ts";
+import { criarPassosVivos } from "../fundo/passos-vivos.ts";
 import type { EventoStream, SubagenteVivo } from "../../contracts/turno.ts";
 import { chaveDe, cifrar, decifrar } from "../../db/cifra.ts";
 import { abrirTxEscopada, exigirForaDaTx, txEscopadaOuDoContexto } from "../../db/tx.ts";
@@ -633,6 +634,13 @@ export function comporApp(o: OpcoesCompor): App {
     for (const e of efeitos) await rodarAposCommit(escopo, e).catch((erro: unknown) => log("aviso", "efeito_apos_commit_falhou", { tipo: e.tipo, ...(e.tipo === "desligar_computador" ? { agente_id: e.agenteId } : e.tipo === "remover_computador" ? { maquina_id: e.maquinaId } : { importacao_id: e.importacaoId }), erro: erro instanceof Error ? erro.message : String(erro) }));
     return r;
   };
+  // ADR-165 (0170): os passos do run gravados no ponto em que os frames ao vivo saem (publicarDoPlano), com o escopo da dona
+  // do turno (autoria.conta_de_execucao = turno.ownerId). O frame turno.atividade sai depois de gravado, com o `seq`.
+  const passosVivos = criarPassosVivos({
+    gravar: (plano, passos) => dentro({ tenantId: plano.tenantId, pessoaId: plano.autoria.conta_de_execucao }, (d) => d.repos.turnoPassos.gravar(plano.turnoId, passos)),
+    marcarFalha: (plano, acaoId) => dentro({ tenantId: plano.tenantId, pessoaId: plano.autoria.conta_de_execucao }, (d) => d.repos.turnoPassos.marcarFalha(plano.turnoId, acaoId)),
+    publicar: (plano, tipo, dados) => publicarAgora(plano, tipo, dados),
+  });
   // NOD-374: a sonda de fundo roda fora de tx, sob o contexto de log da dona (o `carregar` do conector precisa dele).
   const disjuntor = criarDisjuntor({ db, dentro, sondar: (c, op) => services.conectores.sondar(c, op), mudou: (escopo) => barramento.publicar(escopo.pessoaId, "conector.mudou", {}) });
   // NOD-345 (ADR-124): contas atrás de NOD_CONTAS/NOD_BOOTSTRAP/NOD_CONTAS_GOOGLE (compor-contas.ts). Desligadas = null.
@@ -806,6 +814,8 @@ export function comporApp(o: OpcoesCompor): App {
     esquecerTurno: (id) => {
       interruptor.esquecer(id);
       trabalhosVivos.esquecerTurno(id);
+      // ADR-165: o último bloco de fala do turno vira passo.
+      void passosVivos.encerrar(id);
     },
     // ADR-083: a rede de 2 min só promove quem já chamou ferramenta; a memória do Mac fica em memória do processo.
     fezFerramenta: (id) => trabalhosVivos.ultimaFerramenta(id) !== null,
@@ -920,7 +930,8 @@ export function comporApp(o: OpcoesCompor): App {
     agora: relogio,
     delta: (plano, texto) => publicarDoPlano(plano, "turno.delta", { texto }),
     // NOD-348/NOD-352: `emUso` é o que a fala viva diz agora (`rotuloAgora`: "Rodando um comando", "Abrindo frentes"); a web não lê o domínio (ADR-018).
-    ferramenta: (plano, nome, id) => publicarDoPlano(plano, "turno.atividade", frameDaFerramenta(nome, id)),
+    // ADR-165: `resumo` do executor (já redigido lá); frameDaFerramenta corta em 160 e redige de novo.
+    ferramenta: (plano, nome, id, resumo) => publicarDoPlano(plano, "turno.atividade", frameDaFerramenta(nome, id, resumo)),
     fimDaFerramenta: (plano, id, falhou) => publicarDoPlano(plano, "turno.acao_fim", { id, falhou }),
     tarefas: (plano, tarefas) => publicarDoPlano(plano, "turno.tarefas", { tarefas }),
     subagentes: (plano, subagentes, principalOcioso) => publicarDoPlano(plano, "turno.subagentes", { subagentes, principalOcioso: principalOcioso === true }),
@@ -1576,6 +1587,14 @@ export function comporApp(o: OpcoesCompor): App {
   ];
 
   function publicarDoPlano(plano: PlanoTurno, tipo: "turno.delta" | "turno.atividade" | "turno.acao_fim" | "turno.tarefas" | "turno.subagentes" | "turno.fala" | "turno.vigia", dados: Record<string, unknown>): void {
+    // ADR-165: o texto, a ferramenta e o fim viram passos (turno_passos) e saem na ordem, depois de gravados.
+    if (tipo === "turno.delta" || tipo === "turno.atividade" || tipo === "turno.acao_fim") {
+      void passosVivos.registrar(plano, tipo, dados);
+      return;
+    }
+    publicarAgora(plano, tipo, dados);
+  }
+  function publicarAgora(plano: PlanoTurno, tipo: "turno.delta" | "turno.atividade" | "turno.acao_fim" | "turno.tarefas" | "turno.subagentes" | "turno.fala" | "turno.vigia", dados: Record<string, unknown>): void {
     // ADR-083: o "último passo" da faixa de Trabalhos é o rótulo da última ferramenta do turno vivo.
     if (tipo === "turno.atividade" && typeof dados.rotulo === "string") trabalhosVivos.ferramenta(plano.turnoId, dados.rotulo);
     // NOD-350: e, enquanto algum subagente trabalha, a contagem deles (critérios 3 e 9).

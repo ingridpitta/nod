@@ -1,6 +1,6 @@
 /**
  * Labels e prazo das tarefas do quadro (definido em 2026-11-10, como no Multica/Linear): campos para filtrar. Só tipos
- * (EMENDA 26): o domínio mora em src/domain/quadro-labels.ts, o banco na 0159, os filtros da tela em
+ * (EMENDA 26): o domínio mora em src/domain/quadro-labels.ts, o banco na 0161, os filtros da tela em
  * web/lib/filtros-de-campo.ts.
  *
  * O catálogo é por quadro; a tarefa guarda os ids (0..N). Aplicar um nome que não existe cria a label (como no Linear).

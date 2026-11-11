@@ -38,6 +38,15 @@ cards em Implementando trabalhava um por vez, e o card não dizia se estava roda
    dos agentes e das frentes — o portão de recursos da máquina (`portaoDoMac`/`deveSegurar`, uso do Mac
    pouco/equilibrado/livre, ADR-085) e o pool elástico de laços do executor (`pool-lacos.ts`). Em série continua só a
    mesma tarefa com o mesmo bot (a mesma faixa, §2).
+   **Emenda de 2026-11-10 (P5 da comparação Multica):** saiu também o teto escondido de 8 começos por lote
+   (`MAX_COMECOS_POR_LOTE`, revisão rodada 4 do quadro), que deixava a 9ª tarefa em A fazer sem turno e sem dizer por
+   quê. Conferido o risco que ele cobria (um bot criando 50 tarefas num lote): o bot sozinho (limite normal, NOD-430) não
+   cria tarefa para outro, não atribui, só mexe nas dele e não se reinicia, então não dispara rajada; o lote da pessoa (ou
+   do bot a pedido dela) é decisão dela. Restam os limites que não são teto de paralelo: no máximo 50 passos por lote
+   (`LIMITES_QUADRO.ops`) e a corrente de bots, `PROFUNDIDADE_MAXIMA = 3` (ADR-063, `src/domain/profundidade.ts`): o
+   turno aberto por um bot que foi aberto por um bot que foi aberto por um bot (3 saltos sem pessoa no meio) não
+   começa nada sozinho — a tarefa fica em A fazer, segurada, e o resumo do `gerir_quadro` manda pedir à pessoa. Esse corte
+   fica: é contra telefone sem fio entre bots, não contra paralelo.
 5. **Portão do Mac (emenda da ADR-085).** A primeira etapa da tarefa (trabalho ainda não começado) entra no portão como
    a rotina e o colega quando o Mac aperta; a etapa seguinte de um trabalho já começado segue. O espaço de 30 s entre
    trabalhos novos de fundo (`ESPACO_FUNDO_MS`) não vale para o quadro: ele serializaria as tarefas paralelas. Quem

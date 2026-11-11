@@ -6,6 +6,7 @@ import type { Executor } from "../contracts/evento.ts";
 import type { Confianca } from "../contracts/mensagem.ts";
 import type { MotivoFalha, MotivoInterrupcao, MotivoLocalidade, MotivoSemNovidade } from "../contracts/motivos.ts";
 import type { EstadoTurno, MotivoRecomeco, OrigemTurno, Profundidade, SinaisTurno, Turno } from "../contracts/turno.ts";
+import type { CondicaoDaVolta } from "../contracts/quadro-execucoes.ts";
 import { ENTRADA_DA_RETOMADA_DA_QUEDA, ENTRADA_DA_VOLTA_DA_COTA, MARCA_DA_FALA_NA_FRENTE, MARCA_DO_PEDIDO_ORIGINAL, PREFIXOS_DA_VOLTA_DO_FUNDO, type PortaoDaCota, RETORNO_DO_LOTE } from "../domain/cota-da-ia.ts";
 import type { SomaDoDia } from "../domain/custo-do-dia.ts";
 import { modelosPorIa } from "../domain/ia-do-modelo.ts";
@@ -710,37 +711,40 @@ export function turnosRepo(conn: Conn, escopo: Escopo) {
      * ADR-086 (revisão do #212): `me_chame_as` só anota o pedido no turno que está rodando — a volta nasce no
      * assentamento. Só turno vivo e sem Parar pedido; a última chamada vale (uma volta por turno).
      */
-    async marcarDespertar(id: string, em: number, motivo: string, ci: { prUrl: string } | null = null): Promise<boolean> {
-      // ADA-232: a volta por CI anota a condição no turno que chamou; a retomada a herda no assentamento (marcarVoltaCi).
+    async marcarDespertar(id: string, em: number, motivo: string, cond: CondicaoDaVolta | null = null): Promise<boolean> {
+      // ADA-232: a volta por evento (CI; desde 2026-11-10 também merge, conflito e outra tarefa) anota a condição no turno
+      // que chamou; a retomada a herda no assentamento (marcarVoltaPorEvento).
+      const c = colunasDaCondicao(cond);
       const linhas = await conn`
         update turnos set despertar_em = ${data(em)}, despertar_motivo = ${motivo},
-          acordar_quando = ${ci ? "ci" : null}, acordar_pr_url = ${ci?.prUrl ?? null}
+          acordar_quando = ${c.quando}, acordar_pr_url = ${c.prUrl}, acordar_tarefa_id = ${c.tarefaId}, acordar_tarefa_estado = ${c.estado}
         where tenant_id = ${escopo.tenantId} and owner_id = ${escopo.pessoaId} and id = ${id} and estado = 'despachando' and parar_solicitado_em is null
         returning id`;
       return linhas.length > 0;
     },
 
-    /** ADR-086: o pedido de volta que o turno anotou (null = nenhum). */
-    async despertarDoTurno(id: string): Promise<{ em: number; motivo: string; prUrlCi: string | null } | null> {
-      const [l] = await conn<{ despertar_em: Date | null; despertar_motivo: string | null; acordar_quando: string | null; acordar_pr_url: string | null }[]>`
-        select despertar_em, despertar_motivo, acordar_quando, acordar_pr_url from turnos where tenant_id = ${escopo.tenantId} and id = ${id}`;
-      return l?.despertar_em ? { em: ms(l.despertar_em), motivo: l.despertar_motivo ?? "", prUrlCi: l.acordar_quando === "ci" ? l.acordar_pr_url : null } : null;
+    /** ADR-086: o pedido de volta que o turno anotou (null = nenhum), com a condição por evento. */
+    async despertarDoTurno(id: string): Promise<{ em: number; motivo: string; cond: CondicaoDaVolta | null } | null> {
+      const [l] = await conn<({ despertar_em: Date | null; despertar_motivo: string | null } & LinhaDaCondicao)[]>`
+        select despertar_em, despertar_motivo, acordar_quando, acordar_pr_url, acordar_tarefa_id, acordar_tarefa_estado from turnos where tenant_id = ${escopo.tenantId} and id = ${id}`;
+      return l?.despertar_em ? { em: ms(l.despertar_em), motivo: l.despertar_motivo ?? "", cond: condicaoDaLinha(l) } : null;
     },
 
-    /** ADA-232: a retomada da volta por CI (pendente) espera os checks deste PR; acordar_em segue como o prazo máximo. */
-    async marcarVoltaCi(id: string, prUrl: string): Promise<void> {
-      await conn`update turnos set acordar_quando = 'ci', acordar_pr_url = ${prUrl}
+    /** ADA-232: a retomada da volta por evento (pendente) espera a condição; acordar_em segue como o prazo máximo. */
+    async marcarVoltaPorEvento(id: string, cond: CondicaoDaVolta): Promise<void> {
+      const c = colunasDaCondicao(cond);
+      await conn`update turnos set acordar_quando = ${c.quando}, acordar_pr_url = ${c.prUrl}, acordar_tarefa_id = ${c.tarefaId}, acordar_tarefa_estado = ${c.estado}
         where tenant_id = ${escopo.tenantId} and owner_id = ${escopo.pessoaId} and id = ${id} and estado = 'pendente'`;
     },
 
-    /** ADA-232: as voltas por CI do dono que ainda dormem (o varredor confere o PR de cada uma). */
-    async voltasCiPendentes(agora: number): Promise<{ id: string; prUrl: string; criadoEm: number; acordarEm: number }[]> {
-      const ls = await conn<{ id: string; acordar_pr_url: string; criado_em: Date; acordar_em: Date }[]>`
-        select id, acordar_pr_url, criado_em, acordar_em from turnos
-        where tenant_id = ${escopo.tenantId} and owner_id = ${escopo.pessoaId} and estado = 'pendente' and acordar_quando = 'ci'
-          and acordar_pr_url is not null and acordar_em > ${data(agora)}
+    /** ADA-232: as voltas por evento do dono que ainda dormem (o varredor confere a condição de cada uma). */
+    async voltasPorEventoPendentes(agora: number): Promise<{ id: string; cond: CondicaoDaVolta; criadoEm: number; acordarEm: number }[]> {
+      const ls = await conn<({ id: string; criado_em: Date; acordar_em: Date } & LinhaDaCondicao)[]>`
+        select id, criado_em, acordar_em, acordar_quando, acordar_pr_url, acordar_tarefa_id, acordar_tarefa_estado from turnos
+        where tenant_id = ${escopo.tenantId} and owner_id = ${escopo.pessoaId} and estado = 'pendente' and acordar_quando is not null
+          and acordar_em > ${data(agora)}
         order by acordar_em limit 200`;
-      return ls.map((l) => ({ id: l.id, prUrl: l.acordar_pr_url, criadoEm: ms(l.criado_em), acordarEm: ms(l.acordar_em) }));
+      return ls.flatMap((l) => { const cond = condicaoDaLinha(l); return cond ? [{ id: l.id, cond, criadoEm: ms(l.criado_em), acordarEm: ms(l.acordar_em) }] : []; });
     },
 
     /**
@@ -1697,4 +1701,22 @@ export function turnosRepo(conn: Conn, escopo: Escopo) {
       return linhas.map(paraTurno);
     },
   };
+}
+
+/** 2026-11-10: a condição da volta por evento como as colunas de turnos a guardam. */
+type LinhaDaCondicao = { acordar_quando: string | null; acordar_pr_url: string | null; acordar_tarefa_id: string | null; acordar_tarefa_estado: string | null };
+
+function colunasDaCondicao(c: CondicaoDaVolta | null): { quando: string | null; prUrl: string | null; tarefaId: string | null; estado: string | null } {
+  if (!c) return { quando: null, prUrl: null, tarefaId: null, estado: null };
+  return c.quando === "tarefa" ? { quando: "tarefa", prUrl: null, tarefaId: c.tarefaId, estado: c.estado } : { quando: c.quando, prUrl: c.prUrl, tarefaId: null, estado: null };
+}
+
+function condicaoDaLinha(l: LinhaDaCondicao): CondicaoDaVolta | null {
+  if (l.acordar_quando === "tarefa") {
+    if (!l.acordar_tarefa_id) return null;
+    const e = l.acordar_tarefa_estado;
+    return { quando: "tarefa", tarefaId: l.acordar_tarefa_id, estado: e === "feito" || e === "revisao" || e === "bloqueado" ? e : null };
+  }
+  if ((l.acordar_quando === "ci" || l.acordar_quando === "merge" || l.acordar_quando === "conflito") && l.acordar_pr_url) return { quando: l.acordar_quando, prUrl: l.acordar_pr_url };
+  return null;
 }

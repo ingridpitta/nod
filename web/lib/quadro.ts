@@ -155,8 +155,27 @@ export const ARRASTO_ATE_MS = 30_000;
 /**
  * 2026-11-10 (card preso em "começando"): a resposta de uma mudança traz o quadro do commit, com o turno recém-criado ainda
  * pendente ("fila"). Quando ela chega depois da releitura do frame do despacho, regrava o quadro velho. Um quadro que não
- * veio de frame e tem card na fila pede uma releitura a mais (a de frame não pede outra: sem laço).
+ * veio de frame e tem na fila um dos cards que a mudança mexeu (`mexidas`) pede uma releitura a mais (a de frame não pede
+ * outra: sem laço). revisto em 2026-11-10 (T10): só os mexidos — o card que espera na fila há tempo (fila longa legítima)
+ * e a releitura da importação a cada 2 s não pedem GET extra.
  */
-export function releComecando(novo: { tarefas: readonly { execucao?: string | null }[] } | null, doFrame: boolean): boolean {
-  return !doFrame && !!novo?.tarefas.some((t) => t.execucao === "fila");
+export function releComecando(novo: { tarefas: readonly { id: string; execucao?: string | null }[] } | null, doFrame: boolean, mexidas: readonly string[]): boolean {
+  if (doFrame || !novo || mexidas.length === 0) return false;
+  const ids = new Set(mexidas);
+  return novo.tarefas.some((t) => ids.has(t.id) && t.execucao === "fila");
+}
+
+/** 2026-11-10: de quanto em quanto o quadro confere se precisa da releitura de segurança. */
+export const VIGIA_DO_QUADRO_MS = 5_000;
+/** Sem nenhum dado ao vivo (frame ou ping; o servidor manda ping a cada 15 s) por este tempo, o stream está mudo. */
+export const AO_VIVO_MUDO_MS = 20_000;
+
+/**
+ * 2026-11-10 (Marlon: o quadro não mostrava o que os agentes faziam, só o que ele fazia): o quadro se atualiza pelo SSE
+ * (`quadro.mudou`, frames de turno). Quando o stream está mudo (um proxy que segura o stream, como o túnel rápido do
+ * Cloudflare), o quadro à vista, com trabalho vivo ou com a tarefa aberta, relê sozinho. Com o SSE entregando, nada muda.
+ */
+export function deveVigiarQuadro(o: { agora: number; ultimoDado: number; visivel: boolean; comVivo: boolean; aberta: boolean }): boolean {
+  if (!o.visivel || (!o.comVivo && !o.aberta)) return false;
+  return o.agora - o.ultimoDado >= AO_VIVO_MUDO_MS;
 }

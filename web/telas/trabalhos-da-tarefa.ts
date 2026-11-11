@@ -8,6 +8,7 @@
 import type { EstadoExecucao, ExecucaoDto, ExecucoesDaTarefa, OrigemExecucao } from "../../src/contracts/quadro-execucoes.ts";
 import { linhasDoResumo, SEM_NOME_DA_FERRAMENTA, type AtividadeTurno } from "../lib/atividade.ts";
 import { esc } from "../lib/escape.ts";
+import { rotuloDaSituacao, situacaoDoRun, type MotivoDaFila } from "../lib/estado-do-trabalho.ts";
 
 /** O teto do recado (o RECADO_MAX do contrato; a web não importa valor de src). */
 export const RECADO_MAX = 4000;
@@ -16,11 +17,17 @@ const TENTATIVAS_MAX = 2;
 
 export const NOME_DO_ESTADO: Readonly<Record<EstadoExecucao, string>> = {
   fila: "na fila",
-  rodando: "rodando",
+  rodando: "trabalhando",
   concluido: "concluído",
   falhou: "falhou",
   cancelado: "cancelado",
 };
+
+/** O rótulo da execução: o da fonte única (trabalhando, na fila · motivo, esperando) ou o nome do fim. */
+export function rotuloDaExecucao(e: Pick<ExecucaoDto, "estado" | "esperando">, motivoFila: MotivoDaFila | null = null): string {
+  const s = situacaoDoRun(e);
+  return s ? rotuloDaSituacao(s, { motivoFila }) : NOME_DO_ESTADO[e.estado] ?? e.estado;
+}
 
 /** O selo de cada estado (cinza; o ⊗ da falha é o único vermelho, no CSS). */
 export const SELO_DO_ESTADO: Readonly<Record<EstadoExecucao, string>> = {
@@ -60,6 +67,8 @@ export type VistaDoTrabalho = {
   anterioresAbertos: boolean;
   aviso: string | null;
   ocupado: boolean;
+  /** O motivo da fila, o mesmo do card (TarefaDto.motivoFila; web/lib/estado-do-trabalho.ts). */
+  motivoFila?: MotivoDaFila | null;
 };
 
 /**
@@ -70,7 +79,7 @@ export const numeroNaTela = (e: Pick<ExecucaoDto, "numero"> & Partial<Pick<Execu
 
 /** A frase do anúncio de estado (a mesma palavra da linha do trabalho). */
 export const anuncioDoTrabalho = (e: Pick<ExecucaoDto, "numero" | "estado" | "esperando"> & Partial<Pick<ExecucaoDto, "sessao">>): string =>
-  `Trabalho #${numeroNaTela(e)}: ${e.esperando ? "esperando" : NOME_DO_ESTADO[e.estado] ?? e.estado}`;
+  `Run #${numeroNaTela(e)}: ${rotuloDaExecucao(e)}`;
 
 const ultimaLinha = (t: string | null | undefined): string => (t ?? "").trim().split("\n").map((l) => l.trim()).filter(Boolean).pop() ?? "";
 
@@ -82,7 +91,7 @@ export function passosDoTrabalho(a: AtividadeTurno | undefined, parado: boolean)
 /** O pedaço que o frame troca sozinho: o toggle "› N passos" e o log. Não tem campo, o rascunho do recado fica. */
 export function logDoTrabalho(e: ExecucaoDto, a: AtividadeTurno | undefined, aberto: boolean): string {
   const linhas = passosDoTrabalho(a, !vivo(e));
-  if (!linhas.length) return e.estado === "rodando" ? `<p class="qd-trab-nota">Começando… os passos aparecem aqui.</p>` : "";
+  if (!linhas.length) return situacaoDoRun(e) === "trabalhando" ? `<p class="qd-trab-nota">Começando… os passos aparecem aqui.</p>` : "";
   const toggle = `<button type="button" class="qd-link qd-trab-tg" data-act="trab-passos" aria-expanded="${aberto}">› ${linhas.length} ${linhas.length === 1 ? "passo" : "passos"}</button>`;
   if (!aberto) return toggle;
   const lis = linhas.slice(-40).map((l) => {
@@ -92,12 +101,12 @@ export function logDoTrabalho(e: ExecucaoDto, a: AtividadeTurno | undefined, abe
   return `${toggle}<ol class="qd-trab-passos">${lis}</ol>`;
 }
 
-function linhaDoTrabalho(e: ExecucaoDto, hora: (em: number) => string): string {
+function linhaDoTrabalho(e: ExecucaoDto, hora: (em: number) => string, motivoFila: MotivoDaFila | null = null): string {
   const tentativa = e.origem === "automatica" && e.tentativa ? ` · Nova tentativa ${e.tentativa} de ${TENTATIVAS_MAX}` : e.numero > 1 ? ` · ${esc(NOME_DA_ORIGEM[e.origem] ?? e.origem)}` : "";
   // ADA-10: a etapa do gatilho ("#3 · Plano de engenharia · concluído"); a linha de antes da 0165 não tem.
   const etapa = e.colunaNome ? ` · ${esc(e.colunaNome)}` : "";
   return `<span class="qd-trab-selo" data-estado="${e.estado}" aria-hidden="true">${SELO_DO_ESTADO[e.estado]}</span>` +
-    `<span class="qd-trab-est">#${numeroNaTela(e)}${etapa} · ${esc(e.esperando ? "esperando" : NOME_DO_ESTADO[e.estado] ?? e.estado)}${tentativa}</span>` +
+    `<span class="qd-trab-est">#${numeroNaTela(e)}${etapa} · ${esc(rotuloDaExecucao(e, motivoFila))}${tentativa}</span>` +
     `<time class="qd-trab-hora" datetime="${new Date(e.criadoEm).toISOString()}">${esc(hora(e.criadoEm))}</time>`;
 }
 
@@ -121,12 +130,18 @@ function notasDosRecados(d: ExecucoesDaTarefa): string {
 /** ADA-232: o "Volto quando…" do trabalho que marcou a volta (a CI do PR, a hora ou só o motivo). */
 export function fraseDaVolta(v: NonNullable<ExecucaoDto["volta"]>, hora: (em: number) => string): string {
   const pr = v.prUrl ? (/\/pull\/(\d+)/.exec(v.prUrl)?.[1] ?? null) : null;
-  const quando = v.quando === "ci" ? `Volto quando a CI ${pr ? `do PR #${pr}` : "do PR"} terminar` : v.em !== null ? `Volto às ${hora(v.em)}` : "Volto depois";
+  // 2026-11-10: também as esperas por merge, conflito e outra tarefa do quadro.
+  const doPr = pr ? `o PR #${pr}` : "o PR";
+  const quando = v.quando === "ci" ? `Volto quando a CI ${pr ? `do PR #${pr}` : "do PR"} terminar`
+    : v.quando === "merge" ? `Volto quando ${doPr} for mergeado`
+      : v.quando === "conflito" ? `Volto se ${doPr} ficar com conflito`
+        : v.quando === "tarefa" ? `Volto quando ${v.tarefa ?? "a outra tarefa"} andar`
+          : v.em !== null ? `Volto às ${hora(v.em)}` : "Volto depois";
   return v.motivo ? `${quando} · ${v.motivo}` : quando;
 }
 
 export function secaoDoTrabalho(v: VistaDoTrabalho, hora: (em: number) => string): string {
-  const titulo = `<h2 class="qd-t-sec" id="qd-trab-tit">Execuções</h2>`;
+  const titulo = `<h2 class="qd-t-sec" id="qd-trab-tit">Runs</h2>`;
   const abre = `<section class="qd-trab" data-ancora="trab" aria-labelledby="qd-trab-tit" data-tarefa="${esc(v.tarefaId)}">${titulo}`;
   if (v.erro) return `${abre}<p class="qd-trab-nota">Não consegui ler os trabalhos · <button type="button" class="qd-link" data-act="trab-reler">Tentar de novo</button></p></section>`;
   if (!v.dados) return `${abre}<p class="qd-trab-nota">Lendo…</p></section>`;
@@ -159,7 +174,7 @@ export function secaoDoTrabalho(v: VistaDoTrabalho, hora: (em: number) => string
     const acordar = atual.volta?.em != null ? `<span aria-hidden="true"> · </span><button type="button" class="qd-link" data-act="trab-acordar"${des}>Acordar agora</button>` : "";
     const volta = atual.volta ? `<p class="qd-trab-nota qd-trab-volta">${esc(fraseDaVolta(atual.volta, hora))}${acordar}</p>` : "";
     const log = `<div class="qd-trab-log" data-trabalho="${esc(atual.id)}">${logDoTrabalho(atual, v.atividade, v.passosAbertos)}</div>`;
-    corpo = `<div class="qd-trab-atual" data-estado="${atual.estado}"><p class="qd-trab-linha">${linhaDoTrabalho(atual, hora)}</p>${fraseHtml}${volta}${agenda}${log}` +
+    corpo = `<div class="qd-trab-atual" data-estado="${atual.estado}"><p class="qd-trab-linha">${linhaDoTrabalho(atual, hora, v.motivoFila ?? null)}</p>${fraseHtml}${volta}${agenda}${log}` +
       (acoes.length ? `<p class="qd-trab-acoes">${acoes.join(`<span aria-hidden="true"> · </span>`)}</p>` : "") + `</div>`;
   }
   if (anteriores.length) {

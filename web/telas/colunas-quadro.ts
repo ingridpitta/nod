@@ -10,8 +10,9 @@
  */
 import type { ColunaDto, GrupoColuna, TarefaDto } from "../../src/contracts/quadro.ts";
 import { esc } from "../lib/escape.ts";
-import { aceitaPassagem, acionaNaColuna, colunaDeEspera, podeTerPrazo, prazoLegivelMin, prazoNoPopover, LIMITE_COLUNAS, LIMITE_INSTRUCOES, LIMITE_NOME_COLUNA, destinosAoRemover, FRASE_DO_GRUPO, fraseDaColuna, GRUPOS, iconeDaColuna, NOME_DO_GRUPO, passoDeMover, porqueNaoRecebeCard, porqueNaoRemove, type EdicaoDeColuna } from "../lib/colunas.ts";
+import { aceitaPassagem, acionaNaColuna, colunaDeEspera, podeTerPrazo, prazoLegivelMin, prazoNoPopover, LIMITE_COLUNAS, LIMITE_INSTRUCOES, LIMITE_NOME_COLUNA, destinosAoRemover, FRASE_DO_GRUPO, fraseDaColuna, GRUPOS, iconeDaColuna, NOME_DO_GRUPO, passoDeMover, porqueNaoRemove, type EdicaoDeColuna } from "../lib/colunas.ts";
 import { fraseDaTrava } from "../lib/freios.ts";
+import { dicaDeMover, nomeNaPrevia, previaDaTarefa } from "../lib/acionamento.ts";
 import { confiar, ICONE, ICONE_DO_STATUS, type Html } from "./quadro.ts";
 
 const ICONE_DO_GRUPO: Readonly<Record<GrupoColuna, Html>> = {
@@ -124,6 +125,16 @@ function saidasDoPopover(c: ColunaDto, cs: readonly ColunaDto[]): string {
     sel("volta", "Ajustes voltam para", c.volta, padraoVolta, cs.filter((x) => x.id !== c.id && aceitaPassagem(x)), "Sem volta (comente na tarefa)");
 }
 
+/**
+ * 2026-11-10 (o "What X receives" do Multica): o texto exato da etapa que vai ao turno, recolhido. Vem pronto do servidor
+ * (textoDaEtapa, a mesma função do turno), por isso mostra o que está salvo: depois de Salvar, a prévia acompanha.
+ */
+export function previaDoQueRecebe(c: Pick<ColunaDto, "recebe" | "responsavelNome">): string {
+  if (!c.recebe) return "";
+  return `<details class="qd-pas-recebe"><summary>O que ${esc(c.responsavelNome ?? "o bot")} recebe</summary>` +
+    `<pre class="qd-pas-recebe-txt">${esc(c.recebe)}</pre><p class="qd-dica">Como está salvo. Muda depois de Salvar.</p></details>`;
+}
+
 export function popoverDePassagem(c: ColunaDto, agentes: readonly AgenteDaPassagem[], cs: readonly ColunaDto[] = []): Html {
   const com = !!c.responsavel;
   const ops = [`<option value="">Escolha o agente</option>`, ...agentes.map((a) => `<option value="${esc(a.id)}"${a.id === c.responsavel ? " selected" : ""}>${esc(a.nome)}</option>`)].join("");
@@ -137,6 +148,7 @@ export function popoverDePassagem(c: ColunaDto, agentes: readonly AgenteDaPassag
     `<label class="qd-rotulo" for="qd-pas-inst">O que essa etapa faz</label>` +
     `<textarea id="qd-pas-inst" class="qd-pas-inst" name="instrucoes" rows="3" maxlength="${LIMITE_INSTRUCOES}" placeholder="Ex.: revise o PR e aponte o que falta">${esc(c.instrucoes ?? "")}</textarea>` +
     (cs.length ? saidasDoPopover(c, cs) : "") +
+    previaDoQueRecebe(c) +
     `<div class="qd-pop-bts"><button type="button" class="qd-bt" data-act="col-fechar">Cancelar</button><button type="submit" class="qd-bt qd-bt-pri">Salvar</button></div></form></div>`);
 }
 
@@ -160,16 +172,15 @@ export function popoverDePrazo(c: ColunaDto, erro?: string): Html {
 
 /**
  * O menu do "Mover para…" do card: as outras colunas. Todas movem direto, como soltar (2026-11-10: sem a confirmação; a
- * coluna com responsável que aciona diz quem começa, e o Desfazer do recibo é a rede). Precisa de você aparece desabilitada com o
- * porquê (o servidor recusa sem a pergunta, revisão 2 do PR #622).
+ * coluna com responsável que aciona diz quem começa, e o Desfazer do recibo é a rede). ADR-162: toda coluna recebe.
  */
-export function menuDeMover(cs: readonly ColunaDto[], t: Pick<TarefaDto, "id" | "titulo" | "status">, nomeDoBot = "o bot"): Html {
+export function menuDeMover(cs: readonly ColunaDto[], t: Pick<TarefaDto, "id" | "titulo" | "status"> & Partial<Pick<TarefaDto, "agenteId" | "agenteNome" | "execucao">>): Html {
+  const tarefa = { status: t.status, agenteId: t.agenteId ?? null, execucao: t.execucao ?? null, agenteNome: t.agenteNome ?? null };
+  const nomeDe = nomeNaPrevia(cs, tarefa);
   const itens = cs.filter((c) => c.id !== t.status).map((c) => {
-    const porque = porqueNaoRecebeCard(c, nomeDoBot);
-    const nota = porque ?? (!c.responsavel ? null
-      : acionaNaColuna(c) ? `${c.responsavelNome ?? "O responsável"} começa` : `Passa para ${c.responsavelNome ?? "o responsável"}`);
-    const des = porque ? ` aria-disabled="true" title="${esc(porque)}"` : "";
-    return `<button type="button" role="menuitem" class="qd-menu-it" data-act="tarefa-mover-para" data-coluna="${esc(c.id)}" data-tarefa="${esc(t.id)}"${des}>` +
+    // 2026-11-10: a mesma regra e o mesmo texto da dica ao arrastar (web/lib/acionamento.ts).
+    const nota = dicaDeMover(previaDaTarefa(tarefa, c.id, cs), nomeDe, false);
+    return `<button type="button" role="menuitem" class="qd-menu-it" data-act="tarefa-mover-para" data-coluna="${esc(c.id)}" data-tarefa="${esc(t.id)}">` +
       `${icone(c)}<span>${esc(c.nome)}</span>${nota ? `<small class="qd-menu-porque">${esc(nota)}</small>` : ""}</button>`;
   }).join("");
   return confiar(`<div class="qd-menu qd-menu-mover" role="menu" id="qd-menu" aria-label="${esc(`Mover ${t.titulo} para`)}">${itens}</div>`);

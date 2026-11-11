@@ -686,20 +686,19 @@ describe("ADA-16 (ADR-163): o card diz rodando, na fila há X min ou esperando",
   });
 
   // Regression: pedido do Marlon (2026-11-10, "não quero limites"): sem teto próprio, o card não fala de vaga nem de limite.
-  it("na fila sem motivo: só \"na fila\", sem a hora e sem falar de vaga ou limite", () => {
+  // T4 (comparação Multica × nod, 2026-11-10, aprovada pelo Marlon): com o relógio da tela a fila sem motivo também diz há quanto tempo.
+  it("na fila sem motivo: \"na fila há X\", sem falar de vaga ou limite", () => {
     const h = html({ execucao: "fila", naFilaDesde: 1, motivoFila: null });
-    expect(h).toContain("na fila");
-    expect(h).not.toContain("na fila há");
+    expect(h).toContain("na fila há 12 min");
     expect(h).not.toMatch(/limite|vaga/);
   });
 
-  it("2026-11-10: na fila há menos de um minuto, ou sem a hora (o card otimista do mover): \"começando\"", () => {
-    const novo = html({ execucao: "fila", naFilaDesde: agora - 30_000, motivoFila: "mesma_tarefa" });
-    expect(novo).not.toContain("na fila há");
-    expect(novo).toContain("começando");
-    const sem = html({ execucao: "fila", naFilaDesde: null, motivoFila: "memoria" });
-    expect(sem).toContain("começando");
-    expect(sem).not.toContain("na fila há");
+  it("2026-11-10 (uma fonte só): \"começando\" só no card otimista do mover; a fila do servidor diz \"na fila · motivo\"", () => {
+    const servidor = html({ execucao: "fila", naFilaDesde: agora - 30_000, motivoFila: "mesma_tarefa" });
+    expect(servidor).not.toContain("começando");
+    expect(servidor).toContain("na fila · termina a etapa anterior desta tarefa");
+    const otimista = html({ execucao: "fila", naFilaDesde: null, motivoFila: null, otimista: true } as never);
+    expect(otimista).toContain("começando");
   });
 
   it("esperando: o selo de pausa e a frase de quem espera a CI; nunca \"Trabalhando\"", () => {
@@ -730,6 +729,16 @@ describe("ADA-232: o card numa linha", () => {
     expect(h).not.toContain(MAL);
     expect(h).not.toContain("qd-selo");
   });
+  it("2026-11-10: as esperas por evento viram chips: o merge, o conflito e a outra tarefa pelo código (escapado)", () => {
+    const esp = (v: { quando: "merge" | "conflito" | "tarefa"; tarefa?: string | null }) =>
+      cardDaTarefa(t("9", { status: "fazendo", estadoLinha: { tipo: "esperando", motivo: null, volta: { ...volta, ...v } } }), agente).espera;
+    expect(esp({ quando: "merge" })).toEqual({ texto: "Esperando o merge", voce: false });
+    expect(esp({ quando: "conflito" })).toEqual({ texto: "Esperando conflito", voce: false });
+    expect(esp({ quando: "tarefa", tarefa: "ENG-12" })).toEqual({ texto: "Esperando ENG-12", voce: false });
+    expect(esp({ quando: "tarefa", tarefa: null })).toEqual({ texto: "Esperando outra tarefa", voce: false });
+    const c = cardDaTarefa(t("9", { status: "fazendo", estadoLinha: { tipo: "esperando", motivo: null, volta: { ...volta, quando: "tarefa", tarefa: MAL } } }), agente);
+    expect(String(card(c))).not.toContain(MAL);
+  });
   it("a frente aberta conta como trabalhando, sem execução própria", () => {
     const c = cardDaTarefa(t("2", { status: "fazendo", estadoLinha: { tipo: "trabalhando", frente: true } }), agente);
     expect(c.estado).toBe("rodando");
@@ -737,5 +746,14 @@ describe("ADA-232: o card numa linha", () => {
   });
   it("sem estadoLinha, nada muda", () => {
     expect(cardDaTarefa(t("3", { status: "fazendo" }), agente).estado).toBeUndefined();
+  });
+});
+
+describe("2026-11-10: o aviso do Backlog (o backlog_hint do Multica)", () => {
+  it("com tarefa de um responsável parada no Backlog, a coluna diz como começar; sem responsável ou noutra coluna, nada", () => {
+    const h = String(quadroDaMeta({ q: q([t("1", { status: "backlog", agenteId: "a" })]), nome: "Ada", agente, filtro: "todos", alternadas: new Set(), acesas: new Set() }));
+    expect(h).toContain('<p class="qd-col-dica">Parada no Backlog: mova para A fazer para começar.</p>');
+    expect(String(quadroDaMeta({ q: q([t("1", { status: "backlog", agenteId: null })]), nome: "Ada", agente, filtro: "todos", alternadas: new Set(), acesas: new Set() }))).not.toContain("qd-col-dica");
+    expect(String(quadroDaMeta({ q: q([t("1", { status: "afazer", agenteId: "a" })]), nome: "Ada", agente, filtro: "todos", alternadas: new Set(), acesas: new Set() }))).not.toContain("qd-col-dica");
   });
 });

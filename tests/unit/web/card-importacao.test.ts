@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ColunaDto, ComentarioDto, EntradaHistoricoDto, QuadroDto } from "../../../src/contracts/quadro.ts";
 import { FRASE_SEM_CONECTOR, type ImportacaoDto, type PayloadPropostaImportacaoLinear, type PreviaImportacao } from "../../../src/contracts/quadro-importacao.ts";
 import { ehRecusaDoPainel, linhaDaImportacao, painelDeImportacao, renderCardImportacao } from "../../../web/telas/card-importacao.ts";
-import { comentariosDaTarefa } from "../../../web/telas/comentarios-tarefa.ts";
+import { linhaDoTempo } from "../../../web/telas/linha-do-tempo.ts";
 import { linhaDoHistorico } from "../../../web/lib/quadro-dados.ts";
 import type { SuaVezDto } from "../../../src/contracts/api.ts";
 import type { Proposta } from "../../../src/contracts/conversa.ts";
@@ -153,7 +153,10 @@ describe("NOD-422 · a origem na tarefa: histórico e comentários do Linear", (
 
   it("o comentário trazido mostra quem escreveu lá, com \"· no Linear\", nunca \"Você\"", () => {
     const c: ComentarioDto = { id: "c", quadroId: "q", tarefaId: "t", autor: { tipo: "linear" }, texto: "oi", deFora: true, criadoEm: 0, autorNome: "Ada <x>", acionados: [] };
-    const h = comentariosDaTarefa({ tarefaId: "t", lista: [c], carga: "ok", agente: () => null, hora: () => "10:00" });
+    const h = linhaDoTempo({
+      t: { id: "t", quadroId: "q", titulo: "T", descricao: "", status: "fazendo", agenteId: null, movimentos: [], linhas: [] } as never, colunas: [], comentarios: [c], runs: [], agente: () => null, agora: 0, nomes: [],
+      respondendo: null, editando: null, abertos: new Set(), passos: () => null, chips: () => "", pendente: null, criadaPor: null, criadaEm: null, carga: "ok",
+    });
     expect(h).toContain("Ada &lt;x&gt; · no Linear");
     expect(h).not.toContain(">Você<");
   });

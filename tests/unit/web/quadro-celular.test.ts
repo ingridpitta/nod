@@ -283,3 +283,39 @@ describe("ADA-18: o ⋯ do topo (passo 7)", () => {
     expect(comPrazo).toContain('data-prazo="" aria-checked="false"');
   });
 });
+
+describe("2026-11-11: o celular com o aviso do Backlog e a prioridade do computador (PR #725)", () => {
+  const ui = { aberto: null, campo: null, buscaFiltro: "", filtros: [], negados: [], modal: null } as unknown as NonNullable<Opcoes["ui"]>;
+  const aberto = {};
+  it("o grupo do Backlog com tarefa de alguém tem a dica do computador (dicaDoBacklog); sem responsável, não", () => {
+    const h = celular([t("1", { status: "backlog" })], aberto);
+    expect(h).toContain('<p class="qd-col-dica qd-cg-dica">Parada no Backlog: mova para A fazer para começar.</p>');
+    expect(celular([t("1", { status: "backlog", agenteId: null })], aberto)).not.toContain("qd-cg-dica");
+    expect(celular([t("1", { status: "afazer" })])).not.toContain("qd-cg-dica");
+    expect(celular([t("1", { status: "backlog" })], { ...aberto, celular: { visao: "colunas" } })).toContain("qd-cg-dica");
+  });
+
+  it("a linha mostra as barrinhas da prioridade; no quadro editável é o botão do computador, fora do botão da linha", () => {
+    const h = celular([t("1", { prioridade: "alta" })], { ui, agentes: [{ id: "a", nome: "Ada" }] });
+    expect(h).toContain('class="qd-cl qd-cl-com-pri"');
+    expect(h).toMatch(/<span class="qd-cl-pri"><button type="button" class="qm-pri-bt" data-act="tarefa-prioridade" data-tarefa="1"[^>]*aria-label="Prioridade: Alta. Mudar"/);
+    // Botão dentro de botão não vale: a prioridade vem depois do fim do botão da linha.
+    expect(h.indexOf("qd-cl-pri")).toBeGreaterThan(h.indexOf('data-act="abrir-tarefa" data-id="1"'));
+    expect(h.slice(h.indexOf('data-act="abrir-tarefa" data-id="1"'), h.indexOf("qd-cl-pri"))).toContain("</button>");
+    // Sem as Opções do quadro mínimo (ui), a linha fica como era.
+    expect(celular([t("1", { prioridade: "alta" })])).not.toContain("qd-cl-pri");
+  });
+
+  it("tocar nas barrinhas abre o mesmo seletor do computador (menuDePrioridade) dentro da linha", () => {
+    const h = celular([t("1", { prioridade: "alta" })], { ui, agentes: [{ id: "a", nome: "Ada" }], edicao: { tipo: "prioridade", tarefa: "1", estreito: true } });
+    expect(h).toContain('class="qd-menu qd-menu-mover qd-menu-pri"');
+    expect(h).toContain('data-act="tarefa-prioridade-para" data-tarefa="1" data-valor="baixa"');
+    expect(h).toContain('aria-expanded="true"');
+  });
+
+  it("o CSS do celular dá 44×44 ao botão da prioridade e põe a coluna dela na linha", () => {
+    const css = readFileSync("web/quadro-celular.css", "utf8");
+    expect(css).toMatch(/\.qd-cl-pri \.qm-pri-bt \{ width: 44px; height: 44px;/);
+    expect(css).toContain(".qd-cl.qd-cl-com-pri { grid-template-columns: minmax(0, 1fr) auto auto;");
+  });
+});

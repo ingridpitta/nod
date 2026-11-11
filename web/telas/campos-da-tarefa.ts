@@ -44,9 +44,42 @@ export function campoDePrazo(t: Pick<TarefaDto, "id" | "prazoEm">, o: { agora: n
 }
 
 /** As duas linhas no painel Propriedades do computador (dt/dd). */
-export function propriedadesDeLabelEPrazo(t: TarefaDto, q: QuadroDto, o: { agora: number; fuso: string }): string {
-  return `<dt>Labels</dt><dd>${campoDeLabels(t, q, "lado")}</dd>` +
-    `<dt><label for="qd-t-prazo-em-lado">Prazo</label></dt><dd>${campoDePrazo(t, { ...o, onde: "lado" })}</dd>`;
+export function propriedadesDeLabelEPrazo(t: TarefaDto, q: QuadroDto, o: { agora: number; fuso: string; /** Só estas (a lateral esconde a vazia); ausente = as duas. */ so?: ReadonlySet<PropriedadeOpcional> }): string {
+  return (!o.so || o.so.has("labels") ? `<dt>Labels</dt><dd>${campoDeLabels(t, q, "lado")}</dd>` : "") +
+    (!o.so || o.so.has("prazo") ? `<dt><label for="qd-t-prazo-em-lado">Prazo</label></dt><dd>${campoDePrazo(t, { agora: o.agora, fuso: o.fuso, onde: "lado" })}</dd>` : "");
+}
+
+/* ---------- 2026-11-10 (a issue do Multica): a propriedade vazia some; "+ Propriedade" a traz de volta ---------- */
+
+/** As propriedades que se escondem vazias e que o "+ Propriedade" traz (as editáveis aqui). */
+export type PropriedadeOpcional = "prioridade" | "labels" | "prazo";
+export const PROPRIEDADES_OPCIONAIS: readonly { id: PropriedadeOpcional; nome: string; foco: string }[] = [
+  { id: "prioridade", nome: "Prioridade", foco: "qd-t-pri" },
+  { id: "labels", nome: "Labels", foco: "qd-t-label-lado" },
+  { id: "prazo", nome: "Prazo", foco: "qd-t-prazo-em-lado" },
+];
+
+/** A propriedade está vazia na tarefa (Prioridade "sem", nenhuma label, sem prazo). */
+export function propriedadeVazia(t: Pick<TarefaDto, "prioridade" | "labels" | "prazoEm">, p: PropriedadeOpcional): boolean {
+  if (p === "prioridade") return !t.prioridade || t.prioridade === "sem";
+  if (p === "labels") return !(t.labels ?? []).length;
+  return !t.prazoEm;
+}
+
+/** As que aparecem: as preenchidas e as que a pessoa trouxe pelo menu nesta tela (estado só local). */
+export function propriedadesAVista(t: Pick<TarefaDto, "prioridade" | "labels" | "prazoEm">, mostradas: ReadonlySet<string>): Set<PropriedadeOpcional> {
+  return new Set(PROPRIEDADES_OPCIONAIS.map((p) => p.id).filter((id) => !propriedadeVazia(t, id) || mostradas.has(id)));
+}
+
+/**
+ * O "+ Propriedade" (discreto, como um link) e o menu das escondidas. Escolher uma a mostra com o campo focado; preencher
+ * a mantém (deixa de estar vazia). Sem nenhuma escondida, nada.
+ */
+export function maisPropriedade(escondidas: readonly PropriedadeOpcional[], aberto: boolean): string {
+  if (!escondidas.length) return "";
+  const itens = PROPRIEDADES_OPCIONAIS.filter((p) => escondidas.includes(p.id));
+  const menu = aberto ? `<div class="ta-prop-menu" role="menu" aria-label="Mostrar propriedade">${itens.map((p) => `<button type="button" role="menuitem" class="ta-prop-op" data-act="prop-mostrar" data-prop="${p.id}">${esc(p.nome)}</button>`).join("")}</div>` : "";
+  return `<div class="ta-prop-mais"><button type="button" class="qd-link ta-prop-bt" data-act="prop-menu" aria-haspopup="menu" aria-expanded="${aberto}">+ Propriedade</button>${menu}</div>`;
 }
 
 /** No celular: uma seção curta abaixo dos chips (os alvos têm 44 px pelo CSS do celular). */

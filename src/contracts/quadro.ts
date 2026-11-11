@@ -32,8 +32,8 @@ export type GrupoColuna = (typeof GRUPOS_COLUNA)[number];
  * `trava` (NOD-419): "só sai para…", "só a pessoa tira daqui"; ausente = flexível. `prazoMin` (NOD-420, só onde o trabalho anda): a tarefa parada além disso nesta coluna faz o quadro cobrar o responsável. */
 export type ColunaQuadro = { id: string; nome: string; grupo: GrupoColuna; responsavel?: string | null; instrucoes?: string | null; proxima?: string | null; volta?: string | null; trava?: TravaColuna; prazoMin?: number };
 
-/** A coluna como a web e o bot a recebem: `fixa` = não move nem sai (Cancelado). */
-export type ColunaDto = ColunaQuadro & { fixa: boolean; daPessoa: boolean; recolhida: boolean; responsavelNome?: string | null };
+/** A coluna como a web e o bot a recebem: `fixa` = não move nem sai (Cancelado); `recebe` (2026-11-10): o texto da etapa que vai ao turno (textoDaEtapa), na coluna com responsável ou "o que essa etapa faz". */
+export type ColunaDto = ColunaQuadro & { fixa: boolean; daPessoa: boolean; recolhida: boolean; responsavelNome?: string | null; recebe?: string };
 
 /** O id de uma coluna (o `status` da tarefa): uma chave padrão ou `c-<slug>`. */
 export type IdColuna = string;
@@ -70,7 +70,7 @@ export type TarefaQuadro = {
   numero: number | null;
   /** NOD-443 (ADR-143): quem pediu (a dona ou quem participa). Null antes da 0146 ou num turno do próprio quadro; ausente na foto de um lote de antes. */
   pedidoPor?: string | null; prioridade: Prioridade; // NOD-463 (0160): sem, urgente, alta, média, baixa
-  labelIds?: string[]; prazoEm?: string | null; // 0159: as labels (ids do catálogo) e o prazo AAAA-MM-DD; ausentes na foto de antes = mantém
+  labelIds?: string[]; prazoEm?: string | null; // 0161: as labels (ids do catálogo) e o prazo AAAA-MM-DD; ausentes na foto de antes = mantém
 } & ProvenienciaResposta; // ADA-15 (ADR-154): de qual fala da pessoa veio a resposta
 
 export { MODOS_CONVERSA, MODOS_ESCOLHIVEIS, type ModoConversa } from "./quadro-pessoas.ts";
@@ -138,7 +138,7 @@ export type TarefaDto = TarefaQuadro & {
   linhas?: LinhaDeSistema[]; estadoLinha?: import("./quadro-execucoes.ts").EstadoLinhaTarefa | null; // ADA-232: o card numa linha
   movimentos?: MovimentoDto[]; // NOD-419: os últimos movimentos (o mais novo primeiro)
   respostaAgenteNome?: string | null; esperaPessoa?: boolean; // ADA-15: o bot com quem a pessoa falava; ADR-162: perguntou à pessoa (o status já é a coluna em que aparece)
-  labels?: LabelDto[]; // 0159: as labels da tarefa, resolvidas do catálogo (na ordem do catálogo)
+  labels?: LabelDto[]; // 0161: as labels da tarefa, resolvidas do catálogo (na ordem do catálogo)
 };
 export type QuadroDto = Omit<Quadro, "colunas"> & {
   agenteNome: string;
@@ -156,7 +156,7 @@ export type QuadroDto = Omit<Quadro, "colunas"> & {
   membros?: MembroQuadroDto[];
   comentarios?: ComentarioQuadroDto[];
   avisoGithub?: string | null; // NOD-421: a linha do GitHub no topo ("não conectado", "sem acesso a dono/repo")
-  labels?: LabelDto[]; // 0159: o catálogo de labels do quadro
+  labels?: LabelDto[]; // 0161: o catálogo de labels do quadro
 };
 
 /** Uma operação no quadro (a ferramenta manda uma lista; a rota, uma). Cada tipo é um id do registro `quadro.*`. */
@@ -166,7 +166,7 @@ export type OpQuadro =
   | { tipo: "importar_linear"; itens: ItemLinear[] }
   | OpImportarTimeLinear
   | OpAssumirQuadro
-  | ({ tipo: "mudar_tarefa"; tarefa: string; titulo?: string; descricao?: string; status?: string; agente?: string | null; pr_url?: string | null; prioridade?: Prioridade; pergunta?: string | null; excluir?: boolean; sem_iniciar?: boolean; /** NOD-419: o porquê de bloquear ou cancelar (o agente precisa dizer). */ motivo?: string } & PelaFala & CamposDeLabel)
+  | ({ tipo: "mudar_tarefa"; tarefa: string; titulo?: string; descricao?: string; status?: string; agente?: string | null; pr_url?: string | null; prioridade?: Prioridade; pergunta?: string | null; excluir?: boolean; sem_iniciar?: boolean; /** 2026-11-10 (ADR-142): ao mover para outra etapa, para o turno vivo de quem trabalhava nela (padrão: ele termina, preso à etapa dele). */ parar_anterior?: boolean; /** NOD-419: o porquê de bloquear ou cancelar (o agente precisa dizer). */ motivo?: string } & PelaFala & CamposDeLabel)
   | ({ tipo: "responder"; tarefa: string; resposta: string; /** ADA-15: responder e seguir (o "aprovado"). */ avancar?: true } & PelaFala)
   /** NOD-418: o trabalho da tarefa (sozinhos, sem Desfazer). Repetir abre um novo; cancelar para o vivo; o recado entra nele. */
   | { tipo: "repetir_trabalho"; tarefa: string } | { tipo: "cancelar_trabalho"; tarefa: string } | { tipo: "recado"; tarefa: string; texto: string }
@@ -194,6 +194,6 @@ export type OpQuadro =
 export type TipoOpQuadro = OpQuadro["tipo"];
 /** A ferramenta gerir_quadro (quadro-bot.ts) e o quadro como o bot o lê (quadro-resumo-bot.ts) moram fora (o teto de linhas). */
 export type { ItemLinear, ArgsGerirQuadro, ResultadoGerirQuadro, PelaFala, ProvenienciaResposta } from "./quadro-bot.ts";
-export type { ResumoQuadroParaBot } from "./quadro-resumo-bot.ts"; export type { CamposDeLabel, CorLabel, LabelDto, LabelQuadro, OpLabel, OpcaoPrazo } from "./quadro-labels.ts"; // 0159
-/** Os tetos do quadro (a ferramenta, o domínio e a tela usam os mesmos). */ export const LIMITES_QUADRO = { comentario: 4000, comentariosPorPessoa: 50, membros: 50, meta: 200, titulo: 200, descricao: 4000, pergunta: 1000, resposta: 4000, ops: 50, itens: 50, identificador: 40, url: 500, coluna: 40, colunas: 30, instrucoes: 500, motivo: 600, prazoMin: 30 * 24 * 60 } as const;
+export type { ResumoQuadroParaBot } from "./quadro-resumo-bot.ts"; export type { CamposDeLabel, CorLabel, LabelDto, LabelQuadro, OpLabel, OpcaoPrazo } from "./quadro-labels.ts"; // 0161
+/** Os tetos do quadro (a ferramenta, o domínio e a tela usam os mesmos). */ export const LIMITES_QUADRO = { comentario: 4000, comentariosPorPessoa: 50, membros: 50, meta: 200, titulo: 200, descricao: 4000, pergunta: 1000, resposta: 4000, ops: 50, itens: 50, identificador: 40, url: 500, coluna: 40, colunas: 30, instrucoes: 2000, motivo: 600, prazoMin: 30 * 24 * 60 } as const;
 /** NOD-448 (ADR-140): o card de substituir as colunas mora em quadro-proposta-colunas.ts (teto de linhas dos contratos). */ export type { ColunaNaProposta, PayloadPropostaColunasQuadro } from "./quadro-proposta-colunas.ts";

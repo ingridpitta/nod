@@ -38,7 +38,7 @@ describe("as colunas com passagem", () => {
     expect(COLUNAS_PADRAO.filter(aceitaPassagem).map((c) => c.id)).toEqual(["backlog", "afazer", "fazendo", "revisao"]);
     expect(validarColunas(comPassagem("revisao", ZE.id))).toBeNull();
     for (const id of ["bloqueado", "feito", "cancelado"]) expect(validarColunas(comPassagem(id, ZE.id))).toMatchObject({ erro: expect.stringContaining("não tem responsável") });
-    expect(validarColunas(comPassagem("revisao", null, "x".repeat(501)))).toMatchObject({ erro: expect.stringContaining("500") });
+    expect(validarColunas(comPassagem("revisao", null, "x".repeat(2001)))).toMatchObject({ erro: expect.stringContaining("2000") });
   });
 
   it("a passagem tira o quadro do padrão e segue com a coluna na troca do conjunto", () => {

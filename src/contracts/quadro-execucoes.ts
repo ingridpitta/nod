@@ -55,6 +55,8 @@ export type ExecucaoQuadro = {
   saida: SaidaTrabalho | null;
   /** ADA-232: os reacionamentos sem saída já feitos na série (zera quando a cadeia assenta com saída). */
   semSaida: number;
+  /** 2026-11-10 (ADR-142): a coluna da tarefa quando o trabalho nasceu; ele fica preso a ela (null = dado anterior). */
+  etapa?: string | null;
   criadoEm: number;
 };
 
@@ -96,7 +98,20 @@ export type ExecucaoDto = Pick<ExecucaoQuadro, "id" | "numero" | "sessao" | "col
 };
 
 /** ADA-232: a volta que a cadeia espera. `em` = a hora marcada (ou o prazo máximo da volta por CI). Texto: a tela escapa. */
-export type VoltaDoTrabalho = { motivo: string | null; em: number | null; quando: "ci" | null; prUrl: string | null };
+export type VoltaDoTrabalho = { motivo: string | null; em: number | null; quando: QuandoVolta | null; prUrl: string | null;
+  /** 2026-11-10: na espera por outra tarefa, o código dela ("ENG-12"); ausente nas outras. */ tarefa?: string | null };
+
+/**
+ * 2026-11-10 (os wakeups do Multica): as esperas por evento do me_chame_as. ci = os checks do PR da tarefa terminaram;
+ * merge = o PR mergeou; conflito = o PR aberto ficou com conflito; tarefa = outra tarefa do quadro chegou num estado.
+ */
+export type QuandoVolta = "ci" | "merge" | "conflito" | "tarefa";
+export const QUANDO_VOLTA = ["ci", "merge", "conflito", "tarefa"] as const satisfies readonly QuandoVolta[];
+/** O estado que a espera por outra tarefa quer: Feito (o grupo), Em revisão ou Bloqueado. */
+export type EstadoEsperado = "feito" | "revisao" | "bloqueado";
+export const ESTADOS_ESPERADOS = ["feito", "revisao", "bloqueado"] as const satisfies readonly EstadoEsperado[];
+/** A condição que a volta espera (gravada no turno; a retomada a herda). */
+export type CondicaoDaVolta = { quando: "ci" | "merge" | "conflito"; prUrl: string } | { quando: "tarefa"; tarefaId: string; estado: EstadoEsperado | null };
 
 /**
  * ADA-232: o estado do card numa linha — trabalhando (inclui a frente aberta da tarefa), esperando (com o motivo e a

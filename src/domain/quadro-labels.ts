@@ -4,7 +4,7 @@ import { CORES_LABEL, LIMITES_LABEL, type CamposDeLabel, type CorLabel, type Lab
 /**
  * Labels e prazo das tarefas, puro (definido em 2026-11-10). Lê os campos que chegam de fora (a ferramenta e a rota),
  * troca os nomes de label pelos ids do catálogo (criando os que faltam, como no Linear) e aplica o conjunto na tarefa.
- * O banco é a 0159; o caso de uso, src/use-cases/quadro-labels.ts.
+ * O banco é a 0161; o caso de uso, src/use-cases/quadro-labels.ts.
  */
 
 type ErroOp = { erro: string };

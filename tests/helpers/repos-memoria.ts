@@ -1,4 +1,5 @@
 import { contasIaMemoria, estadoContasIaMemoria, type EstadoContasIaMemoria } from "./contas-ia-memoria.ts";
+import type { CondicaoDaVolta } from "../../src/contracts/quadro-execucoes.ts";
 import { temFalha, type EstadoDisjuntor } from "../../src/domain/disjuntor-conector.ts";
 import { ehDecisao, MOTIVOS_DE_CONECTOR_FORA } from "../../src/domain/decisoes.ts";
 import type { ConfigGithubApp } from "../../src/repositories/github-app.repo.ts";
@@ -290,7 +291,7 @@ const soNoPostgres = async (): Promise<never> => {
   throw new Error("só no Postgres: use tests/integration");
 };
 /** ADR-086: o pedido de volta anotado em cada turno (no Postgres, turnos.despertar_em/despertar_motivo). */
-const despertares = new Map<string, { em: number; motivo: string; prUrlCi: string | null }>();
+const despertares = new Map<string, { em: number; motivo: string; cond: CondicaoDaVolta | null }>();
 const iso = (n: number) => new Date(n).toISOString();
 const semDono = (l: Artefato & { tenantId: string; ownerId: string }): Artefato => ({ id: l.id, agenteId: l.agenteId, conversaId: l.conversaId, titulo: l.titulo, versaoAtual: l.versaoAtual, criadoEm: l.criadoEm, atualizadoEm: l.atualizadoEm });
 const semDonoEspera = ({ tenantId: _tenant, ownerId: _dona, ...e }: Espera & { tenantId: string; ownerId: string }): Espera => ({ ...e });
@@ -1704,14 +1705,14 @@ function reposSobre(b: BancoMemoria, escopo: Escopo): Repos {
       async retomadaNaFila(retomaTurnoId: string) {
         return doTenant(b.turnos).filter((t) => t.ownerId === escopo.pessoaId && t.retomaTurnoId === retomaTurnoId && t.origem === "retomada" && t.estado === "pendente" && (t.acordarEm ?? 0) <= agora()).sort((x, y) => y.criadoEm - x.criadoEm)[0] ?? null;
       },
-      async marcarDespertar(id: string, em: number, motivo: string, ci: { prUrl: string } | null = null) {
+      async marcarDespertar(id: string, em: number, motivo: string, cond: CondicaoDaVolta | null = null) {
         const t = doTenant(b.turnos).find((x) => x.id === id && x.ownerId === escopo.pessoaId && x.estado === "despachando" && x.pararSolicitadoEm === null);
         if (!t) return false;
-        despertares.set(id, { em, motivo, prUrlCi: ci?.prUrl ?? null });
+        despertares.set(id, { em, motivo, cond });
         return true;
       },
-      marcarVoltaCi: soNoPostgres,
-      voltasCiPendentes: async () => [],
+      marcarVoltaPorEvento: soNoPostgres,
+      voltasPorEventoPendentes: async () => [],
       acordarVolta: soNoPostgres,
       async despertarDoTurno(id: string) {
         return despertares.get(id) ?? null;
@@ -4101,6 +4102,7 @@ function reposSobre(b: BancoMemoria, escopo: Escopo): Repos {
       pedidoAbertoNaTarefa: async () => false,
       turnoNaFila: async () => null,
       turnoNaFilaDaThread: async () => null,
+      contarDeQuemParticipa: async () => 0,
       turnosVivos: async () => [],
       buscar: async () => null,
       thread: async () => [],
@@ -4168,6 +4170,10 @@ function reposSobre(b: BancoMemoria, escopo: Escopo): Repos {
       tomarPendentes: async () => [],
       devolverTomados: async () => {},
       cancelarRecados: async () => 0,
+      cancelarRecadosDeComentario: async () => 0,
+      cancelarRecadoDoComentario: async () => 0,
+      tarefasDosRecadosLidos: async () => [],
+      recibosDosComentarios: async () => new Map(),
     },
     // NOD-437: os times são do Postgres (tests/integration/times.test.ts); aqui não há nenhum.
     times: {
@@ -4210,6 +4216,14 @@ function reposSobre(b: BancoMemoria, escopo: Escopo): Repos {
       atualizar: soNoPostgres,
       foto: async () => null,
       definirFoto: soNoPostgres,
+    },
+    // ADR-165 (0170): os passos do run só existem no Postgres (tests/integration/turno-passos.test.ts); aqui nada grava.
+    turnoPassos: {
+      gravar: async () => [],
+      marcarFalha: async () => false,
+      daCadeia: async () => ({ passos: [], fim: true }),
+      resumo: async (raizes: readonly string[]) => new Map(raizes.map((r) => [r, { n: 0, ultimo: null }])),
+      podar: async () => 0,
     },
   } satisfies Repos;
 

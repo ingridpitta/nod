@@ -64,6 +64,7 @@ import { rotinaRitmoRepo } from "./rotina-ritmo.repo.ts";
 import { turnoCredenciaisRepo } from "./turno-credenciais.repo.ts";
 import { acoesPeloModoRepo } from "./acoes-pelo-modo.repo.ts";
 import { preferenciasRepo, raioXRepo } from "./raio-x.repo.ts";
+import { turnoPassosRepo } from "./turno-passos.repo.ts";
 import { perfilRepo } from "./perfil.repo.ts";
 import { onboardingRepo } from "./onboarding.repo.ts";
 import { comandosRepo } from "./comandos.repo.ts";
@@ -142,6 +143,7 @@ export function criarRepos(conn: Conn, escopo: Escopo): Repos {
     maquinasNuvem: maquinasNuvemRepo(conn, escopo),
     credenciaisNuvem: credenciaisNuvemRepo(conn, escopo),
     raioX: raioXRepo(conn, escopo),
+    turnoPassos: turnoPassosRepo(conn, escopo),
     preferencias: preferenciasRepo(conn, escopo),
     comandos: comandosRepo(conn, escopo),
     usoDoPlano: usoDoPlanoRepo(conn, escopo),

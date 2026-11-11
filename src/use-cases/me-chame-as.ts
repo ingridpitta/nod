@@ -1,7 +1,10 @@
 import type { RuntimeEvent } from "../contracts/evento.ts";
 import { ACORDAR_MAX_MINUTOS, ACORDAR_MIN_MINUTOS, MOTIVO_MAX_DESPERTAR, VOLTAS_SEGUIDAS_MAX, VOLTAS_SEM_NOVIDADE } from "../contracts/ferramentas-trabalho.ts";
 import { REGRA_VOLTAS_SEM_NOVIDADE } from "../contracts/pedido.ts";
-import { MOTIVO_CI_EXPIROU, VOLTA_CI_MAX_MS } from "../contracts/quadro-execucoes.ts";
+import { ESTADOS_ESPERADOS, MOTIVO_CI_EXPIROU, QUANDO_VOLTA, VOLTA_CI_MAX_MS, type CondicaoDaVolta, type EstadoEsperado, type QuandoVolta } from "../contracts/quadro-execucoes.ts";
+import type { TarefaQuadro } from "../contracts/quadro.ts";
+import { codigoDaTarefa } from "../domain/codigo-tarefa.ts";
+import { resolverTarefa } from "../domain/quadro.ts";
 import type { CasoNod } from "../contracts/servicos.ts";
 import type { Turno } from "../contracts/turno.ts";
 import { ErroDeDominio } from "../domain/erro.ts";
@@ -41,10 +44,13 @@ export function origemDaVolta(turno: Turno): string {
 export const meChameAs: CasoNod<Deps, "me_chame_as"> = async (deps, input) => {
   const turno = await deps.repos.turnos.buscarTravado(input.turnoId);
   if (!turno || turno.agenteId !== input.agenteId) throw new ErroDeDominio("nao_permitido", { cause: "turno de outro bot" });
-  const porCi = input.quando === "ci";
-  if (input.quando !== undefined && !porCi) throw new ErroDeDominio("entrada_invalida", { cause: "quando só aceita \"ci\"" });
-  // ADA-232: a volta por CI dorme até o prazo máximo (24h); o varredor a traz para agora quando os checks terminam.
-  const minutos = porCi ? VOLTA_CI_MAX_MS / 60_000 : Math.round(input.em_minutos ?? Number.NaN);
+  // ADA-232 + 2026-11-10 (os wakeups do Multica): a volta por evento (CI, merge, conflito, outra tarefa) dorme até o prazo
+  // máximo (24h); o varredor a traz para agora quando o evento acontece.
+  const quandoVolta = input.quando;
+  if (quandoVolta !== undefined && !(QUANDO_VOLTA as readonly string[]).includes(quandoVolta)) throw new ErroDeDominio("entrada_invalida", { cause: `quando só aceita ${QUANDO_VOLTA.join(", ")}` });
+  if (input.estado !== undefined && !(ESTADOS_ESPERADOS as readonly string[]).includes(input.estado)) throw new ErroDeDominio("entrada_invalida", { cause: `estado só aceita ${ESTADOS_ESPERADOS.join(", ")}` });
+  const porEvento = quandoVolta !== undefined;
+  const minutos = porEvento ? VOLTA_CI_MAX_MS / 60_000 : Math.round(input.em_minutos ?? Number.NaN);
   if (!Number.isFinite(minutos) || minutos < ACORDAR_MIN_MINUTOS || minutos > ACORDAR_MAX_MINUTOS) throw new ErroDeDominio("entrada_invalida", { cause: `em_minutos fora de ${ACORDAR_MIN_MINUTOS}–${ACORDAR_MAX_MINUTOS}` });
   const motivo = input.motivo.trim().slice(0, MOTIVO_MAX_DESPERTAR);
   if (motivo === "") throw new ErroDeDominio("texto_vazio");
@@ -55,24 +61,53 @@ export const meChameAs: CasoNod<Deps, "me_chame_as"> = async (deps, input) => {
   }
   // ADR-099 (parte 2): uma volta por turno — quem já deixou um comando esperando volta quando ele terminar.
   if (await deps.repos.esperas.doTurnoTravada(turno.id)) return { data: { ok: false, erro: "ja_esperando", instrucao: "Você já deixou um comando esperando neste turno (esperar_comando) e volta quando ele terminar. Não marque outra volta: encerre o turno." } };
-  const prUrl = porCi ? await prDaTarefaDoTurno(deps, turno) : null;
-  if (porCi && !prUrl) return { data: { ok: false, erro: "sem_pr", instrucao: "quando: \"ci\" só vale no trabalho de uma tarefa do quadro que já tem PR. Ponha o PR na tarefa (gerir_quadro mudar_tarefa pr_url) ou use esperar_comando com gh pr checks --watch." } };
+  const alvo = porEvento ? await condicaoDoPedido(deps, turno, input) : null;
+  if (alvo && "erro" in alvo) return { data: { ok: false, erro: alvo.erro, instrucao: alvo.instrucao } };
+  const cond = alvo;
   const agora = deps.agora();
   const acordarEm = agora + minutos * 60_000;
-  if (!(await deps.repos.turnos.marcarDespertar(turno.id, acordarEm, motivo, prUrl ? { prUrl } : null))) {
+  if (!(await deps.repos.turnos.marcarDespertar(turno.id, acordarEm, motivo, cond))) {
     return { data: { ok: false, erro: "turno_parado", instrucao: "A pessoa parou este trabalho. Não marque volta: encerre o turno." } };
   }
   const hora = quando(acordarEm, agora);
-  if (prUrl) return { data: { ok: true, volta_as: horaDaFrase(acordarEm, agora), acordar_em: new Date(acordarEm).toISOString(), instrucao: `Combinado: você volta sozinho nesta mesma sessão quando a CI de ${prUrl} terminar (no máximo ${hora}). Pare os comandos que deixou em segundo plano, diga em uma frase o que vai esperar e encerre o turno agora — não fique esperando.` } };
-  return { data: { ok: true, volta_as: horaDaFrase(acordarEm, agora), acordar_em: new Date(acordarEm).toISOString(), instrucao: `Combinado: você volta sozinho ${hora}, nesta mesma sessão. Pare os comandos que deixou em segundo plano, diga em uma frase o que vai esperar e encerre o turno agora — não fique esperando.` } };
+  const fecho = "Pare os comandos que deixou em segundo plano, diga em uma frase o que vai esperar e encerre o turno agora — não fique esperando.";
+  if (cond) return { data: { ok: true, volta_as: horaDaFrase(acordarEm, agora), acordar_em: new Date(acordarEm).toISOString(), instrucao: `Combinado: você volta sozinho nesta mesma sessão quando ${oQueEspera(cond, alvo?.codigo ?? null)} (no máximo ${hora}). ${fecho}` } };
+  return { data: { ok: true, volta_as: horaDaFrase(acordarEm, agora), acordar_em: new Date(acordarEm).toISOString(), instrucao: `Combinado: você volta sozinho ${hora}, nesta mesma sessão. ${fecho}` } };
 };
 
-/** ADA-232: o PR da tarefa do quadro cujo trabalho este turno é (a raiz da cadeia); null = não é trabalho de tarefa ou sem PR. */
-async function prDaTarefaDoTurno(deps: Deps, turno: Turno): Promise<string | null> {
+/** 2026-11-10: o evento em palavras, para o bot (na marcação e na volta). */
+function oQueEspera(c: CondicaoDaVolta, codigo: string | null): string {
+  if (c.quando !== "tarefa") return c.quando === "ci" ? `a CI de ${c.prUrl} terminar` : c.quando === "merge" ? `${c.prUrl} for mergeado (ou fechado)` : `${c.prUrl} ficar com conflito (ou sair de aberto)`;
+  const quem = codigo ?? "a outra tarefa";
+  return c.estado ? `${quem} chegar em ${NOME_DO_ESTADO[c.estado]} (ou for cancelada)` : `${quem} chegar em Feito, Em revisão ou Bloqueado (ou for cancelada)`;
+}
+const NOME_DO_ESTADO: Readonly<Record<EstadoEsperado, string>> = { feito: "Feito", revisao: "Em revisão", bloqueado: "Bloqueado" };
+
+/**
+ * 2026-11-10: a condição da volta por evento. ci, merge e conflito: o PR da tarefa deste trabalho. tarefa: outra tarefa do
+ * mesmo quadro, pelo código ou id. Fora de um trabalho de tarefa, ou sem o que esperar, devolve a instrução.
+ */
+async function condicaoDoPedido(deps: Deps, turno: Turno, input: { quando?: QuandoVolta; tarefa?: string; estado?: EstadoEsperado }): Promise<(CondicaoDaVolta & { codigo: string | null }) | { erro: "sem_pr" | "sem_tarefa"; instrucao: string }> {
+  const minha = await tarefaDoTurno(deps, turno);
+  if (input.quando !== "tarefa") {
+    if (!minha?.prUrl) return { erro: "sem_pr", instrucao: `quando: "${input.quando}" só vale no trabalho de uma tarefa do quadro que já tem PR. Ponha o PR na tarefa (gerir_quadro mudar_tarefa pr_url) ou use esperar_comando com gh pr checks --watch.` };
+    return { quando: input.quando === "merge" || input.quando === "conflito" ? input.quando : "ci", prUrl: minha.prUrl, codigo: null };
+  }
+  const semTarefa = (porque: string) => ({ erro: "sem_tarefa" as const, instrucao: `quando: "tarefa" ${porque} Passe em tarefa o código de outra tarefa deste quadro (ex.: "ENG-12"), ou use em_minutos.` });
+  if (!minha) return semTarefa("só vale no trabalho de uma tarefa do quadro.");
+  if (!input.tarefa?.trim()) return semTarefa("precisa de tarefa.");
+  const q = await deps.repos.quadros.buscar(minha.quadroId);
+  const outra = resolverTarefa(await deps.repos.quadros.tarefas(minha.quadroId), input.tarefa, { prefixo: q?.prefixo ?? null });
+  if ("erro" in outra) return semTarefa(`não achou "${input.tarefa.slice(0, 80)}" neste quadro.`);
+  if (outra.id === minha.id) return semTarefa("espera outra tarefa, não a sua.");
+  return { quando: "tarefa", tarefaId: outra.id, estado: input.estado ?? null, codigo: codigoDaTarefa(q?.prefixo ?? null, outra) };
+}
+
+/** ADA-232: a tarefa do quadro cujo trabalho este turno é (a raiz da cadeia); null = não é trabalho de tarefa. */
+async function tarefaDoTurno(deps: Deps, turno: Turno): Promise<TarefaQuadro | null> {
   const raiz = turno.retomaTurnoId ? await deps.repos.turnos.raizDaCadeia(turno.id) : turno;
   const e = raiz ? await deps.repos.quadroExecucoes.doTurnoRaiz(raiz.id) : null;
-  const t = e ? await deps.repos.quadros.tarefa(e.tarefaId) : null;
-  return t?.prUrl ?? null;
+  return e ? await deps.repos.quadros.tarefa(e.tarefaId) : null;
 }
 
 /**
@@ -91,12 +126,18 @@ export async function voltaMarcadaAoAssentar(deps: Deps, turno: Turno, concluiu:
   const r = await enfileirarVolta(deps, turno, {
     acordarEm: pedido.em,
     motivo: pedido.motivo,
-    entradaTexto: pedido.prUrlCi
-      ? `[nod] Você pediu para voltar quando a CI de ${pedido.prUrlCi} terminasse, para conferir: ${pedido.motivo}\nConfira os checks (gh pr checks) e siga de onde parou. Se eles ainda estiverem rodando, ${MOTIVO_CI_EXPIROU}: diga isso na tarefa (status bloqueado com o motivo) ou marque outra volta.`
-      : `[nod] Você marcou para voltar ${quando(pedido.em, agora)} para conferir: ${pedido.motivo}\nConfira e siga de onde parou. Se ainda não estiver pronto, marque outra volta com me_chame_as e encerre o turno.`,
+    entradaTexto: pedido.cond ? entradaDaVoltaPorEvento(pedido.cond, pedido.motivo) : `[nod] Você marcou para voltar ${quando(pedido.em, agora)} para conferir: ${pedido.motivo}\nConfira e siga de onde parou. Se ainda não estiver pronto, marque outra volta com me_chame_as e encerre o turno.`,
   });
-  if (pedido.prUrlCi && r?.volta) await deps.repos.turnos.marcarVoltaCi(r.volta.id, pedido.prUrlCi);
+  if (pedido.cond && r?.volta) await deps.repos.turnos.marcarVoltaPorEvento(r.volta.id, pedido.cond);
   return r?.events ?? [];
+}
+
+/** A entrada da volta por evento: o que acordou e o que conferir (cobre também o prazo máximo, que acorda sem o evento). */
+function entradaDaVoltaPorEvento(c: CondicaoDaVolta, motivo: string): string {
+  if (c.quando === "ci") return `[nod] Você pediu para voltar quando a CI de ${c.prUrl} terminasse, para conferir: ${motivo}\nConfira os checks (gh pr checks) e siga de onde parou. Se eles ainda estiverem rodando, ${MOTIVO_CI_EXPIROU}: diga isso na tarefa (status bloqueado com o motivo) ou marque outra volta.`;
+  const evento = c.quando === "merge" ? `${c.prUrl} fosse mergeado (ou fechado)` : c.quando === "conflito" ? `${c.prUrl} ficasse com conflito (ou saísse de aberto)` : "a outra tarefa do quadro chegasse no estado que você esperava (ou fosse cancelada)";
+  const confira = c.quando === "tarefa" ? "Confira a tarefa (gerir_quadro com acoes vazio)" : "Confira o PR (gh pr view)";
+  return `[nod] Você pediu para voltar quando ${evento}, para conferir: ${motivo}\n${confira} e siga de onde parou. Se o evento ainda não aconteceu, passaram 24 h: diga isso na tarefa (status bloqueado com o motivo) ou marque outra volta.`;
 }
 
 /**

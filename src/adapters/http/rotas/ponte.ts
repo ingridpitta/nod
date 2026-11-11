@@ -93,7 +93,8 @@ export function criarPonteHttpServidor(d: {
   sessaoDaMaquina?(escopo: Escopo, chaveId: string): Promise<string>;
   agora(): number;
   delta(plano: PlanoTurno, texto: string): void;
-  ferramenta(plano: PlanoTurno, nome: string, id?: string): void;
+  /** ADR-165: `resumo` = a linha do argumento que o executor mandou (já redigida lá; o compositor redige de novo). */
+  ferramenta(plano: PlanoTurno, nome: string, id?: string, resumo?: string): void;
   /** NOD-353: a chamada `id` terminou (`falhou` = tool_result.isError) — publica turno.acao_fim. */
   fimDaFerramenta?(plano: PlanoTurno, id: string, falhou: boolean): void;
   /** A lista de tarefas do bot, inteira, quando muda (definido em 2026-09-28). */
@@ -427,7 +428,7 @@ export function criarPonteHttpServidor(d: {
       if (fs.length && r.ativo) d.fala?.(plano);
       if (r.ativo && texto(b.delta, 16_000) && b.delta) d.delta(plano, b.delta);
       if (r.ativo) for (const t of trechos(b.trechos)) {
-        if ("ferramenta" in t) d.ferramenta(plano, t.ferramenta, t.id);
+        if ("ferramenta" in t) d.ferramenta(plano, t.ferramenta, t.id, t.resumo);
         else if ("fim" in t) d.fimDaFerramenta?.(plano, t.fim, t.falhou);
         else if ("tarefas" in t) d.tarefas(plano, t.tarefas);
         else if ("vigia" in t) d.vigia?.(plano, t.vigia);

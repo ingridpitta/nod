@@ -8,8 +8,9 @@
  * `camposDoFiltro({ porLabel, porPrazo })`; até lá valem os de reserva daqui, com a mesma assinatura.
  */
 import type { TarefaDto } from "../../src/contracts/quadro.ts";
-import type { Prioridade } from "../../src/contracts/quadro-opcoes.ts";
-import { normalizar } from "./vista-do-quadro.ts";
+import type { CampoDoFiltro as CampoDoContrato, Prioridade } from "../../src/contracts/quadro-opcoes.ts";
+import { ehComigo, normalizar, trabalhandoAgora } from "./vista-do-quadro.ts";
+import type { ColunaDto } from "../../src/contracts/quadro.ts";
 
 const PRIORIDADES_F: readonly Prioridade[] = ["sem", "urgente", "alta", "media", "baixa"];
 const NOME_PRI: Readonly<Record<Prioridade, string>> = { sem: "Sem prioridade", urgente: "Urgente", alta: "Alta", media: "Média", baixa: "Baixa" };
@@ -25,14 +26,18 @@ export type TarefaDoFiltro = TarefaDto & { prazo?: string | number | null };
 export const prazoDa = (t: TarefaDoFiltro): string | number | null | undefined => ("prazo" in t ? t.prazo : t.prazoEm);
 
 /** Os campos do funil, na ordem do menu (Label e Prazo só aparecem com dado). */
-export const CAMPOS_DO_FILTRO = ["tipo", "status", "agente", "prioridade", "responsavel", "criador", "relacao", "data", "label", "prazo"] as const;
+export const CAMPOS_DO_FILTRO = ["tipo", "status", "agente", "prioridade", "responsavel", "criador", "relacao", "data", "label", "prazo"] as const satisfies readonly CampoDoContrato[];
 export type CampoDoFiltro = (typeof CAMPOS_DO_FILTRO)[number];
+/* 2026-11-10: a lista mora também no contrato (o servidor valida os filtros lembrados); o Exato quebra o typecheck se divergir. */
+type Exato<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
+const _mesmosCampos: Exato<CampoDoFiltro, CampoDoContrato> = true;
+void _mesmosCampos;
 /** Uma condição: campo = valor. Dentro do mesmo campo vale qualquer uma (OU); entre campos, todas (E). */
 export interface CondicaoDoFiltro { campo: CampoDoFiltro; valor: string }
 /** O modo de cada campo: "é" (o padrão) ou "não é" (a tarefa passa quando NENHUM dos valores escolhidos casa). */
 export type ModoDoCampo = "e" | "nao";
 /** Quem lê o quadro (para "Relação comigo") e o relógio (para "Data" e "Prazo"). */
-export interface ContextoDoFiltro { pessoaId: string | null; dona: boolean; agora: number }
+export interface ContextoDoFiltro { pessoaId: string | null; dona: boolean; agora: number; /** T5: as travas das colunas ("só a pessoa" conta como comigo). */ colunas?: readonly Pick<ColunaDto, "id" | "trava">[] }
 
 export interface ValorDoCampo { valor: string; nome: string }
 /** O predicado puro de um campo: a tarefa casa com aquele valor? */
@@ -51,8 +56,11 @@ export interface DescritorDeCampo {
 const DIA = 86_400_000;
 const meiaNoite = (ms: number): number => new Date(new Date(ms).setHours(0, 0, 0, 0)).getTime();
 
-/** O responsável efetivo do card: "voce" (a tarefa espera uma pessoa), o id do bot ou "sem". */
-export const responsavelDe = (t: Pick<TarefaDto, "status" | "agenteId" | "esperaPessoa">): string => (t.esperaPessoa || t.status === "voce" ? "voce" : t.agenteId ?? "sem");
+/**
+ * O responsável do card: o id do bot ou "sem". revisto em 2026-11-10 (ADR-162): a tarefa que espera a pessoa continua com
+ * o mesmo responsável (a espera é a marca, não "Você" no lugar do bot); "esperando por mim" é o campo Relação comigo.
+ */
+export const responsavelDe = (t: Pick<TarefaDto, "agenteId">): string => t.agenteId ?? "sem";
 /** Quem pediu a tarefa: a pessoa (id) ou "bot" (sem pedidoPor: o bot sozinho ou a dona antes da 0146). */
 export const criadorDe = (t: Pick<TarefaDto, "pedidoPor">): string => t.pedidoPor ?? "bot";
 
@@ -94,18 +102,19 @@ const unicos = <T>(xs: readonly T[]): T[] => [...new Set(xs)];
  */
 export function camposDoFiltro(o: { porLabel?: PredicadoDeCampo; porPrazo?: PredicadoDeCampo } = {}): DescritorDeCampo[] {
   return [
-    { campo: "tipo", nome: "Tipo de responsável", valores: fixos([{ valor: "agente", nome: "Agente" }, { valor: "pessoa", nome: "Pessoa" }, { valor: "sem", nome: "Sem responsável" }]),
-      passa: (t, v) => { const r = responsavelDe(t); return v === "pessoa" ? r === "voce" : v === "sem" ? r === "sem" : r !== "voce" && r !== "sem"; } },
+    { campo: "tipo", nome: "Tipo de responsável", valores: fixos([{ valor: "agente", nome: "Agente" }, { valor: "sem", nome: "Sem responsável" }]),
+      passa: (t, v) => (responsavelDe(t) === "sem") === (v === "sem") },
     { campo: "status", nome: "Status", valores: (ts) => unicos(ts.map((t) => t.status)).map((s) => ({ valor: s, nome: s })), passa: (t, v) => t.status === v },
     { campo: "agente", nome: "Status do agente", valores: fixos([{ valor: "rodando", nome: "Trabalhando agora" }, { valor: "fila", nome: "Na fila" }, { valor: "falhou", nome: "Falhou" }]),
-      passa: (t, v) => (t.execucao ?? (t.estadoLinha?.tipo === "trabalhando" ? "rodando" : null)) === v },
+      passa: (t, v) => (v === "rodando" ? trabalhandoAgora(t) : t.execucao === v) },
     { campo: "prioridade", nome: "Prioridade", valores: fixos(PRIORIDADES_F.map((p) => ({ valor: p, nome: NOME_PRI[p] }))),
       passa: (t, v) => ((PRIORIDADES_F as readonly unknown[]).includes(t.prioridade) ? t.prioridade : "sem") === v },
     { campo: "responsavel", nome: "Responsável", valores: (ts) => unicos(ts.map(responsavelDe)).map((r) => ({ valor: r, nome: r })), passa: (t, v) => responsavelDe(t) === v },
     { campo: "criador", nome: "Criado por", valores: (ts) => unicos(ts.map(criadorDe)).map((c) => ({ valor: c, nome: c })),
       passa: (t, v, ctx) => criadorDe(t) === v || (v === ctx.pessoaId && ctx.dona && !t.pedidoPor) },
     { campo: "relacao", nome: "Relação comigo", valores: fixos([{ valor: "comigo", nome: "Esperando por mim" }, { valor: "criadas", nome: "Criadas por mim" }]),
-      passa: (t, v, ctx) => (v === "comigo" ? (t.esperaPessoa === true || t.status === "voce") && !(t.decide && !t.decide.voce) : !!ctx.pessoaId && (t.pedidoPor === ctx.pessoaId || (!t.pedidoPor && ctx.dona))) },
+      // T5: "Esperando por mim" é o mesmo Comigo do filtro rápido e da pílula (a pergunta, Bloqueado e "só a pessoa").
+      passa: (t, v, ctx) => (v === "comigo" ? ehComigo(t, ctx.colunas ?? []) : !!ctx.pessoaId && (t.pedidoPor === ctx.pessoaId || (!t.pedidoPor && ctx.dona))) },
     { campo: "data", nome: "Data", valores: fixos([
       { valor: "criada:1", nome: "Criada hoje" }, { valor: "criada:7", nome: "Criada nos últimos 7 dias" }, { valor: "criada:30", nome: "Criada nos últimos 30 dias" },
       { valor: "atualizada:1", nome: "Atualizada hoje" }, { valor: "atualizada:7", nome: "Atualizada nos últimos 7 dias" }, { valor: "atualizada:30", nome: "Atualizada nos últimos 30 dias" }]),

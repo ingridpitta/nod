@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { TarefaQuadro } from "../../../src/contracts/quadro.ts";
-import { cercado, COMO_TERMINAR, colunaDoBacklog, recusaDoLimite, deveComecar, MAX_CANDIDATAS, quemFez, entradaDaResposta, entradaDaTarefa, lerOps, metaCumprida, numeroDoPr, planejarLote, MAX_COMECOS_POR_LOTE, prazoValido, progresso, resolverTarefa, resumoDaMeta, resumoDoLote, tarefasDaMeta } from "../../../src/domain/quadro.ts";
+import { cercado, COMO_TERMINAR, colunaDoBacklog, recusaDoLimite, deveComecar, MAX_CANDIDATAS, quemFez, entradaDaResposta, entradaDaTarefa, lerOps, metaCumprida, numeroDoPr, planejarLote, prazoValido, progresso, resolverTarefa, resumoDaMeta, resumoDoLote, tarefasDaMeta } from "../../../src/domain/quadro.ts";
 import { COLUNAS_PADRAO } from "../../../src/domain/colunas.ts";
 
 /** NOD-442: o quadro-agente puro — a leitura das ações, quem começa sozinho, o lote tudo ou nada e o fecho da meta. */
@@ -74,27 +74,27 @@ describe("deveComecar (NOD-417/418): só na transição", () => {
   });
 });
 
-describe("deveComecar por grupo (NOD-448, revisão do PR #615): a frase da tela é a regra do motor", () => {
+describe("deveComecar (2026-11-10, regra do Multica): mudar de coluna só aciona com handoff", () => {
   const cs = [...COLUNAS_PADRAO.slice(0, 2), { id: "c-pedido", nome: "Pedido", grupo: "nao_iniciado" as const }, { id: "c-compras", nome: "Compras", grupo: "iniciado" as const }, { id: "c-producao", nome: "Produção", grupo: "iniciado" as const }, ...COLUNAS_PADRAO.slice(2)];
   const de = (a: string, b: string, viva = false) => deveComecar({ status: a, agenteId: ZE.id }, { status: b, agenteId: ZE.id }, null, cs, viva);
-  it("entrar no andamento vindo de fora aciona: Backlog → Fazendo, Pedido → Fazendo, Pedido → Compras", () => {
+  it("entrar no andamento sem responsável na coluna não aciona (Revisão → Fazendo, Feito → Compras); sair do Backlog aciona, como no Multica", () => {
     expect(de("backlog", "fazendo")).toBe(true);
-    expect(de("c-pedido", "fazendo")).toBe(true);
-    expect(de("c-pedido", "c-compras")).toBe(true);
-    expect(de("feito", "c-compras")).toBe(true);
-  });
-  it("andar dentro do andamento, com turno vivo, ou em Revisão/Bloqueado/Precisa de você não aciona", () => {
+    expect(de("revisao", "fazendo")).toBe(false);
+    expect(de("c-pedido", "c-compras")).toBe(false);
+    expect(de("feito", "fazendo")).toBe(false);
     expect(de("c-compras", "c-producao")).toBe(false);
-    expect(de("c-compras", "fazendo")).toBe(false);
-    expect(de("backlog", "fazendo", true)).toBe(false);
-    expect(de("c-pedido", "c-compras", true)).toBe(false);
-    expect(de("backlog", "revisao")).toBe(false);
     expect(de("backlog", "bloqueado")).toBe(false);
-    expect(de("c-pedido", "c-pedido")).toBe(false);
-    expect(deveComecar({ status: "backlog", agenteId: ZE.id }, { status: "fazendo", agenteId: ZE.id }, ZE.id, cs)).toBe(false);
   });
-  it("mudança consciente da ADR-140: Feito → Fazendo com o mesmo responsável aciona; trocar de mão no andamento aciona o novo mesmo com turno vivo", () => {
-    expect(de("feito", "fazendo")).toBe(true);
+  it("a passagem da coluna (pelaColuna) aciona: outro bot com ou sem turno vivo; o mesmo, só sem turno vivo", () => {
+    const outro = "00000000-0000-4000-8000-0000000000aa";
+    expect(deveComecar({ status: "fazendo", agenteId: ZE.id }, { status: "c-compras", agenteId: outro }, null, cs, true, { pelaColuna: true })).toBe(true);
+    expect(deveComecar({ status: "revisao", agenteId: ZE.id }, { status: "fazendo", agenteId: ZE.id }, null, cs, false, { pelaColuna: true })).toBe(true);
+    expect(deveComecar({ status: "revisao", agenteId: ZE.id }, { status: "fazendo", agenteId: ZE.id }, null, cs, true, { pelaColuna: true })).toBe(false);
+    // O bot que se manda para a própria etapa não se reinicia; o `terminei` sim.
+    expect(deveComecar({ status: "fazendo", agenteId: ZE.id }, { status: "c-compras", agenteId: ZE.id }, ZE.id, cs, false, { pelaColuna: true })).toBe(false);
+    expect(deveComecar({ status: "fazendo", agenteId: ZE.id }, { status: "c-compras", agenteId: ZE.id }, ZE.id, cs, false, { pelaColuna: true, terminei: true })).toBe(true);
+  });
+  it("trocar de mão no andamento aciona o novo mesmo com turno vivo, menos quando o novo é o autor", () => {
     const outro = "00000000-0000-4000-8000-0000000000aa";
     expect(deveComecar({ status: "c-compras", agenteId: ZE.id }, { status: "c-compras", agenteId: outro }, null, cs, true)).toBe(true);
     expect(deveComecar({ status: "c-compras", agenteId: ZE.id }, { status: "c-compras", agenteId: outro }, outro, cs, true)).toBe(false);
@@ -226,6 +226,18 @@ describe("planejarLote: tudo ou nada", () => {
     expect(resp).toMatchObject({ tarefas: [{ status: "fazendo", resposta: "Azul" }], respondidas: [{ id: t.id, resposta: "Azul" }], comecam: [] });
   });
 
+  it("P2 (10/11, ADR-162): a pergunta feita no Backlog ou em A fazer volta para lá; A fazer chama o bot, Backlog guarda a resposta", () => {
+    const naFila = tarefa({ status: "voce", voltarPara: "afazer", agenteId: ZE.id, pergunta: "Qual cor?" });
+    expect(planejar([{ tipo: "responder", tarefa: "Login", resposta: "Azul" }], { tarefas: [naFila] }))
+      .toMatchObject({ tarefas: [{ status: "afazer", resposta: "Azul" }], respondidas: [{ id: naFila.id }], comecam: [] });
+    const noBacklog = { ...naFila, voltarPara: "backlog" };
+    expect(planejar([{ tipo: "responder", tarefa: "Login", resposta: "Azul" }], { tarefas: [noBacklog] }))
+      .toMatchObject({ tarefas: [{ status: "backlog", resposta: "Azul" }], respondidas: [], comecam: [] });
+    // Em revisão segue como antes: volta para lá e chama o bot.
+    expect(planejar([{ tipo: "responder", tarefa: "Login", resposta: "Azul" }], { tarefas: [{ ...naFila, voltarPara: "revisao" }] }))
+      .toMatchObject({ tarefas: [{ status: "revisao" }], respondidas: [{ id: naFila.id }] });
+  });
+
   it("responder só vale com a tarefa esperando a pessoa; a segunda resposta (outro aparelho, mesmo lote) é recusada", () => {
     const t = tarefa({ status: "fazendo", agenteId: ZE.id, pergunta: "Qual cor?" });
     expect(planejar([{ tipo: "responder", tarefa: "Login", resposta: "Azul" }], { tarefas: [t] })).toMatchObject({ erro: expect.stringContaining("não está esperando resposta") });
@@ -240,8 +252,8 @@ describe("planejarLote: tudo ou nada", () => {
   });
 
   // ADA-289 (P2 do Dante, ADR-162 "o card fica onde está"): responder a uma pergunta feita no Backlog não joga a tarefa em
-  // Fazendo nem aciona o bot; a resposta fica guardada no card para quando ela começar. Em A fazer segue acionando (vai ao
-  // andamento ao começar, ADR-140).
+  // Fazendo nem aciona o bot; a resposta fica guardada no card para quando ela começar. Em A fazer segue acionando; desde o
+  // #725 (P2 da rodada 2) o card fica em A fazer e é a coluna que chama o bot (o teste "P2 (10/11, ADR-162)" acima).
   it("responder a pergunta feita no Backlog deixa a tarefa no Backlog, sem turno; em A fazer aciona", () => {
     const noBacklog = tarefa({ status: "voce", voltarPara: "backlog", agenteId: ZE.id, pergunta: "Qual cor?" });
     expect(planejar([{ tipo: "responder", tarefa: "Login", resposta: "Azul" }], { tarefas: [noBacklog] })).toMatchObject({
@@ -250,7 +262,7 @@ describe("planejarLote: tudo ou nada", () => {
     const emAfazer = tarefa({ status: "voce", voltarPara: "afazer", agenteId: ZE.id, pergunta: "Qual cor?" });
     const r = planejar([{ tipo: "responder", tarefa: "Login", resposta: "Azul" }], { tarefas: [emAfazer] });
     expect(r).toMatchObject({ respondidas: [{ id: emAfazer.id, resposta: "Azul" }] });
-    expect(r).toMatchObject({ tarefas: [{ status: "fazendo" }] });
+    expect(r).toMatchObject({ tarefas: [{ status: "afazer" }] });
   });
 
   it("toda tarefa que acaba em voce precisa da pergunta: criar e importar também (revisão do PR #612)", () => {
@@ -258,24 +270,26 @@ describe("planejarLote: tudo ou nada", () => {
     expect(planejar([{ tipo: "criar_tarefa", titulo: "a", status: "voce" }, { tipo: "mudar_tarefa", tarefa: "a", pergunta: "Pode?" }])).toMatchObject({ tarefas: [{ status: "voce", pergunta: "Pode?" }] });
   });
 
-  it("um lote começa no máximo MAX_COMECOS_POR_LOTE tarefas; o resto fica em A fazer, segurado (revisão rodada 4)", () => {
-    const p = planejar(Array.from({ length: MAX_COMECOS_POR_LOTE + 2 }, (_, i) => ({ tipo: "criar_tarefa", titulo: `T${i}`, agente: "ze 1", status: "afazer" })));
-    if ("erro" in p) throw new Error(p.erro);
-    expect(p.comecam).toHaveLength(MAX_COMECOS_POR_LOTE);
-    expect(p.seguradas).toHaveLength(2);
-    expect(p.tarefas.filter((t) => t.status === "afazer")).toHaveLength(2);
+  it("P5 (10/11, ADR-163 §4): o lote não tem teto de começos — 20 tarefas da pessoa (ou do bot a pedido dela) começam todas", () => {
+    const ops = Array.from({ length: 20 }, (_, i) => ({ tipo: "criar_tarefa", titulo: `T${i}`, agente: "ze 1", status: "afazer" }));
+    for (const quem of [{}, { autor: ADA.id, autorNaConversa: true, limite: "total" as const }]) {
+      const p = planejar(ops, quem);
+      if ("erro" in p) throw new Error(p.erro);
+      expect(p.comecam).toHaveLength(ops.length);
+      expect(p.seguradas).toEqual([]);
+    }
+    // O bot sozinho (limite normal) nem cria tarefa para outro: não há rajada a segurar.
+    expect(planejar(ops, { autor: ADA.id, limite: "normal" })).toMatchObject({ erro: expect.stringContaining("não pode atribuir") });
   });
 
-  it("as respostas contam no mesmo teto de turnos por lote; a excedente fica em A fazer com a resposta guardada (codex rodada 7)", () => {
-    const esperando = Array.from({ length: MAX_COMECOS_POR_LOTE + 1 }, (_, i) => tarefa({ id: `10000000-0000-4000-8000-0000000001${String(i).padStart(2, "0")}`, status: "voce", agenteId: ZE.id, pergunta: "Qual?" }));
+  it("as respostas também não têm teto (codex rodada 7, revisto no P5)", () => {
+    const esperando = Array.from({ length: 12 }, (_, i) => tarefa({ id: `10000000-0000-4000-8000-0000000001${String(i).padStart(2, "0")}`, status: "voce", agenteId: ZE.id, pergunta: "Qual?", voltarPara: "fazendo" }));
     const ops = [...esperando.map((t) => ({ tipo: "responder", tarefa: t.id, resposta: "Esta" })), { tipo: "criar_tarefa", titulo: "Nova", agente: "ze 1", status: "afazer" }];
     const p = planejar(ops, { tarefas: esperando });
     if ("erro" in p) throw new Error(p.erro);
-    expect(p.respondidas).toHaveLength(MAX_COMECOS_POR_LOTE);
-    expect(p.comecam).toHaveLength(0);
-    expect(p.seguradas).toHaveLength(2);
-    const excedente = p.tarefas.find((t) => t.id === esperando[MAX_COMECOS_POR_LOTE]!.id)!;
-    expect(excedente).toMatchObject({ status: "afazer", resposta: "Esta", turnoId: null });
+    expect(p.respondidas).toHaveLength(esperando.length);
+    expect(p.comecam).toHaveLength(1);
+    expect(p.seguradas).toEqual([]);
   });
 
   it("no limite da corrente de bots (podeComecar false) a tarefa fica em A fazer, segurada, sem começar", () => {

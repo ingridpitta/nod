@@ -1,4 +1,5 @@
 import type { JsonSchema } from "./json-schema.ts";
+import { ESTADOS_ESPERADOS, QUANDO_VOLTA, type EstadoEsperado, type QuandoVolta } from "./quadro-execucoes.ts";
 
 /** Os tetos do `esperar_comando` (CHECKs da 0070); moram aqui porque o schema é contrato (EMENDA 26: só `as const`). */
 export const COMANDO_ESPERA_MAX = 4_000;
@@ -54,9 +55,12 @@ export const FERRAMENTAS_TRABALHO = {
     description:
       "Sai do Mac e volta sozinho mais tarde, na mesma sessão e no mesmo ponto. Use para hora marcada (\"me chame amanhã às 9 h\") ou para esperar algo de fora que não tem comando que acompanhe — a resposta de alguém, um fornecedor — em vez de ficar num laço com sleep ou checando de tempos em tempos. Para CI, deploy ou processo que um comando acompanha até o fim, use esperar_comando se ele estiver disponível. Depois de chamar, pare os comandos que deixou em segundo plano e encerre o turno; a volta só é marcada quando o turno termina.",
     properties: {
-      em_minutos: { type: "integer", description: `Daqui a quantos minutos voltar, inteiro de ${ACORDAR_MIN_MINUTOS} a ${ACORDAR_MAX_MINUTOS} (24 h). Dispensado com quando: "ci".` },
+      em_minutos: { type: "integer", description: `Daqui a quantos minutos voltar, inteiro de ${ACORDAR_MIN_MINUTOS} a ${ACORDAR_MAX_MINUTOS} (24 h). Dispensado com quando.` },
       // ADA-232 (ADR-155): no trabalho de uma tarefa do quadro com PR, voltar quando a CI do PR terminar (prazo máximo 24 h).
-      quando: { type: "string", enum: ["ci"], description: "\"ci\": volta sozinho quando os checks do PR da tarefa do quadro terminarem (passou, falhou, mergeado ou fechado), no máximo em 24 h. Só no trabalho de uma tarefa que já tem PR; dispensa em_minutos." },
+      // 2026-11-10 (os wakeups do Multica): também o merge, o conflito do PR e outra tarefa do quadro, pelo mesmo varredor.
+      quando: { type: "string", enum: [...QUANDO_VOLTA], description: "Volta por evento, no máximo em 24 h, no trabalho de uma tarefa do quadro; dispensa em_minutos. \"ci\": os checks do PR da tarefa terminaram (passou, falhou, mergeado ou fechado). \"merge\": o PR da tarefa mergeou (ou fechou). \"conflito\": o PR aberto da tarefa ficou com conflito (ou saiu de aberto). ci, merge e conflito só com PR na tarefa. \"tarefa\": outra tarefa do mesmo quadro (tarefa) chegou em estado (feito, revisao ou bloqueado; sem estado, qualquer um), foi cancelada ou apagada." },
+      tarefa: { type: "string", description: "Com quando \"tarefa\": o código da outra tarefa do quadro (ex.: \"ENG-12\") ou o id.", minLength: 1, maxLength: 80 },
+      estado: { type: "string", enum: [...ESTADOS_ESPERADOS], description: "Com quando \"tarefa\": o estado que você espera (feito, revisao ou bloqueado). Sem ele, o primeiro dos três." },
       motivo: { type: "string", description: "O que você vai conferir quando voltar, numa frase (ex.: \"ver se o CI do PR #212 passou\").", minLength: 1, maxLength: MOTIVO_MAX_DESPERTAR },
     },
     required: ["motivo"],
@@ -79,7 +83,7 @@ export const FERRAMENTAS_TRABALHO = {
 
 export type ArgsAbrirTask = { titulo: string; pedido: string; depois_de?: string };
 export type ArgsMandarParaTask = { trabalho_id: string; texto: string };
-export type ArgsMeChameAs = { em_minutos?: number; motivo: string; quando?: "ci" };
+export type ArgsMeChameAs = { em_minutos?: number; motivo: string; quando?: QuandoVolta; tarefa?: string; estado?: EstadoEsperado };
 export type ArgsEsperarComando = { comando: string; motivo: string };
 
 export type ResultadoAbrirTask =
@@ -91,7 +95,7 @@ export type ResultadoMandarParaTask =
 /** `volta_as`: a hora no fuso de São Paulo (horaDaFrase; o servidor não guarda o da pessoa); `acordar_em`: o instante (ISO). */
 export type ResultadoMeChameAs =
   | { ok: true; volta_as: string; acordar_em: string; instrucao: string }
-  | { ok: false; erro: "turno_parado" | "task_fechada" | "voltas_demais" | "ja_esperando" | "sem_pr"; instrucao: string };
+  | { ok: false; erro: "turno_parado" | "task_fechada" | "voltas_demais" | "ja_esperando" | "sem_pr" | "sem_tarefa"; instrucao: string };
 /** ADR-099 (parte 2): `espera_id` para a tela e o Raio-X; o resto é instrução. */
 export type ResultadoEsperarComando =
   | { ok: true; espera_id: string; instrucao: string }

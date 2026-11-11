@@ -8,6 +8,7 @@
 import type { ColunaDto, QuadroDto, TarefaDto } from "../../src/contracts/quadro.ts";
 import { esc } from "../lib/escape.ts";
 import { opcoesDeStatus } from "../lib/quadro-dados.ts";
+import { NOME_DA_PRIORIDADE, PRIORIDADES } from "../lib/opcoes-do-quadro.ts";
 import { linkSeguro, numeroDoPr } from "./quadro-real.ts";
 
 const MARCA = '<span class="qd-fo-marca" aria-hidden="true">✓</span>';
@@ -55,6 +56,12 @@ export function casaNaBusca(nome: string, termo: string): boolean {
   return !termo.trim() || n(nome).includes(n(termo));
 }
 
+/** 2026-11-10: a Prioridade no celular (a mesma escolha do select do computador; o toque grava, com Desfazer). */
+export function folhaDePrioridade(t: Pick<TarefaDto, "prioridade">): string {
+  const atual = t.prioridade || "sem";
+  return `<div role="radiogroup" aria-label="Prioridade"><ul class="qd-fo-ops">${PRIORIDADES.map((p) => item("prioridade", p, NOME_DA_PRIORIDADE[p], p === atual)).join("")}</ul></div>`;
+}
+
 /** O branch numa linha só (rola de lado dentro da linha, nunca a página) e o Copiar. */
 export function folhaDoBranch(branch: string): string {
   return `<p class="qd-fo-linha"><code class="qd-fo-branch">${esc(branch)}</code></p>` +
@@ -87,6 +94,7 @@ export function folhaDeAjustes(o: { t: TarefaDto; q: QuadroDto; nomeStatus: stri
   return `<ul class="qd-props-cel">` +
     linha("Status", esc(o.nomeStatus), "abrir-status") +
     linha("Responsável", esc(o.nomeResp), o.podeResp ? "abrir-resp" : undefined) +
+    linha("Prioridade", esc(NOME_DA_PRIORIDADE[t.prioridade] ?? NOME_DA_PRIORIDADE.sem), "abrir-prioridade") +
     linha("Quadro", esc(`${q.agenteNome}${q.meta ? ` · ${q.meta}` : ""}`), o.podeMover ? "abrir-mover" : undefined) +
     (t.branch ? linha("Branch", `<code class="qd-prop-branch">${esc(t.branch)}</code>`, "abrir-branch") : "") +
     (prs.length ? linha("PR", prs.join(", ")) : pr ? linha("PR", `<a class="qd-link" href="${esc(pr)}" target="_blank" rel="noopener noreferrer">${esc(numeroDoPr(pr))}</a>`) : "") +

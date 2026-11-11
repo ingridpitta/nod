@@ -313,7 +313,7 @@ Estados: **vivo** = o chat faz pelo mesmo executor da tela, com teste de contrat
 | `quadro.criar_label` | Criar uma label no quadro (nome e cor) | muda | vivo (`gerir_quadro`) | `POST ^\/agentes\/(?<id>[^/]+)\/quadro\/labels$` |
 | `quadro.editar_label` | Renomear ou recolorir uma label do quadro | muda | vivo (`gerir_quadro`) | `PATCH ^\/agentes\/(?<id>[^/]+)\/quadro\/labels\/(?<lid>[^/]+)$` |
 | `quadro.remover_label` | Remover uma label do quadro (sai de todas as tarefas) | muda | vivo (`gerir_quadro`) | `DELETE ^\/agentes\/(?<id>[^/]+)\/quadro\/labels\/(?<lid>[^/]+)$` |
-| `quadro.editar_comentario` | Editar o próprio comentário numa tarefa (não reaciona ninguém) | muda | vivo (`gerir_quadro`) | `PATCH ^\/agentes\/(?<id>[^/]+)\/quadro\/tarefas\/(?<tid>[^/]+)\/comentarios\/(?<cid>[^/]+)$` |
+| `quadro.editar_comentario` | Editar o próprio comentário numa tarefa (com refazer: cancela o run que ele abriu e reaciona com o texto novo) | muda | vivo (`gerir_quadro`) | `PATCH ^\/agentes\/(?<id>[^/]+)\/quadro\/tarefas\/(?<tid>[^/]+)\/comentarios\/(?<cid>[^/]+)$` |
 | `quadro.apagar_comentario` | Apagar o próprio comentário numa tarefa (as respostas da thread ficam) | muda | vivo (`gerir_quadro`) | `DELETE ^\/agentes\/(?<id>[^/]+)\/quadro\/tarefas\/(?<tid>[^/]+)\/comentarios\/(?<cid>[^/]+)$` |
 
 ## paginas

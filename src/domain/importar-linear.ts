@@ -95,7 +95,7 @@ export type ItemImportado = {
   estadoLinear: string;
   noEstadoDesde: number;
   comentarios: ComentarioLinear[];
-  /** 0159: as etiquetas da issue, que viram labels da tarefa nova (as que cabem no nome da label). */
+  /** 0161: as etiquetas da issue, que viram labels da tarefa nova (as que cabem no nome da label). */
   etiquetas: string[];
 };
 

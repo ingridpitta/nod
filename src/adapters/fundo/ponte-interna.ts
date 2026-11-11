@@ -28,7 +28,8 @@ import { despacharTurno } from "../../use-cases/despachar-turno.ts";
 import { avisarFundoSeguradoPelaCota, type EntradaFundoSegurado } from "../../use-cases/fundo-segurado-pela-cota.ts";
 import { absorverNaSessao, confirmarNaSessao, gravarFalasDaSessao } from "../../use-cases/sessao-viva.ts";
 import { absorverNoTrabalho, promoverNaRede } from "../../use-cases/coordenar-trabalhos.ts";
-import { ofertarRecadosDoQuadro } from "../../use-cases/quadro-execucoes.ts";
+import { avisosDeRecadoLido, ofertarRecadosDoQuadro } from "../../use-cases/quadro-execucoes.ts";
+import { avisoDaEtapaNaSessao } from "../../use-cases/etapa-presa.ts";
 import { eventoPressao, sincronizarTrabalho } from "../../use-cases/trabalhos.ts";
 import { camposDoRelato, pastaSemTrabalhoDoTurno, pastasParaLimpar, relatoValido } from "../../use-cases/limpeza-das-tasks.ts";
 import { relatarEspera as relatarEsperaDaMaquina } from "../../use-cases/esperar-comando.ts";
@@ -228,6 +229,8 @@ export function criarPonteInterna(db: Db, deps: DepsPonte): PonteInternaNod {
    * (o escopo fica: a entrega tardia ainda assenta, ADR-045). Antes só a entrega os limpava.
    */
   const vistos = new Map<string, number>();
+  /** 2026-11-10 (ADR-142): o aviso da etapa movida já entregue a cada turno (a chave da mudança): entra uma vez só. */
+  const avisosDeEtapa = new Map<string, string>();
   /**
    * NOD-245: os turnos que a ENTREGA adotou (`adotar` com `para: "assentar"`) — o processo que os despachou caiu antes de
    * eles terminarem. O assentamento lê daqui (`adotada`); sai com a entrega ou com o lease vencido (`esquecerVencidos`).
@@ -281,6 +284,7 @@ export function criarPonteInterna(db: Db, deps: DepsPonte): PonteInternaNod {
     for (const [turnoId, em] of vistos) {
       if (em >= limite) continue;
       vistos.delete(turnoId);
+      avisosDeEtapa.delete(turnoId);
       oferecidas.delete(turnoId);
       despachados.delete(turnoId);
       adotadosNaEntrega.delete(turnoId);
@@ -583,10 +587,22 @@ export function criarPonteInterna(db: Db, deps: DepsPonte): PonteInternaNod {
         // moldura dele (molduraDoRecado), nas mesmas duas fases: oferecido aqui, lido na confirmação (confirmarNaSessao).
         if (r.ativo && p.aceitaMensagens) {
           const recados = (await ofertarRecadosDoQuadro(d, p.turnoId)).filter((x) => !jaOferecidas.has(x.id));
-          if (!confirma) await d.repos.quadroExecucoes.entregarRecados(recados.map((x) => x.id), p.turnoId);
+          if (!confirma && recados.length) {
+            await d.repos.quadroExecucoes.entregarRecados(recados.map((x) => x.id), p.turnoId);
+            events.push(...(await avisosDeRecadoLido(d, recados.map((x) => x.id))));
+          }
           textos = [...textos, ...recados.map((x) => x.texto)];
           ids = [...ids, ...recados.map((x) => x.id)];
           semMoldura = [...semMoldura, ...recados.map((x) => x.id)];
+        }
+        // 2026-11-10 (ADR-142, o `stepMoved` do Multica): a tarefa deste trabalho foi movida por outro para outra etapa
+        // e o turno seguiu (sem "Parar"): o próximo passo dele lê o aviso, uma vez por mudança.
+        if (r.ativo && p.aceitaMensagens) {
+          const aviso = await avisoDaEtapaNaSessao(d, p.turnoId);
+          if (aviso && avisosDeEtapa.get(p.turnoId) !== aviso.chave) {
+            avisosDeEtapa.set(p.turnoId, aviso.chave);
+            textos = [...textos, aviso.texto];
+          }
         }
         const turno = r.ativo ? await d.repos.turnos.buscar(p.turnoId) : null;
         // A decisão respondida DENTRO do turno não passa por outro caminho: a renovação acerta o estado da task.
@@ -749,6 +765,7 @@ export function criarPonteInterna(db: Db, deps: DepsPonte): PonteInternaNod {
       oferecidas.delete(e.turnoId);
       despachados.delete(e.turnoId);
       vistos.delete(e.turnoId);
+      avisosDeEtapa.delete(e.turnoId);
       adotadosNaEntrega.delete(e.turnoId);
       deps.services.tokenTurno.revogar(e.turnoId);
       // NOD-200: a captura do turno sai só com o assentar confirmado; na falha fica, como o escopo, para a entrega repetida.

@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { ExecucaoDto, ExecucoesDaTarefa } from "../../../src/contracts/quadro-execucoes.ts";
 import { ErroApi } from "../../../web/lib/erro-api.ts";
@@ -19,7 +20,7 @@ const secao = (p: Partial<VistaDoTrabalho>) => secaoDoTrabalho(vista(p), hora);
 
 describe("os 5 estados", () => {
   it.each([
-    ["fila", "○", "na fila"], ["rodando", "◐", "rodando"], ["concluido", "✓", "concluído"], ["falhou", "⊗", "falhou"], ["cancelado", "⊘", "cancelado"],
+    ["fila", "○", "na fila"], ["rodando", "◐", "trabalhando"], ["concluido", "✓", "concluído"], ["falhou", "⊗", "falhou"], ["cancelado", "⊘", "cancelado"],
   ] as const)("%s: o selo e o texto", (estado, selo, nome) => {
     const h = secao({ dados: dados([exec({ id: "a", numero: 1, estado })]) });
     expect(h).toContain(`data-estado="${estado}" aria-hidden="true">${selo}</span>`);
@@ -62,7 +63,7 @@ describe("ADA-10: o número é a sessão do bot, com a etapa", () => {
 
 describe("o título", () => {
   it("a seção se chama Execuções (critério 1 e protótipo C; revisão 2 do PR #625)", () => {
-    expect(secao({ dados: dados([]) })).toContain('<h2 class="qd-t-sec" id="qd-trab-tit">Execuções</h2>');
+    expect(secao({ dados: dados([]) })).toContain('<h2 class="qd-t-sec" id="qd-trab-tit">Runs</h2>');
   });
 });
 
@@ -296,11 +297,11 @@ describe("o controle", () => {
     expect(escritas).toEqual([]);
     t.aoClicar("trab-repetir");
     await esperar();
-    expect(regiao.textContent).toBe("Trabalho #3: na fila");
+    expect(regiao.textContent).toBe("Run #3: na fila");
     // A mesma chave (o redesenho, uma releitura igual) não reescreve a região.
     t.html("tar", { bloqueada: false, agenteId: "beto", conversaAtual: null, hora });
     await t.reler();
-    expect(escritas).toEqual(["Trabalho #3: na fila"]);
+    expect(escritas).toEqual(["Run #3: na fila"]);
     expect(t.html("tar", { bloqueada: false, agenteId: "beto", conversaAtual: null, hora })).not.toContain(`role="status"`);
   });
 
@@ -336,5 +337,14 @@ describe("ADA-232: Volto quando… · Acordar agora", () => {
     const h = secao({ dados: dados([exec({ id: "a", numero: 1, estado: "rodando", esperando: true, volta: { motivo: "os testes", em: null, quando: null, prUrl: null } })]) });
     expect(h).toContain("Volto depois · os testes");
     expect(h).not.toContain("trab-acordar");
+  });
+});
+
+describe("os frames que a tarefa aberta escuta (10/11)", () => {
+  it("todo `f.tipo === \"…\"` de web/lib/trabalhos-da-tarefa.ts é um TipoFrame de verdade (\"turno.falhou\" era tipo de mensagem)", () => {
+    const tipos = new Set([...readFileSync("src/contracts/frame.ts", "utf8").matchAll(/\|\s*"([a-z_.]+)"/g)].map((m) => m[1]));
+    const usados = [...readFileSync("web/lib/trabalhos-da-tarefa.ts", "utf8").matchAll(/f\.tipo === "([a-z_.]+)"/g)].map((m) => m[1]);
+    expect(usados.length).toBeGreaterThan(0);
+    expect(usados.filter((u) => !tipos.has(u))).toEqual([]);
   });
 });

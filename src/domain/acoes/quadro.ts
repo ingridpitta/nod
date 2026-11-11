@@ -84,7 +84,7 @@ export const ACOES_QUADRO = [
   {
     id: "quadro.mudar_tarefa",
     titulo: "Mudar uma tarefa (status, responsável, PR, pergunta, labels, prazo) ou tirá-la do quadro",
-    schema: objeto({ tarefa: P.tarefa, titulo: P.titulo, descricao: P.descricao, status: P.status, agente: P.agente, pr_url: P.pr_url, prioridade: P.prioridade, pergunta: P.pergunta, excluir: P.excluir, sem_iniciar: P.sem_iniciar, motivo: P.motivo, pela_fala: P.pela_fala, mensagem_id: P.mensagem_id, labels: P.labels, por_labels: P.por_labels, tirar_labels: P.tirar_labels, prazo_em: P.prazo_em }, ["tarefa"]),
+    schema: objeto({ tarefa: P.tarefa, titulo: P.titulo, descricao: P.descricao, status: P.status, agente: P.agente, pr_url: P.pr_url, prioridade: P.prioridade, pergunta: P.pergunta, excluir: P.excluir, sem_iniciar: P.sem_iniciar, parar_anterior: P.parar_anterior, motivo: P.motivo, pela_fala: P.pela_fala, mensagem_id: P.mensagem_id, labels: P.labels, por_labels: P.por_labels, tirar_labels: P.tirar_labels, prazo_em: P.prazo_em }, ["tarefa"]),
     risco: "muda",
     cartaoNoChat: false,
     chat: vivo,
@@ -308,7 +308,7 @@ export const ACOES_QUADRO = [
     chat: vivo,
     casoDeUso: "quadro.acordar_trabalho",
   },
-  // 0159: o catálogo de labels do quadro (sem Desfazer de lote: o inverso é a op contrária). Pôr e tirar label na tarefa
+  // 0161: o catálogo de labels do quadro (sem Desfazer de lote: o inverso é a op contrária). Pôr e tirar label na tarefa
   // é o mudar_tarefa (labels, por_labels, tirar_labels), com Desfazer.
   { id: "quadro.criar_label", titulo: "Criar uma label no quadro (nome e cor)", schema: objeto({ nome: P.nome, cor: P.cor }, ["nome"]), risco: "muda", cartaoNoChat: false, chat: vivo, casoDeUso: "quadro.criar_label" },
   { id: "quadro.editar_label", titulo: "Renomear ou recolorir uma label do quadro", schema: objeto({ label: P.label, nome: P.nome, cor: P.cor }, ["label"]), risco: "muda", cartaoNoChat: false, chat: vivo, casoDeUso: "quadro.editar_label" },
@@ -316,8 +316,8 @@ export const ACOES_QUADRO = [
   // 2026-11-10: editar e apagar o próprio comentário (no fim do registro: a ordem das outras não muda o sorteio do fuzz).
   {
     id: "quadro.editar_comentario",
-    titulo: "Editar o próprio comentário numa tarefa (não reaciona ninguém)",
-    schema: objeto({ tarefa: P.tarefa, comentario: P.comentario, texto: P.texto }, ["tarefa", "comentario", "texto"]),
+    titulo: "Editar o próprio comentário numa tarefa (com refazer: cancela o run que ele abriu e reaciona com o texto novo)",
+    schema: objeto({ tarefa: P.tarefa, comentario: P.comentario, texto: P.texto, refazer: { type: "boolean", description: "true: cancela o run vivo que o comentário abriu e aciona de novo com o texto novo (o recado que não entrou vira run)." } }, ["tarefa", "comentario", "texto"]),
     risco: "muda",
     cartaoNoChat: false,
     chat: vivo,

@@ -11,7 +11,7 @@ import { EXPERIMENTOS, renderGeral, type DadosGeral } from "../../../web/telas/c
 import { renderCabecalhoConversa } from "../../../web/telas/conversa.ts";
 import { paginasDoDto } from "../../../web/lib/paginas.ts";
 import { cenario } from "../../helpers/paginas-do-bot.ts";
-import { anel, aviso, avatar, barra, card, coluna, confiar, linha, meta as metaDoQuadro, quadro, quadroVazio, rotuloDoCard, segmento } from "../../../web/telas/quadro.ts";
+import { anel, aviso, avatar, barra, card, coluna, confiar, linha, quadro, quadroVazio, rotuloDoCard, segmento } from "../../../web/telas/quadro.ts";
 
 /** NOD-429: o vocabulário, os componentes e o CSS do quadro-agente (a prova no Chrome real é tests/concurrency/quadro-chrome.test.ts). */
 
@@ -132,7 +132,6 @@ describe("NOD-429 · componentes (web/telas/quadro.ts)", () => {
     semTagCrua(linha({ id: MAL, titulo: MAL, motivo: MAL }));
     semTagCrua(coluna({ status: "fazendo", nome: MAL, trava: MAL, vazio: MAL }));
     semTagCrua(coluna({ status: "feito", nome: MAL, recolhida: true }));
-    semTagCrua(metaDoQuadro({ objetivo: MAL, prazo: MAL, feitas: 1, total: 2, falta: MAL, risco: MAL }));
     semTagCrua(anel(MAL, MAL));
     semTagCrua(avatar({ avatar: ava, nome: MAL, estado: "rodando", acao: MAL, tempo: MAL }));
     semTagCrua(segmento({ nome: MAL }));
@@ -171,12 +170,6 @@ describe("NOD-429 · componentes (web/telas/quadro.ts)", () => {
     const travada = coluna({ status: "feito", nome: "Feito", trava: "Feito só aceita vindo de Em revisão" });
     expect(travada).toContain('title="Feito só aceita vindo de Em revisão"');
     expect(travada).toContain('<span class="qd-sr">Feito só aceita vindo de Em revisão</span>');
-  });
-
-  it("meta: as feitas nunca passam do total nem ficam negativas", () => {
-    expect(metaDoQuadro({ objetivo: "o", prazo: "p", feitas: 9, total: 4 })).toContain("4 de 4 feitas");
-    expect(metaDoQuadro({ objetivo: "o", prazo: "p", feitas: -2, total: 4 })).toContain("0 de 4 feitas");
-    expect(metaDoQuadro({ objetivo: "o", prazo: "p", feitas: 1, total: 0 })).toContain('style="width:0%"');
   });
 
   it("o segmento é um tablist com o indicador, e o HTML NÃO muda com o modo vivo (quem marca é o quadro-na-tela)", () => {
@@ -241,7 +234,6 @@ describe("NOD-429 · componentes (web/telas/quadro.ts)", () => {
     for (const out of [card({ id: "N-1", titulo: "t", classe: ruim }), linha({ id: "N-1", titulo: "t", classe: ruim }), quadro({ colunas: [{ status: "voce", nome: "x", classe: ruim }], classe: ruim })]) {
       expect(out).not.toContain('" onmouseover=');
     }
-    expect(metaDoQuadro({ objetivo: "o", prazo: "p", feitas: Number.NaN, total: Number.POSITIVE_INFINITY })).toContain("0 de 0 feitas");
   });
 });
 

@@ -203,7 +203,11 @@ describeIntegracao("quadro com várias pessoas (NOD-443, ADR-143)", () => {
       const q = await quadroDaDona(trx, m);
       expect(q.modoConversa).toBe("so_dono");
       expect(q.tarefas.find((t) => t.titulo === "T1")!.status).not.toBe("feito");
-      expect(q.comentarios).toEqual([expect.objectContaining({ texto: "Pode subir a T1?", tarefaId: q.tarefas.find((t) => t.titulo === "T1")!.id, assinatura: `${ANA.nome}, pela ${m.liaNome}` })]);
+      // 2026-11-11: o comentário vai à conversa da tarefa (NOD-417), assinado por ela e de fora; no "só a dona" não aciona bot.
+      const t1 = q.tarefas.find((t) => t.titulo === "T1")!.id;
+      const naTarefa = await (await como(trx, DONA.escopo)).repos.quadroComentarios.daTarefa(t1);
+      expect(naTarefa).toEqual([expect.objectContaining({ texto: "Pode subir a T1?", autor: { tipo: "pessoa" }, pedidoPor: ANA.id, autorNome: `${ANA.nome}, pela ${m.liaNome}`, deFora: true, acionados: [] })]);
+      expect(q.comentarios ?? []).toEqual([]);
     });
   });
 
@@ -365,7 +369,7 @@ describeIntegracao("quadro com várias pessoas (NOD-443, ADR-143)", () => {
       // O comentário certo entra; mover a tarefa de quadro o leva junto.
       expect((await daTela(await como(trx, ANA.escopo), m.qid, [{ tipo: "comentar", texto: "Sobe a T1?", tarefa: "T1" }])).data).toMatchObject({ ok: true });
       expect((await lote(await como(trx, DONA.escopo), m.ada.agenteId, [{ tipo: "mover_quadro", tarefa: "T1", quadro: outroNome }])).data).toMatchObject({ ok: true });
-      expect(await trx`select quadro_id from quadro_tarefa_comentarios where tarefa_id = ${t1}`).toEqual([{ quadro_id: q2 }]);
+      expect(await trx`select quadro_id from quadro_comentarios where tarefa_id = ${t1}`).toEqual([{ quadro_id: q2 }]);
     });
   });
 
@@ -510,33 +514,58 @@ describeIntegracao("quadro com várias pessoas (NOD-443, ADR-143)", () => {
     });
   });
 
-  it("revisão 1, achado 9: o comentário sai com a tarefa, o de quem participa é de fora e há um teto por pessoa em cada tarefa", async () => {
+  it("2026-11-11: quem participa comenta na tarefa pela conversa da NOD-417 (não pelo recado D7): aciona o responsável, de fora, sob a procuração dela, assinado por ela", async () => {
+    await withRollback(DONA.escopo, async (trx) => {
+      const m = await montar(trx);
+      await porNaAna(m);
+      expect((await lote(m.dd, m.ada.agenteId, [{ tipo: "criar_tarefa", titulo: "Da Ada", agente: m.adaNome, status: "backlog" }])).data).toMatchObject({ ok: true });
+      // Pela tela da Ana.
+      const r = await daTela(await como(trx, ANA.escopo), m.qid, [{ tipo: "comentar", tarefa: "Da Ada", texto: "Pode revisar?" }]);
+      expect(r.data, JSON.stringify(r.data)).toMatchObject({ ok: true, comecaram: [expect.objectContaining({ agenteId: m.ada.agenteId })], comentario: expect.objectContaining({ texto: "Pode revisar?" }) });
+      const turnoId = r.data.ok ? r.data.comecaram[0]!.turnoId : "";
+      const dd = await como(trx, DONA.escopo);
+      const tarefaId = (await quadroDaDona(trx, m)).tarefas.find((t) => t.titulo === "Da Ada")!.id;
+      const naTarefa = await dd.repos.quadroComentarios.daTarefa(tarefaId);
+      expect(naTarefa).toEqual([expect.objectContaining({ texto: "Pode revisar?", autor: { tipo: "pessoa" }, pedidoPor: ANA.id, autorNome: ANA.nome, deFora: true, acionados: [m.adaNome], turnos: [turnoId] })]);
+      expect(await trx`select count(*)::int as n from quadro_tarefa_comentarios where tarefa_id = ${tarefaId}`).toEqual([{ n: 0 }]);
+      // O turno da Ada: de fora, sob a procuração da Ana, com o nome dela na entrada.
+      const turno = await (await como(trx, DONA.escopo)).repos.turnos.buscar(turnoId);
+      expect(turno).toMatchObject({ agenteId: m.ada.agenteId, entradaConfianca: "nao_confiavel", sobProcuracaoDe: ANA.id });
+      expect(turno?.entradaTexto).toContain(ANA.nome);
+      expect(await (await como(trx, DONA.escopo)).repos.turnos.contaminado(turnoId)).toBe(true);
+      // A dona não reescreve o comentário da Ana.
+      const editar = await daTela(await como(trx, DONA.escopo), m.qid, [{ tipo: "editar_comentario", tarefa: "Da Ada", comentario: naTarefa[0]!.id, texto: "outro" }]);
+      expect(editar.data).toMatchObject({ ok: false, erro: "nao_permitido" });
+      // Quem participa não usa os chips da dona (parar o turno, mandar agora): o pedido segue a rota normal.
+      const chips = await daTela(await como(trx, ANA.escopo), m.qid, [{ tipo: "comentar", tarefa: "Da Ada", texto: "De novo", acionar: { [m.ada.agenteId]: "no_lugar" } }]);
+      expect(chips.data, JSON.stringify(chips.data)).toMatchObject({ ok: true });
+      expect((await (await como(trx, DONA.escopo)).repos.turnos.buscar(turnoId))?.pararSolicitadoEm ?? null).toBeNull();
+    });
+  });
+
+  it("revisão 1, achado 9: o comentário de quem participa é de fora e há um teto por pessoa em cada tarefa", async () => {
     await withRollback(DONA.escopo, async (trx) => {
       const m = await montar(trx);
       await porNaAna(m);
       const pelaAna = async (ops: OpQuadro[]) => (await daTela(await como(trx, ANA.escopo), m.qid, ops)).data;
-      // NOD-417 × NOD-443 (o merge): a dona comenta na tarefa pelo comentário da NOD-417 (a conversa da tarefa, que aciona o
-      // responsável); quem participa deixa recado para a dona (D7), de fora, sem acionar bot da dona.
+      // 2026-11-11: a dona e quem participa comentam na conversa da tarefa (NOD-417); o de quem participa é de fora.
       expect((await daTela(await como(trx, DONA.escopo), m.qid, [{ tipo: "comentar", tarefa: "T1", texto: "Da dona" }])).data).toMatchObject({ ok: true });
       expect(await pelaAna([{ tipo: "comentar", tarefa: "T1", texto: "Da Ana" }])).toMatchObject({ ok: true });
       const t1Antes = (await quadroDaDona(trx, m)).tarefas.find((t) => t.titulo === "T1")!;
       const daTarefa = await (await como(trx, DONA.escopo)).repos.quadroComentarios.daTarefa(t1Antes.id);
-      expect(daTarefa.map((c) => [c.texto, c.autor.tipo, c.deFora])).toEqual([["Da dona", "pessoa", false]]);
-      const comentarios = (await quadroDaDona(trx, m)).comentarios ?? [];
-      expect(Object.fromEntries(comentarios.map((c) => [c.texto, c.deFora]))).toEqual({ "Da Ana": true });
+      expect(daTarefa.map((c) => [c.texto, c.autor.tipo, c.deFora, c.pedidoPor ?? null])).toEqual([["Da dona", "pessoa", false, null], ["Da Ana", "pessoa", true, ANA.id]]);
+      expect((await quadroDaDona(trx, m)).comentarios ?? []).toEqual([]);
       // O teto: a Ana já tem o máximo na T1 (completa com linhas diretas, no escopo da dona).
       const t1 = (await quadroDaDona(trx, m)).tarefas.find((t) => t.titulo === "T1")!;
       await como(trx, DONA.escopo);
-      await trx`insert into quadro_tarefa_comentarios (tenant_id, owner_id, quadro_id, tarefa_id, texto, pedido_por, de_fora)
-        select ${DONA.escopo.tenantId}, ${DONA.escopo.pessoaId}, ${m.qid}, ${t1.id}, 'enche ' || g, ${ANA.escopo.pessoaId}, true
+      await trx`insert into quadro_comentarios (tenant_id, owner_id, quadro_id, tarefa_id, autor, texto, pedido_por, de_fora)
+        select ${DONA.escopo.tenantId}, ${DONA.escopo.pessoaId}, ${m.qid}, ${t1.id}, 'pessoa', 'enche ' || g, ${ANA.escopo.pessoaId}, true
         from generate_series(2, ${LIMITES_QUADRO.comentariosPorPessoa}) g`;
       expect(await pelaAna([{ tipo: "comentar", tarefa: "T1", texto: "Mais um" }])).toMatchObject({ ok: false, erro: "entrada_invalida" });
       // A dona ainda comenta (o teto é por pessoa).
       expect((await daTela(await como(trx, DONA.escopo), m.qid, [{ tipo: "comentar", tarefa: "T1", texto: "Dona de novo" }])).data).toMatchObject({ ok: true });
-      // Excluir a tarefa leva os comentários dela.
-      expect((await daTela(await como(trx, DONA.escopo), m.qid, [{ tipo: "mudar_tarefa", tarefa: "T1", excluir: true }])).data).toMatchObject({ ok: true });
-      await como(trx, DONA.escopo);
-      expect(await contar(trx, "quadro_tarefa_comentarios")).toBe(0);
+      // A conversa da tarefa (NOD-417) não tem FK para a tarefa: fica para o Desfazer da exclusão trazer de volta; o teto
+      // também não para a dona.
     });
   });
 
@@ -706,11 +735,17 @@ describeIntegracao("quadro com várias pessoas (NOD-443, ADR-143)", () => {
       const ctx = await turnoDe(da, m.lia.agenteId, m.lia.conversaId);
       expect((await executar(da, gerirQuadro, { ...ctx, quadro: m.qid, acoes: [{ tipo: "comentar", tarefa: "T1", texto: "Vi a T1" }] })).data).toMatchObject({ ok: true });
       expect(await (await como(trx, ANA.escopo)).repos.turnos.contaminado(ctx.turnoId)).toBe(true);
-      // A dona, pela Ada, num turno limpo: o quadro traz o comentário da Ana.
+      // 2026-11-11: o texto da Ana fica na conversa da tarefa; a dona responde na thread dela chamando a Ada: o turno da Ada
+      // leva a thread na entrada, então nasce contaminado mesmo com a dona (confiável) comentando.
       const dd = await como(trx, DONA.escopo);
-      const daDona = await turnoDe(dd, m.ada.agenteId, m.ada.conversaId);
-      expect((await executar(dd, gerirQuadro, { ...daDona, acoes: [{ tipo: "comentar", tarefa: "T1", texto: "Ok" }] })).data).toMatchObject({ ok: true });
-      expect(await (await como(trx, DONA.escopo)).repos.turnos.contaminado(daDona.turnoId)).toBe(true);
+      const t1 = (await quadroDaDona(trx, m)).tarefas.find((t) => t.titulo === "T1")!.id;
+      const daAna = (await (await como(trx, DONA.escopo)).repos.quadroComentarios.daTarefa(t1)).find((c) => c.texto === "Vi a T1")!;
+      const r = await daTela(await como(trx, DONA.escopo), m.qid, [{ tipo: "comentar", tarefa: "T1", texto: `@${m.adaNome} olha isso`, responder_a: daAna.id }]);
+      expect(r.data, JSON.stringify(r.data)).toMatchObject({ ok: true });
+      const aberto = r.data.ok ? r.data.comecaram.find((c) => c.agenteId === m.ada.agenteId)?.turnoId : undefined;
+      expect(aberto).toBeTruthy();
+      expect(await (await como(trx, DONA.escopo)).repos.turnos.contaminado(aberto!)).toBe(true);
+      void dd;
     });
   });
 
@@ -834,9 +869,10 @@ describeIntegracao("quadro com várias pessoas (NOD-443, ADR-143)", () => {
       expect(c.data, JSON.stringify(c.data)).toMatchObject({ ok: true });
       const q = await quadroDaDona(trx, m);
       const tarefaId = q.tarefas.find((t) => t.titulo === "Para a Ada")!.id;
-      expect(q.comentarios).toEqual([expect.objectContaining({ texto: "Comecei", tarefaId, assinatura: m.adaNome, deFora: true })]);
-      expect(await (await como(trx, DONA.escopo)).repos.quadros.contarComentarios(m.qid, tarefaId, ANA.id)).toBe(0);
-      expect((await quadroDaAna(trx, m)).comentarios?.map((x) => x.assinatura)).toEqual([m.adaNome]);
+      // 2026-11-11: na conversa da tarefa, como a Ada (bot, de fora), sem quem pediu.
+      const naTarefa = await (await como(trx, DONA.escopo)).repos.quadroComentarios.daTarefa(tarefaId);
+      expect(naTarefa.map((x) => [x.texto, x.autor, x.pedidoPor ?? null, x.deFora])).toEqual([["Comecei", { tipo: "agente", agenteId: m.ada.agenteId }, null, true]]);
+      expect(await (await como(trx, DONA.escopo)).repos.quadroComentarios.contarDeQuemParticipa(tarefaId, ANA.id)).toBe(0);
     });
   });
 

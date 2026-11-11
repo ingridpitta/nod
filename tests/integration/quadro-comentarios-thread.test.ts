@@ -122,23 +122,24 @@ describeIntegracao("comentários em thread e chips (tarefa aberta estilo Multica
     });
   });
 
-  // ADA-289 (bug 6 do Dante na tarefa aberta): a prévia mostrava o chip "vai começar" do responsável numa tarefa que
-  // espera a pessoa, mas o envio o tira da rota (o comentário é a resposta, e quem reaciona é o responder). A mesma conta.
-  it("tarefa esperando a pessoa: a prévia não mostra o chip do responsável e diz que o comentário é a resposta", async () => {
+  it("10/11: na tarefa que espera a pessoa a prévia bate com o envio — o responsável não vira chip; é a resposta que o chama", async () => {
     await withRollback(MARLON, async (trx) => {
       const m = await montar(trx);
-      // A pergunta feita no andamento (no Backlog a resposta não retoma ninguém: o teste abaixo).
-      await m.lote([{ tipo: "mudar_tarefa", tarefa: "T", status: "fazendo" }]);
-      const r = await m.lote([{ tipo: "mudar_tarefa", tarefa: "T", status: "voce", pergunta: "Qual cor?" }]);
-      expect(r.data.ok).toBe(true);
-      const tid = (await m.tarefa()).id;
-      const previa = (await previaComentario(m.deps, { agenteId: m.ana.agenteId, tarefaId: tid, texto: "Azul" })).data;
+      const r = await m.lote([{ tipo: "mudar_tarefa", tarefa: "T", status: "fazendo" }, { tipo: "mudar_tarefa", tarefa: "T", pergunta: "Qual cor?" }]);
+      expect(r.data.ok, JSON.stringify(r.data)).toBe(true);
+      const t = await m.tarefa();
+      expect(t.status).toBe("voce");
+      const previa = (await previaComentario(m.deps, { agenteId: m.ana.agenteId, tarefaId: t.id, texto: "azul" })).data;
       expect(previa.chips).toEqual([]);
-      expect(previa.nada).toContain("resposta");
-      expect(previa.nada).toContain(m.betoNome);
-      // A menção a outro bot continua na prévia, como no envio.
-      const comMencao = (await previaComentario(m.deps, { agenteId: m.ana.agenteId, tarefaId: tid, texto: `Azul, @${m.anaNome} confere` })).data;
+      expect(previa.nada).toContain(`${m.betoNome} volta à tarefa`);
+      // Com uma @menção, o chip da menção aparece e o do responsável continua de fora — como no envio.
+      const comMencao = (await previaComentario(m.deps, { agenteId: m.ana.agenteId, tarefaId: t.id, texto: `azul @${m.anaNome}` })).data;
       expect(comMencao.chips.map((c) => c.agenteId)).toEqual([m.ana.agenteId]);
+      const enviado = await m.comentar(`azul @${m.anaNome}`);
+      const doComentario = await trx<{ agente_id: string }[]>`select t.agente_id from turnos t where t.id = any(${(await m.repos.quadroComentarios.buscar(t.id, enviado.comentario!.id))!.turnos}::uuid[])`;
+      expect(doComentario.map((x) => x.agente_id)).toEqual(comMencao.chips.map((c) => c.agenteId));
+      // O responsável volta pela resposta (um turno só, da resposta), não pelo comentário.
+      expect((await m.tarefa()).status).not.toBe("voce");
     });
   });
 

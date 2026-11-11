@@ -63,6 +63,7 @@ import type { rotinaRitmoRepo } from "./rotina-ritmo.repo.ts";
 import type { turnoCredenciaisRepo } from "./turno-credenciais.repo.ts";
 import type { acoesPeloModoRepo } from "./acoes-pelo-modo.repo.ts";
 import type { preferenciasRepo, raioXRepo } from "./raio-x.repo.ts";
+import type { turnoPassosRepo } from "./turno-passos.repo.ts";
 import type { perfilRepo } from "./perfil.repo.ts";
 import type { onboardingRepo } from "./onboarding.repo.ts";
 import type { comandosRepo } from "./comandos.repo.ts";
@@ -160,6 +161,7 @@ export interface Repos {
   maquinasNuvem: ReturnType<typeof maquinasNuvemRepo>;
   credenciaisNuvem: ReturnType<typeof credenciaisNuvemRepo>;
   raioX: ReturnType<typeof raioXRepo>;
+  turnoPassos: ReturnType<typeof turnoPassosRepo>;
   preferencias: ReturnType<typeof preferenciasRepo>;
   onboarding: ReturnType<typeof onboardingRepo>;
   /** NOD-346 (0110): nome, "Sobre mim" e foto da pessoa. */

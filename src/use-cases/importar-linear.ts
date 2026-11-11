@@ -397,7 +397,7 @@ export async function aplicarImportacao(deps: Deps, importacaoId: string, todas:
   const codigosDoTime: typeof codigos = [];
   const regra = { tipo: "regra" } as const;
   const agora = deps.agora();
-  // 0159: as etiquetas do Linear viram labels da tarefa NOVA (a que já existe guarda as labels que a pessoa pôs). A que
+  // 0161: as etiquetas do Linear viram labels da tarefa NOVA (a que já existe guarda as labels que a pessoa pôs). A que
   // falta no catálogo nasce nele, com a cor fixa do nome.
   const catalogo = (await repo.labels(q.id)).map((l) => ({ id: l.id, nome: l.nome, cor: l.cor }));
   const labelsDe = async (etiquetas: readonly string[]): Promise<string[]> => {

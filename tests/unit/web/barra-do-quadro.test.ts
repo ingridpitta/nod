@@ -63,7 +63,7 @@ describe("web/lib/barra-do-quadro", () => {
     expect(focos.at(-1)).toBe('[data-act="op-abrir"]');
   });
 
-  it("os filtros: abre o campo, liga e desliga valores, tira um campo, limpa; ficam por quadro na memória", () => {
+  it("os filtros: abre o campo, liga e desliga valores, tira um campo, limpa; ficam por quadro no Exibir", () => {
     const { b } = montar();
     b.aoClicar(el(FalsoEl), "fil-abrir");
     b.aoClicar(el(FalsoEl, { campo: "status" }), "fil-campo");
@@ -83,6 +83,23 @@ describe("web/lib/barra-do-quadro", () => {
     b.aoClicar(el(FalsoEl), "fil-limpar");
     expect(b.ui().filtros).toEqual([]);
     expect(b.ui().negados).toEqual([]);
+  });
+
+  it("2026-11-10: o funil fica lembrado no Exibir do quadro (vai ao servidor), e o guardado inválido é ignorado", () => {
+    const { b, gravados } = montar();
+    b.aoClicar(el(FalsoEl, { campo: "status", valor: "afazer" }), "fil-alternar");
+    expect(gravados.at(-1)).toEqual({ filtros: [{ campo: "status", valor: "afazer" }] });
+    b.aoClicar(el(FalsoEl, { campo: "status", modo: "nao" }), "fil-modo");
+    expect(gravados.at(-1)).toEqual({ negados: ["status"] });
+    b.aoClicar(el(FalsoEl), "fil-limpar");
+    expect(gravados.at(-1)).toEqual({ filtros: [], negados: [] });
+    // Recarregou: o que veio das preferências volta; o campo que não existe mais fica de fora.
+    const guardado = criarBarraDoQuadro({
+      quadro: () => QUADRO, colunas: () => QUADRO.colunas, exibir: () => ({ recolhidas: true, compacto: false, filtros: [{ campo: "prioridade", valor: "alta" }, { campo: "sumiu" as never, valor: "x" }], negados: ["prioridade"] }),
+      gravarExibir: () => undefined, desenhar: () => undefined, focar: () => undefined, anunciar: () => undefined, podeCriar: () => true, criarTarefa: async () => true, noQuadro: () => true, celular: () => false,
+    });
+    expect(guardado.ui().filtros).toEqual([{ campo: "prioridade", valor: "alta" }]);
+    expect(guardado.ui().negados).toEqual(["prioridade"]);
   });
 
   it("as Opções gravam no Exibir: visão, inverter, colunas escondidas e propriedades (na ordem do catálogo)", () => {

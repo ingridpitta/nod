@@ -3,7 +3,7 @@ import type { QuadroDto, TarefaDto } from "../../../src/contracts/quadro.ts";
 import { COLUNAS_PADRAO, colunasDto } from "../../../src/domain/colunas.ts";
 import { PRIORIDADES as PRIORIDADES_CONTRATO, PROPRIEDADES_DO_CARD as PROPS_CONTRATO, PROPRIEDADES_PADRAO as PADRAO_CONTRATO } from "../../../src/contracts/quadro-opcoes.ts";
 import {
-  alternarCondicao, camposDoFiltro, porLabelReserva, porPrazoReserva, type CampoDoFiltro, type TarefaDoFiltro, chipsDosFiltros, ehCondicao, gruposPorResponsavel, haQuantoTempo, opcoesAjustadas, opcoesEfetivas, ordenarTarefas, passaNosFiltros, PRIORIDADES, PROPRIEDADES_DO_CARD, PROPRIEDADES_PADRAO,
+  alternarCondicao, camposDoFiltro, dicaDaOrdem, porLabelReserva, porPrazoReserva, type CampoDoFiltro, type TarefaDoFiltro, chipsDosFiltros, ehCondicao, gruposPorResponsavel, haQuantoTempo, opcoesAjustadas, opcoesEfetivas, ordenarTarefas, passaNosFiltros, PRIORIDADES, PROPRIEDADES_DO_CARD, PROPRIEDADES_PADRAO,
   type CondicaoDoFiltro, type ContextoDoFiltro,
 } from "../../../web/lib/opcoes-do-quadro.ts";
 import { chipsDosFiltrosHtml, iconeDaPrioridade, modalDaNovaTarefa, pilulaDosAtivos, popoverDasOpcoes, popoverDosFiltros, type UiDaBarra } from "../../../web/telas/opcoes-quadro.ts";
@@ -53,6 +53,14 @@ describe("web/lib/opcoes-do-quadro", () => {
     expect(ids("atualizacao")).toBe("2314");
   });
 
+  it("2026-11-10: ordena por prazo (o mais perto primeiro); sem prazo fica por último também invertido; a dica fora do Manual", () => {
+    const ts = [t("1", { prazoEm: "2026-11-20" }), t("2", { prazoEm: null }), t("3", { prazoEm: "2026-11-12" }), t("4", { prazoEm: "2026-11-20" })];
+    const ids = (inv = false) => ordenarTarefas(ts, "prazo", inv).map((x) => x.id).join("");
+    expect(ids()).toBe("3142");
+    expect(ids(true)).toBe("1432");
+    expect(dicaDaOrdem("prazo")).toBe("A ordem segue Prazo: para reordenar à mão, volte para Manual nas Opções do quadro.");
+  });
+
   it("filtros: OU dentro do campo, E entre campos; tipo, status, agente, prioridade, responsável, criador, relação e data", () => {
     const hoje = ctx.agora - 3600_000;
     const ts = [
@@ -65,11 +73,11 @@ describe("web/lib/opcoes-do-quadro", () => {
     expect(f()).toBe("1234");
     expect(f(["status", "afazer"], ["status", "fazendo"])).toBe("12");
     expect(f(["status", "afazer"], ["prioridade", "baixa"])).toBe("");
-    expect(f(["tipo", "pessoa"])).toBe("3");
+    // ADR-162 (revisto em 2026-11-10): a tarefa que espera a pessoa segue com o responsável dela; "Pessoa" saiu do tipo.
     expect(f(["tipo", "sem"])).toBe("4");
-    expect(f(["tipo", "agente"])).toBe("12");
+    expect(f(["tipo", "agente"])).toBe("123");
     expect(f(["agente", "rodando"])).toBe("1");
-    expect(f(["responsavel", "g"], ["responsavel", "voce"])).toBe("23");
+    expect(f(["responsavel", "g"], ["responsavel", "a"])).toBe("123");
     expect(f(["criador", "p2"])).toBe("2");
     // A dona: o que não tem pedidoPor (antes da 0146, ou da tela dela) conta como dela.
     expect(f(["criador", "p1"])).toBe("134");
@@ -91,9 +99,9 @@ describe("web/lib/opcoes-do-quadro", () => {
     expect(ehCondicao({ campo: "status", valor: "" })).toBe(false);
   });
 
-  it("agrupa por responsável: os bots (mais tarefas primeiro), depois você e sem responsável", () => {
-    const g = gruposPorResponsavel([t("1", { agenteId: null }), t("2", { agenteId: "g" }), t("3", { status: "voce" }), t("4", { agenteId: "a" }), t("5", { agenteId: "a" })]);
-    expect(g.map((x) => `${x.chave}:${x.tarefas.length}`)).toEqual(["a:2", "g:1", "voce:1", "sem:1"]);
+  it("agrupa por responsável: os bots (mais tarefas primeiro), depois sem responsável; a que espera a pessoa fica com o bot dela (ADR-162)", () => {
+    const g = gruposPorResponsavel([t("1", { agenteId: null }), t("2", { agenteId: "g" }), t("3", { status: "voce", agenteId: "a", esperaPessoa: true }), t("4", { agenteId: "a" }), t("5", { agenteId: "a" })]);
+    expect(g.map((x) => `${x.chave}:${x.tarefas.length}`)).toEqual(["a:3", "g:1", "sem:1"]);
   });
 
   it("há quanto tempo", () => {
@@ -243,10 +251,10 @@ describe("web/telas/quadro-minimo e o quadro com a barra nova", () => {
     expect(nada.atualizado).toBeUndefined();
   });
 
-  it("os valores do funil vêm do quadro: colunas, bots, você, sem responsável e quem pediu", () => {
-    const quadro = q([t("1", { agenteId: "g", pedidoPor: "p2" }), t("2", { status: "voce" }), t("3", { agenteId: null })], { dona: { pessoaId: "p1", nome: "Marlon" }, membros: [{ pessoaId: "p2", nome: "Ana" } as never] });
+  it("os valores do funil vêm do quadro: colunas, bots, sem responsável e quem pediu", () => {
+    const quadro = q([t("1", { agenteId: "g", pedidoPor: "p2" }), t("2", { status: "voce", agenteId: "g", esperaPessoa: true }), t("3", { agenteId: null })], { dona: { pessoaId: "p1", nome: "Marlon" }, membros: [{ pessoaId: "p2", nome: "Ana" } as never] });
     const v = valoresDoFiltro(quadro, quadro.colunas, agente);
-    expect(v.responsavel?.map((x) => x.nome)).toEqual(["Gil", "Você", "Sem responsável"]);
+    expect(v.responsavel?.map((x) => x.nome)).toEqual(["Gil", "Sem responsável"]);
     expect(v.criador?.map((x) => x.nome)).toEqual(["Ana", "Um bot"]);
     expect(v.status?.length).toBe(quadro.colunas.length);
   });
@@ -289,5 +297,22 @@ describe("web/telas/quadro-minimo e o quadro com a barra nova", () => {
     const tarefa = t("1", { prioridade: "media" });
     expect(campoDePrioridade(tarefa)).toContain('<option value="media" selected>');
     expect(tarefaAberta({ t: tarefa, q: q([tarefa]), agente })).toContain('id="qd-t-pri"');
+  });
+});
+
+describe("2026-11-10: a prioridade editável no próprio card (a edição inline do Multica)", () => {
+  it("no card editável as barrinhas são o botão do seletor; sem edição, só o ícone", () => {
+    const tarefa = t("1", { prioridade: "alta" });
+    const c = ajustarCard(cardDaTarefa(tarefa, agente), tarefa, opcoesEfetivas(null), q([tarefa]), Date.now());
+    expect(String(card({ ...c, arrastavel: true }))).toContain('<button type="button" class="qm-pri-bt" data-act="tarefa-prioridade" data-tarefa="1" aria-haspopup="menu" aria-expanded="false" aria-label="Prioridade: Alta. Mudar"');
+    expect(String(card(c))).not.toContain("qm-pri-bt");
+  });
+  it("com o seletor aberto, o card traz o menu com as cinco e a atual marcada (escapado)", () => {
+    const ts = [t("1", { prioridade: "media", titulo: `<b>x</b>` })];
+    const h = String(quadroDaMeta({ q: q(ts), nome: "Ada", agente, filtro: "todos", alternadas: new Set(), acesas: new Set(), agentes: [{ id: "a", nome: "Ada" }], edicao: { tipo: "prioridade", tarefa: "1" }, exibir: { recolhidas: true, compacto: false }, ui: ui() }));
+    expect(h).toContain('aria-expanded="true" aria-controls="qd-menu"');
+    expect(h).toContain('aria-label="Prioridade de &lt;b&gt;x&lt;/b&gt;"');
+    expect(h.match(/data-act="tarefa-prioridade-para"/g)).toHaveLength(5);
+    expect(h).toContain('data-valor="media" aria-current="true"');
   });
 });

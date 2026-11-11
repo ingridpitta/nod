@@ -248,7 +248,9 @@ descrever("NOD-416 no Chrome real: criar, abrir pelo link, mudar status e respon
     // Com o mouse (a escolha no popup): vale na hora. Backlog não começa ninguém: o recibo de sempre.
     await escolher("#qd-t-status", "backlog");
     await ate(`window.__chamadas.filter((c) => c[0] === "mudar").length === 3`);
-    await ate(`/Revisar a copy: Backlog/.test(document.querySelector("#qc-faixa")?.textContent ?? "")`);
+    // 2026-11-10 (#725, reciboDeMover em web/lib/colunas.ts): o recibo do mover é "<título> foi para <coluna>", com
+    // "; <bot> começa" só quando aciona. Backlog não aciona nem passa: só o destino.
+    await ate(`/Revisar a copy foi para Backlog/.test(document.querySelector("#qc-faixa")?.textContent ?? "")`);
     expect(await texto("#qc-faixa")).not.toContain("começou");
     // ADR-162: "Precisa de você" não é coluna (não está no Status).
     expect(await avaliar<boolean>(cdp, `!document.querySelector('#qd-t-status option[value="voce"]')`)).toBe(true);
@@ -288,7 +290,7 @@ descrever("NOD-416 no Chrome real: criar, abrir pelo link, mudar status e respon
     expect(await avaliar<boolean>(cdp, `!document.querySelector('#quadro [data-id="t1"]')`)).toBe(true);
   }, 60_000);
 
-  it("2026-11-10 (o handoff do Multica): o Status da tarefa aberta numa coluna com responsável muda e aciona direto, sem confirmar", async () => {
+  it("2026-11-10 (o handoff do Multica): o Status da tarefa aberta numa coluna com responsável passa pelo diálogo e aciona", async () => {
     await cdp.enviar("Page.navigate", { url });
     await ate("window.__montar");
     await avaliar(cdp, "window.__comPassagem()");
@@ -299,6 +301,8 @@ descrever("NOD-416 no Chrome real: criar, abrir pelo link, mudar status e respon
     await ate(`document.querySelector("#qd-t-status")`);
     // Escolher Em revisão manda a mudança na hora (sem sem_iniciar) e o recibo diz quem começa; o Desfazer é a rede.
     await escolher("#qd-t-status", "revisao");
+    await ate(`document.querySelector("dialog#qd-handoff[open]")`);
+    await avaliar(cdp, `document.querySelector("#qd-handoff [data-ho='mover']").click()`);
     await ate(`window.__chamadas.some((c) => c[0] === "mudar")`);
     expect(await mudancas()).toEqual([{ status: "revisao" }]);
     expect(await avaliar<boolean>(cdp, `!document.querySelector("#quadro .qd-t-soltar, #quadro .qd-soltar")`)).toBe(true);

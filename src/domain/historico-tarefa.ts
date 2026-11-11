@@ -1,4 +1,5 @@
 import type { AutorHistorico, ColunaQuadro, IdColuna, MudancaTarefa, TarefaQuadro } from "../contracts/quadro.ts";
+import type { MudancaDeCampo } from "../contracts/quadro-pela-conversa.ts";
 import { colunaDeAndamento, colunaDoGrupoSemPassagem, grupoDe, normalizarNome, responsavelDe } from "./colunas.ts";
 
 /**
@@ -65,4 +66,25 @@ function andamentoSemExecucao(origem: readonly ColunaQuadro[], status: IdColuna,
   const nome = origem.find((c) => c.id === status)?.nome;
   const mesmoNome = nome === undefined ? undefined : candidatas.find((c) => normalizarNome(c.nome) === normalizarNome(nome));
   return (mesmoNome ?? candidatas[0])?.id ?? null;
+}
+
+/** A foto dos campos que a linha do tempo conta (2026-11-10); ausente na foto de um lote de antes deles = não se sabe. */
+export type CamposDaFoto = Partial<Pick<TarefaQuadro, "prioridade" | "labelIds" | "prazoEm">>;
+
+/**
+ * 2026-11-10 (a issue do Multica): o que um lote mudou na prioridade, no prazo e nas labels da tarefa, comparando a foto de
+ * antes dele com a de depois (a foto de antes do lote seguinte, ou a tarefa de agora para o último). Campo ausente numa das
+ * fotos (lote de antes da 0159/0160) não conta: melhor calar que inventar uma mudança.
+ */
+export function mudancasDeCampos(antes: CamposDaFoto | null, depois: CamposDaFoto): MudancaDeCampo[] {
+  if (!antes) return [];
+  const m: MudancaDeCampo[] = [];
+  if (antes.prioridade !== undefined && depois.prioridade !== undefined && antes.prioridade !== depois.prioridade) m.push({ campo: "prioridade", de: antes.prioridade, para: depois.prioridade });
+  if (antes.prazoEm !== undefined && depois.prazoEm !== undefined && (antes.prazoEm ?? null) !== (depois.prazoEm ?? null)) m.push({ campo: "prazo", de: antes.prazoEm ?? null, para: depois.prazoEm ?? null });
+  if (antes.labelIds !== undefined && depois.labelIds !== undefined) {
+    const postas = depois.labelIds.filter((id) => !antes.labelIds!.includes(id));
+    const tiradas = antes.labelIds.filter((id) => !depois.labelIds!.includes(id));
+    if (postas.length || tiradas.length) m.push({ campo: "labels", postas, tiradas });
+  }
+  return m;
 }

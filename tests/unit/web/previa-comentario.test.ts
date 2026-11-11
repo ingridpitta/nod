@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { mencionados } from "../../../src/domain/comentarios-quadro.ts";
 import { colunasDe } from "../../../src/domain/colunas.ts";
-import { mencionaTodos, rotaDoComentario } from "../../../src/domain/rota-comentario.ts";
-import { previaDoComentario, textoDaPrevia } from "../../../web/lib/previa-comentario.ts";
+import { ehNota, mencionaTodos, NOTA_NAO_ACIONA as NOTA_DO_SERVIDOR, rotaDoComentario } from "../../../src/domain/rota-comentario.ts";
+import { NOTA_NAO_ACIONA, previaDoComentario, textoDaPrevia } from "../../../web/lib/previa-comentario.ts";
 
 /**
  * ADA-28 (escopo D): a prévia da tela diz o mesmo que o servidor fará. A web espelha a regra (não importa o domínio,
@@ -23,13 +23,13 @@ const nomes = new Map(agentes.map((a) => [a.id, a.nome]));
 function doServidor(status: string, agenteId: string | null, texto: string): string[] {
   const mencoes = mencionados(texto, agentes).map((a) => a.id);
   void status; // 2026-11-10: a coluna não decide mais (o responsável é acionado em qualquer uma)
-  const ids = rotaDoComentario({ autor: { tipo: "pessoa" }, responsavelId: agenteId, mencionados: mencoes, todos: mencionaTodos(texto), nods: new Set(["n"]) }).map((r) => r.agenteId);
+  const ids = rotaDoComentario({ autor: { tipo: "pessoa" }, responsavelId: agenteId, mencionados: mencoes, todos: mencionaTodos(texto), nods: new Set(["n"]), nota: ehNota(texto) }).map((r) => r.agenteId);
   return ids.map((id) => nomes.get(id)!);
 }
 
 describe("ADA-28: a prévia do comentário", () => {
   const status = colunas.map((c) => c.id);
-  const textos = ["oi", "@todos aviso", "@todos e @Gil", "@Gil olha", "@gilberto e @Gil", "@Dev 1 e @Dev", "@Nod faz", "@Faustino de novo", "email a@Gil.com", "@Gilbertos chegou", "@Dev 1 só"];
+  const textos = ["oi", "@todos aviso", "@todos e @Gil", "@Gil olha", "@gilberto e @Gil", "@Dev 1 e @Dev", "@Nod faz", "@Faustino de novo", "email a@Gil.com", "@Gilbertos chegou", "@Dev 1 só", "/note @Gil anotação", "  /NOTE só pra mim", "/notes não é nota", "a /note no meio"];
   for (const s of status)
     for (const resp of ["x", null])
       for (const texto of textos)
@@ -43,4 +43,13 @@ describe("ADA-28: a prévia do comentário", () => {
     expect(textoDaPrevia(previaDoComentario({ tarefa: { agenteId: "x", status: "feito" }, colunas, texto: "@todos amanhã", agentes }))).toMatch(/@todos é anúncio/);
     expect(textoDaPrevia(previaDoComentario({ tarefa: { agenteId: null, status: "afazer" }, colunas, texto: "oi", agentes }))).toMatch(/não tem responsável/);
 });
+});
+
+describe("2026-11-10: o /note (comparação Multica × nod)", () => {
+  it("não aciona ninguém, nem com @menção, e a linha diz 'nota, não aciona' (a mesma frase do servidor)", () => {
+    const p = previaDoComentario({ tarefa: { agenteId: "x", status: "fazendo" }, colunas, texto: "/note @Gil lembrar disso", agentes });
+    expect(p).toEqual({ acionados: [], motivo: "nota" });
+    expect(textoDaPrevia(p)).toBe("nota, não aciona");
+    expect(NOTA_NAO_ACIONA).toBe(NOTA_DO_SERVIDOR);
+  });
 });

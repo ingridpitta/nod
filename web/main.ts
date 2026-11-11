@@ -710,6 +710,8 @@ const quadroNaTela = criarQuadroNaTela(document, {
     api: () => api,
     agente: (id) => { const b = botGerido(id); return b ? { avatar: confiarHtml(iconeAgente(b, "sm")), nome: b.nome } : null; },
     hora: horaDaFala,
+    // 2026-11-10: o SSE mudo (um proxy que segura o stream) faz o quadro reler sozinho.
+    ultimoDadoAoVivo: () => live?.ultimoDado() ?? 0,
     // Os bots da pessoa: quem recebe a passagem de uma coluna (ADR-142) e quem pode ser o Responsável da tarefa aberta
     // (NOD-416). O código da tarefa aberta vai para a URL.
     agentes: () => responsaveisDaTarefa(estado.frota?.agentes ?? [], estado.sessao?.pessoaId),

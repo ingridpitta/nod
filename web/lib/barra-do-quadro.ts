@@ -4,8 +4,8 @@
  * Nova tarefa. Mora fora de web/lib/quadro-na-tela.ts (que já passa de 3 mil linhas): ela só repassa os eventos e
  * desenha com o que `ui()` devolve.
  *
- * Onde fica cada coisa: as Opções vão para as preferências de quem lê (o Exibir do quadro, 0149, pelo `gravarExibir` da
- * tela, que já guarda em fila); os Filtros ficam na memória desta tela, por quadro, enquanto ela está aberta.
+ * Onde fica cada coisa: as Opções e (desde 2026-11-10) os Filtros vão para as preferências de quem lê (o Exibir do
+ * quadro, 0149, pelo `gravarExibir` da tela, que já guarda em fila), por quadro.
  */
 import type { ColunaDto, QuadroDto } from "../../src/contracts/quadro.ts";
 import type { ExibirDoQuadro } from "../../src/contracts/raio-x.ts";
@@ -52,17 +52,17 @@ export function criarBarraDoQuadro(d: DepsDaBarra) {
   let passo: "prazo" | null = null;
   let campo: CampoDoFiltro | null = null;
   let buscaFiltro = "";
-  const filtrosPorQuadro = new Map<string, CondicaoDoFiltro[]>();
   let modal: ModalDaNovaTarefa | null = null;
   /** O botão que abriu o modal (o foco volta para ele ao fechar). */
   let voltaDoModal = '[data-act="nt-abrir"]';
 
-  const filtros = (): CondicaoDoFiltro[] => { const q = d.quadro(); return q ? filtrosPorQuadro.get(q.id) ?? [] : []; };
-  const porFiltros = (f: CondicaoDoFiltro[]): void => { const q = d.quadro(); if (q) filtrosPorQuadro.set(q.id, f); };
+  // 2026-11-10 (comparação Multica × nod): o funil fica lembrado por quadro nas preferências, como as Opções (antes, só
+  // na memória da tela: sumia ao recarregar). O que veio guardado e não vale mais (um campo que saiu) é ignorado.
+  const filtros = (): CondicaoDoFiltro[] => (d.quadro() ? (d.exibir().filtros ?? []).filter(ehCondicao) : []);
+  const porFiltros = (f: CondicaoDoFiltro[]): void => { if (d.quadro()) d.gravarExibir({ filtros: f }); };
   /** Os campos em "não é", por quadro (como os filtros). */
-  const negadosPorQuadro = new Map<string, CampoDoFiltro[]>();
-  const negados = (): CampoDoFiltro[] => { const q = d.quadro(); return q ? negadosPorQuadro.get(q.id) ?? [] : []; };
-  const porNegados = (n: CampoDoFiltro[]): void => { const q = d.quadro(); if (q) negadosPorQuadro.set(q.id, n); };
+  const negados = (): CampoDoFiltro[] => (d.quadro() ? (d.exibir().negados ?? []).filter(ehCampo) : []);
+  const porNegados = (n: CampoDoFiltro[]): void => { if (d.quadro()) d.gravarExibir({ negados: n }); };
 
   function abrir(p: PopoverDaBarra, foco?: string): void {
     aberto = aberto === p ? null : p;
@@ -175,14 +175,13 @@ export function criarBarraDoQuadro(d: DepsDaBarra) {
         }
         case "fil-tirar": {
           const c = el.dataset["campo"];
-          porFiltros(filtros().filter((f) => f.campo !== c));
-          porNegados(negados().filter((x) => x !== c));
+          if (d.quadro()) d.gravarExibir({ filtros: filtros().filter((f) => f.campo !== c), negados: negados().filter((x) => x !== c) });
           d.desenhar();
           d.focar('[data-act="fil-abrir"]');
           anunciarFiltros();
           return true;
         }
-        case "fil-limpar": porFiltros([]); porNegados([]); campo = null; d.desenhar(); d.focar('[data-act="fil-abrir"]'); anunciarFiltros(); return true;
+        case "fil-limpar": if (d.quadro()) d.gravarExibir({ filtros: [], negados: [] }); campo = null; d.desenhar(); d.focar('[data-act="fil-abrir"]'); anunciarFiltros(); return true;
         case "op-vista": { const v = el.dataset["valor"]; if (v === "quadro" || v === "lista") mudarOpcao({ vista: v }, `#qm-pop-op [data-act="op-vista"][data-valor="${v}"]`); return true; }
         case "op-inverter": mudarOpcao({ inverter: !opcoesEfetivas(d.exibir()).inverter }, '#qm-pop-op [data-act="op-inverter"]'); return true;
         case "op-coluna": {

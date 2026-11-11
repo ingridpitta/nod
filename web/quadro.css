@@ -142,6 +142,8 @@
 .qd-col-nome { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .qd-n { flex: none; font-size: 12px; font-weight: 500; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .qd-col-trava { display: inline-flex; flex: none; color: var(--ink-3); }
+/* 2026-11-10 (o backlog_hint do Multica): a linha discreta debaixo do cabeçalho, sem fundo nem ícone. */
+.qd-col-dica { margin: -2px 4px 6px; font-size: 11.5px; line-height: 1.4; color: var(--ink-3); overflow-wrap: anywhere; }
 /* NOD-420: o Responder no card e na linha; fica acima do ::after que torna o card inteiro clicável. */
 .qd-card-resp { position: relative; z-index: 1; display: flex; align-items: flex-end; gap: 6px; margin-top: 6px; }
 .qd-card-resp-in { min-height: 32px; padding: 6px 8px; font-size: 13px; resize: vertical; }
@@ -206,6 +208,12 @@
 .qd-pas-op small { display: block; color: var(--ink-3); font-size: 12px; }
 .qd-pas-inst { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: none; color: var(--ink); font: inherit; font-size: 13px; resize: vertical; }
 .qd-pas-inst:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+/* "O que o bot recebe": recolhido, sem fundo, o texto do turno em tinta 3 e rolando dentro (2026-11-10). */
+.qd-pas-recebe > summary { cursor: pointer; color: var(--ink-3); font-size: 12px; list-style-position: inside; }
+.qd-pas-recebe > summary:hover { color: var(--ink-2); }
+.qd-pas-recebe > summary:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; border-radius: 4px; }
+.qd-pas-recebe-txt { max-height: 180px; overflow: auto; margin: 6px 0 0; padding: 6px 0 6px 8px; border-left: 2px solid var(--line); color: var(--ink-3);
+  font: inherit; font-size: 11.5px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
 .qd-pop-passa:not(:has(input[value="agente"]:checked)) #qd-pas-agente { display: none; }
 /* O "Mover para…" do card: aparece no hover e no foco (sempre no toque), acima do clique do card inteiro. */
 .qd-card-mover { position: relative; z-index: 1; align-self: flex-start; display: inline-flex; align-items: center; min-height: 24px; min-width: 24px; padding: 0 2px;
@@ -1016,3 +1024,20 @@ a.qd-chip:hover { background: var(--surface-raised); }
 .qd-espera-voce { color: var(--ink); border-color: var(--line-strong); }
 .qd-espera-voce .qd-espera-ic { color: var(--signal); }
 .qd-card-l1 .qd-espera { margin-left: auto; }
+/* 2026-11-10 (o drop_hint do Multica): a linha discreta sob o cabeçalho da coluna onde o card vai cair. */
+.qd-dica-soltar { margin: 0; padding: 0 4px; font-size: 12px; line-height: 1.35; color: var(--ink-2, var(--ink-3)); }
+/* 2026-11-10 (o confirm do Multica): o diálogo de handoff. Parece mensagem, não alerta: sem fundo chapado, botão discreto. */
+.qd-handoff { width: min(440px, calc(100vw - 32px)); padding: 18px 18px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--ink); box-shadow: var(--shadow-pop); }
+.qd-handoff::backdrop { background: color-mix(in srgb, var(--ink) 18%, transparent); }
+.qd-ho-form { display: flex; flex-direction: column; gap: 10px; margin: 0; }
+.qd-ho-tit { margin: 0; font-size: 15px; font-weight: 600; }
+.qd-ho-linha { margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--ink-2, var(--ink)); }
+.qd-ho-run { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
+.qd-ho-run-tit { margin: 0; font-size: 13px; color: var(--ink); }
+.qd-ho-op { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.qd-ho-dica { margin: 0; font-size: 12px; line-height: 1.4; color: var(--ink-3); }
+.qd-ho-recebe > summary { cursor: pointer; font-size: 12.5px; color: var(--ink-3); }
+.qd-ho-texto { max-height: 220px; overflow: auto; margin: 6px 0 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font: 12px/1.45 var(--font-mono); white-space: pre-wrap; color: var(--ink-2, var(--ink)); }
+.qd-ho-bts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.qd-handoff .qd-bt-pri { border-color: var(--line-strong, var(--line)); background: none; color: var(--ink); font-weight: 600; }
+.qd-handoff .qd-bt-pri:hover { background: var(--surface-raised); opacity: 1; }

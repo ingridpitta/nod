@@ -1,6 +1,6 @@
 # ADR-142 — Passagem por coluna: a coluna tem responsável, e entrar nela aciona
 
-Status: aceita (2026-11-02, NOD-417; a PM aceitou na revisão do PR #622) · Revisa a [ADR-140](adr-140-colunas-do-quadro-por-grupo.md) (decisão 2: quem é acionado).
+Status: aceita (2026-11-02, NOD-417; a PM aceitou na revisão do PR #622) · Revisa a [ADR-140](adr-140-colunas-do-quadro-por-grupo.md) (decisão 2: quem é acionado) · Emendada em 2026-11-10 (acionamento à Multica, diálogo de handoff, turno preso à etapa: ver a emenda no fim).
 
 ## Contexto
 
@@ -13,19 +13,20 @@ passagem no estilo Multica: cada coluna pode ter um agente e uma instrução, e 
 1. **A coluna ganha `responsavel` (id de agente ou null) e `instrucoes` (até 500).** Ficam no mesmo jsonb
    `quadros.colunas`, sem migração; coluna sem os dois campos é igual a antes, e as padrão continuam "padrão" só sem
    eles. Só aceitam passagem as colunas de não iniciado e de andamento (Backlog, A fazer, Fazendo, Revisão e as da
-   pessoa nesses grupos); Bloqueado, Precisa de você, Cancelado, Feito e Fechado nunca têm (`aceitaPassagem`).
+   pessoa nesses grupos); Bloqueado, Cancelado, Feito e Fechado nunca têm (`aceitaPassagem`; a espera da pessoa não é
+   coluna desde a ADR-162).
 2. **Entrar numa coluna com responsável passa a tarefa a ele; ele é acionado só onde a coluna aciona**
    (`acionaNaColuna`, emendado na revisão 3 do PR #622): A fazer e as colunas de andamento, inclusive Revisão. Em Não
    iniciado só A fazer aciona: no Backlog e nas colunas da pessoa desse grupo a tarefa passa ao responsável sem
-   acioná-lo, e entrar nelas para o turno vivo da tarefa. A tarefa fica na coluna (Revisão não vira Fazendo); A fazer
+   acioná-lo, e entrar nelas para o turno vivo da tarefa. Revisto em 2026-11-10: mudar de coluna SÓ aciona aqui (A fazer
+   e coluna com responsável); coluna sem responsável mantém o responsável da tarefa e não roda nada (ver a emenda). A tarefa fica na coluna (Revisão não vira Fazendo); A fazer
    segue levando ao andamento, como na ADR-140 ("entrar em A fazer aciona" fica). O passo que nomeia um agente explicitamente vence a passagem. As tarefas que já estavam na
    coluna quando a passagem foi definida não mudam de mão. O bot que move a própria tarefa para a coluna que já é dele
    não se reaciona (só pelo `terminei`).
-3. **`terminei`** fecha a etapa: a tarefa vai para a próxima coluna da ordem (pulando Precisa de você, Bloqueado e
-   Cancelado) e, se ela tiver responsável, ele começa. Sem tarefa explícita, vale a do turno de quem chama. Sem próxima
+3. **`terminei`** fecha a etapa: a tarefa vai para a próxima coluna da ordem (pulando Bloqueado e Cancelado) e, se ela tiver responsável, ele começa. Sem tarefa explícita, vale a do turno de quem chama. Sem próxima
    coluna (já no fim do andamento), é erro com a frase de por quê. Na próxima sem passagem, o responsável continua e não
    é reacionado.
-4. **O mesmo caminho de mudança de status.** A passagem por entrada, o `terminei` e o "Não iniciar ainda" da tela são
+4. **O mesmo caminho de mudança de status.** A passagem por entrada, o `terminei` e o mover da tela são
    o `mudar_tarefa` de sempre dentro do `planejarLote` (lote travado, tudo ou nada, Desfazer), para as travas e o
    histórico de movimentos verem toda mudança. `sem_iniciar` move e passa ao responsável sem acionar (`semAcionar`).
 5. **`definir_passagem`** é um passo de coluna: só a pedido da pessoa (na tela ou num turno de conversa limpo), como
@@ -33,10 +34,9 @@ passagem no estilo Multica: cada coluna pode ter um agente e uma instrução, e 
 6. **Tela**: o cabeçalho mostra o nome do responsável (cinza) ou o "Passar para…" só no hover; o popover tem "Sem
    passagem — o responsável continua" / "Passar para um agente — começa na hora" (onde a coluna aciona; nas outras,
    "passa para ele, sem acionar"), o agente e "O que essa etapa faz"; a descrição do `definir_passagem` diz o mesmo.
-   Soltar o card numa coluna com responsável pede "Confirmar · Não iniciar ainda" (Confirmar é o padrão) num card
-   discreto no lugar do card, dentro da lista da coluna de destino: sem modal, sem popover e sem botão cheio
-   (`role="group"`, dois links, foco no Confirmar, Esc cancela). O "Mover para…" do card (teclado e toque) leva à
-   mesma confirmação.
+   Soltar o card numa coluna com responsável abre o diálogo de handoff (2026-11-10, o confirm do Multica; substitui o
+   antigo "Confirmar · Não iniciar ainda"): ver a emenda. O "Mover para…", o Status da tarefa aberta e o celular levam
+   ao mesmo diálogo; coluna sem responsável move direto.
 
 ## Emenda (2026-11-02, revisão do PR #622): o pedir_a_bot com a tarefa
 
@@ -73,10 +73,8 @@ Revisão 4 do PR #622:
   aberto (`pedidoAbertoSql`), não pelo turno de quem comenta: a retomada do turno do colega também não reaciona o
   responsável. Respondido o pedido, o comentário do colega volta a acioná-lo.
 - No `pedir_a_bot` com a tarefa, a @menção no texto do pedido não aciona nenhum bot além do alvo: o pedido é a ele.
-- **Decisão (suposição para a Ada confirmar):** o comentário só aciona o responsável quando a tarefa está numa coluna
-  em andamento (grupo iniciado, fora Precisa de você e Bloqueado). Em Não iniciado (Backlog, A fazer) e Encerrado
-  (Feito, Cancelado) o comentário fica na tarefa sem acionar o responsável, e o resultado diz isso (a tarefa, a coluna
-  e quem não foi acionado). A @menção segue acionando o mencionado em qualquer coluna.
+- ~~O comentário só aciona o responsável em andamento~~ (revisto: o comentário aciona o responsável em qualquer coluna,
+  inclusive Feito, como o `gerir_quadro` descreve; a @menção aciona o mencionado; @todos não aciona o responsável).
 
 ## Emenda NOD-419 (2026-11-02): travas, recusa, freios e histórico
 
@@ -248,6 +246,39 @@ Revisão 10 do PR #629:
 
 - Ao mesclar a NOD-416 (antes na fila), unificar a lista da tarefa aberta numa só e tratar a tarefa que muda de quadro
   (os movimentos acompanham ou a contagem zera). Fica para o merge.
+
+## Emenda (2026-11-10, decisão do Marlon): acionamento à Multica, diálogo de handoff e turno preso à etapa
+
+Copiado do Multica (`server/internal/service/issue_trigger.go` WillEnqueueRun/PreviewIssueTrigger, `board-view.tsx`
+MUL-7420 e o `stepMoved` de `issueworkflow.go`).
+
+1. **Mover só aciona com handoff.** Mudar a tarefa de coluna aciona em A fazer (que leva ao andamento) e na coluna com
+   responsável que aciona. Coluna sem responsável mantém o responsável da tarefa e não roda nada: Em revisão → Fazendo
+   não reaciona o Dev. Sair do Backlog para uma coluna que anda aciona o responsável da tarefa, como o Multica
+   (Backlog → Fazendo aciona; Feito → Fazendo não). O apelido
+   `afazer` num quadro sem A fazer vale como A fazer. Comentário, @menção e troca de responsável seguem como antes (a troca
+   numa coluna que anda aciona o novo). Na coluna com responsável, o mesmo responsável com turno vivo não ganha outro
+   turno (o vivo cobre a etapa).
+2. **Uma regra só de "vai começar"**: `regraDeComecar`/`previaDeMover` (`src/domain/acionamento.ts`), pura, usada pelo
+   lote (`deveComecar`), pela prévia do diálogo (`previaDoMover`) e, pelo espelho `web/lib/acionamento.ts` (ADR-018; o
+   teste confere que o código é o mesmo), pelo otimista do mover, pela dica ao arrastar e pela nota do "Mover para…" e
+   do celular. Teste de tabela em `tests/helpers/tabela-acionamento.ts`.
+3. **Dica ao arrastar**: a coluna sob o card destaca e mostra uma linha discreta — "Soltar passa para Ze 1, que começa
+   agora", "Soltar passa para Ze 1" ou nada. O "Mover para…" e a folha do celular mostram a mesma frase.
+4. **Diálogo de handoff** (tela, coluna com responsável): "Mover ENG-9 para Em revisão?"; quem pega ("O responsável muda
+   de Dev 1 para Ze 1, que começa na hora" / "Ze 1 continua responsável e começa nesta etapa" / sem "começa" quando não
+   aciona); com o run de quem estava vivo, "Dev 1 ainda está trabalhando (há 3 min)" e "Parar o run do Dev 1" (na fila,
+   "Cancelar o run na fila do Dev 1"), desmarcado; "O que o Ze 1 recebe", recolhido, com o mesmo pedido que vai ao turno;
+   "Mover para Em revisão" / "Cancelar". O Desfazer do recibo continua. Pelo chat não há diálogo: o `mudar_tarefa` ganha
+   `parar_anterior` (padrão false) e o resultado do `gerir_quadro` diz quem seguiu na etapa de antes, para o bot contar.
+5. **O turno anterior não é cortado.** Mudar de etapa (com outro responsável) não para o turno vivo de quem estava,
+   a não ser com `parar_anterior` (o "Parar" do diálogo), ao estacionar (Backlog) ou cancelar; a troca de responsável sem
+   mudar de coluna continua parando. O trabalho fica preso à etapa em que nasceu (`quadro_execucoes.etapa`, migração
+   0168): se a tarefa saiu dela por outro (a pessoa ou outro bot; o próprio bot e a regra não prendem), o lote dele que
+   muda a coluna (status, `terminei`, `devolver`, `nao_e_comigo`) é recusado: "a tarefa foi movida por X para Y enquanto
+   você trabalhava; não mude o status, comente se precisar". A sessão viva recebe esse aviso no próximo passo (uma vez
+   por mudança) e a saída dele é "andou" (ADR-155: não é cobrado por "sem saída"). A retomada dessa cadeia segue
+   recusada como trabalho substituído (`cadeiaDoQuadroEncerrada`).
 
 ## Gatilho de reversão
 

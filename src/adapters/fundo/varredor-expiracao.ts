@@ -64,6 +64,11 @@ export const INTERVALO_RISCOS_QUADRO_MS = 15 * 60_000;
 
 /** ADR-115 (0093): a retenção de `acoes_pelo_modo` (o resumo da ação e o motivo do revisor são texto livre). */
 export const RETENCAO_ACOES_PELO_MODO_MS = 90 * 24 * 60 * 60_000;
+/**
+ * definido em 2026-11-10 (ADR-165, 0170): a retenção dos passos do run (`turno_passos`, o resumo do argumento e o começo
+ * de cada fala). O turno_raio_x não tem poda automática (ADR-054, "Não implementado"); vale o critério de acoes_pelo_modo.
+ */
+export const RETENCAO_TURNO_PASSOS_MS = 90 * 24 * 60 * 60_000;
 /** definido em 2026-10-20 (NOD-293 E7, 0097): a chave de idempotência da nativa só vale durante a chamada do hook. */
 export const RETENCAO_NATIVAS_IDEMPOTENCIA_MS = 24 * 60 * 60_000;
 /** NOD-323 (ADR-126): a mídia do bot que nenhuma fala prendeu (turno silencioso, sem fala, caído) some depois disto. */
@@ -205,6 +210,14 @@ export async function varrerPessoa(escopo: Escopo, tx: Transacao, opcoes: Opcoes
     });
   } catch (e) {
     log("erro", "revisoes_velhas_falhou", { erro: ehErroDeDominio(e) ? e.codigo : e instanceof Error ? e.name : "desconhecido" });
+  }
+  // ADR-165 (0170): os passos do run com mais de 90 dias, em transação própria (índice turno_passos_por_dona).
+  try {
+    await tx(async (trx) => {
+      await criarRepos(trx, escopo).turnoPassos.podar(opcoes.agora() - RETENCAO_TURNO_PASSOS_MS);
+    });
+  } catch (e) {
+    log("erro", "turno_passos_poda_falhou", { erro: ehErroDeDominio(e) ? e.codigo : e instanceof Error ? e.name : "desconhecido" });
   }
   // NOD-293 E7 (0097): a poda das chaves de idempotência das nativas, em transação própria.
   try {

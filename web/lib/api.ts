@@ -1,6 +1,7 @@
+import type { PreviaDoMoverDto } from "../../src/contracts/previa-mover.ts";
 import type { Prioridade } from "../../src/contracts/quadro-opcoes.ts";
 import type { Time, TimeNaLista } from "../../src/contracts/time.ts";
-import type { ModoAcionar, PreviaComentarioDto, RunDaTarefa } from "../../src/contracts/quadro-comentarios.ts";
+import type { ModoAcionar, PassosDoRunDto, PreviaComentarioDto, RunDaTarefa } from "../../src/contracts/quadro-comentarios.ts";
 import type { DetalheVersaoPerfil, ListaVersoesPerfil, VersaoPerfil } from "../../src/contracts/versoes-perfil.ts";
 import type { AtividadeDto, ContagemDaAtividade } from "../../src/contracts/atividade.ts";
 import type { DecisoesDto } from "../../src/contracts/decisoes-do-bot.ts";
@@ -322,18 +323,21 @@ export function criarApi(escopo: Escopo) {
     criarQuadro: (agenteId: string, campos: { meta?: string | null; prazo?: string | null; nome?: string; projeto?: string | null }) => post<MutacaoQuadro>(`agentes/${encodeURIComponent(agenteId)}/quadro`, campos),
     editarQuadro: (agenteId: string, campos: { meta?: string | null; prazo?: string | null }) => patch<MutacaoQuadro>(`agentes/${encodeURIComponent(agenteId)}/quadro`, campos),
     removerQuadro: (agenteId: string) => del<MutacaoQuadro>(`agentes/${encodeURIComponent(agenteId)}/quadro`),
-    mudarTarefa: (agenteId: string, tarefaId: string, campos: { status?: StatusTarefa | string; agente?: string | null; titulo?: string; descricao?: string; sem_iniciar?: boolean; prioridade?: Prioridade } & CamposDeLabel) =>
+    mudarTarefa: (agenteId: string, tarefaId: string, campos: { status?: StatusTarefa | string; agente?: string | null; titulo?: string; descricao?: string; sem_iniciar?: boolean; parar_anterior?: boolean; prioridade?: Prioridade } & CamposDeLabel) =>
       patch<MutacaoQuadro>(`agentes/${encodeURIComponent(agenteId)}/quadro/tarefas/${encodeURIComponent(tarefaId)}`, campos),
     /** NOD-416 (ADR-144): sem status, a tarefa cai no Backlog e ninguém começa. */
     criarTarefa: (agenteId: string, campos: { titulo: string; descricao?: string; status?: string; agente?: string | null; prioridade?: Prioridade; labels?: string[]; prazo_em?: string | null }) =>
       post<MutacaoQuadro>(`agentes/${encodeURIComponent(agenteId)}/quadro/tarefas`, campos),
-    /** 0159: o catálogo de labels do quadro (pôr e tirar label na tarefa é o mudarTarefa: labels, por_labels, tirar_labels). */
+    /** 0161: o catálogo de labels do quadro (pôr e tirar label na tarefa é o mudarTarefa: labels, por_labels, tirar_labels). */
     criarLabel: (agenteId: string, campos: { nome: string; cor?: CorLabel }) => post<MutacaoQuadro>(`agentes/${encodeURIComponent(agenteId)}/quadro/labels`, campos),
     editarLabel: (agenteId: string, labelId: string, campos: { nome?: string; cor?: CorLabel }) => patch<MutacaoQuadro>(`agentes/${encodeURIComponent(agenteId)}/quadro/labels/${encodeURIComponent(labelId)}`, campos),
     removerLabel: (agenteId: string, labelId: string) => del<MutacaoQuadro>(`agentes/${encodeURIComponent(agenteId)}/quadro/labels/${encodeURIComponent(labelId)}`),
     /** NOD-416: muda a tarefa para o quadro de outro bot (sem lote nem Desfazer; ninguém começa). */
     moverTarefa: (agenteId: string, tarefaId: string, quadro: string) =>
       post<MutacaoQuadro & { movida?: { tarefaId: string; codigo: string; codigoAntigo: string } }>(`agentes/${encodeURIComponent(agenteId)}/quadro/tarefas/${encodeURIComponent(tarefaId)}/mover`, { quadro }),
+    /** 2026-11-10 (ADR-142): o diálogo de handoff — quem pega, se começa, o run de quem estava e o texto da etapa. */
+    previaMover: (agenteId: string, tarefaId: string, coluna: string) =>
+      get<PreviaDoMoverDto>(`agentes/${encodeURIComponent(agenteId)}/quadro/tarefas/${encodeURIComponent(tarefaId)}/previa-mover/${encodeURIComponent(coluna)}`),
     historicoTarefa: (agenteId: string, tarefaId: string) =>
       get<{ historico: EntradaHistoricoDto[] }>(`agentes/${encodeURIComponent(agenteId)}/quadro/tarefas/${encodeURIComponent(tarefaId)}/historico`),
     /** NOD-416: o link `?tarefa=ZE-12` (o código antigo também resolve, para a tarefa que mudou de quadro). */
@@ -362,10 +366,14 @@ export function criarApi(escopo: Escopo) {
     /** 2026-11-10: os chips antes de enviar (a mesma conta do servidor). */
     previaComentario: (agenteId: string, tarefaId: string, texto: string, responderA: string | null) =>
       get<PreviaComentarioDto>(`agentes/${encodeURIComponent(agenteId)}/quadro/tarefas/${encodeURIComponent(tarefaId)}/comentarios/previa?texto=${encodeURIComponent(texto)}${responderA ? `&responder_a=${encodeURIComponent(responderA)}` : ""}`),
-    editarComentario: (agenteId: string, tarefaId: string, comentarioId: string, texto: string) =>
-      patch<MutacaoQuadro>(`agentes/${encodeURIComponent(agenteId)}/quadro/tarefas/${encodeURIComponent(tarefaId)}/comentarios/${encodeURIComponent(comentarioId)}`, { texto }),
+    /** 2026-11-10: `refazer` cancela o run vivo do comentário e reaciona (o mesmo texto: "Mandar como run novo", Repetir). */
+    editarComentario: (agenteId: string, tarefaId: string, comentarioId: string, texto: string, refazer = false) =>
+      patch<MutacaoQuadro>(`agentes/${encodeURIComponent(agenteId)}/quadro/tarefas/${encodeURIComponent(tarefaId)}/comentarios/${encodeURIComponent(comentarioId)}`, { texto, ...(refazer ? { refazer: true } : {}) }),
     apagarComentario: (agenteId: string, tarefaId: string, comentarioId: string) =>
       del<MutacaoQuadro>(`agentes/${encodeURIComponent(agenteId)}/quadro/tarefas/${encodeURIComponent(tarefaId)}/comentarios/${encodeURIComponent(comentarioId)}`),
+    /** ADR-165: os passos persistidos de um run da tarefa (o turno raiz), a página depois do seq `depois` (null = do começo). */
+    passosDoRun: (agenteId: string, tarefaId: string, turnoId: string, depois: number | null = null) =>
+      get<PassosDoRunDto>(`agentes/${encodeURIComponent(agenteId)}/quadro/tarefas/${encodeURIComponent(tarefaId)}/runs/${encodeURIComponent(turnoId)}/passos${depois !== null ? `?depois=${depois}` : ""}`),
     /** NOD-418: os trabalhos da tarefa aberta (o atual, os anteriores, os recados) e Repetir, Cancelar e o recado. */
     trabalhosDaTarefa: (agenteId: string, tarefaId: string) =>
       get<ExecucoesDaTarefa>(`agentes/${encodeURIComponent(agenteId)}/quadro/tarefas/${encodeURIComponent(tarefaId)}/trabalhos`),

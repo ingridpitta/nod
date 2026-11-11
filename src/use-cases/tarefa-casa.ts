@@ -3,6 +3,7 @@ import type { Executor, RuntimeEvent } from "../contracts/evento.ts";
 import type { ColunaQuadro, OpQuadro, Quadro, TarefaQuadro } from "../contracts/quadro.ts";
 import { colunasDe, grupoDe } from "../domain/colunas.ts";
 import { codigoDaTarefa } from "../domain/codigo-tarefa.ts";
+import { ehDarDone } from "../domain/dar-done.ts";
 import { ErroDeDominio } from "../domain/erro.ts";
 import { LIMITES_QUADRO } from "../domain/quadro.ts";
 import { tarefaCasaLigada } from "../shared/tarefa-casa.ts";
@@ -50,22 +51,25 @@ export async function gravarLinhaDaTarefa(deps: Deps, p: { motivo: "precisa" | "
 /**
  * Logo depois de criar a decisão (pedir_a_pessoa, pedir_aprovacao que parou na pessoa): se o turno é de uma tarefa, liga
  * a decisão a ela, põe a tarefa em "Precisa de você" pelo lote comum (autor = o bot, a pergunta = a frase da decisão) e
- * grava a linha no chat. A coluna que não aceita ir a "Precisa de você" (trava) não impede: a decisão fica ligada e a
- * tarefa não se move. Fora de tarefa (ou com a flag desligada), nada: o caminho de hoje.
+ * grava a linha no chat. revisto em 2026-11-10 (P6): o lote recusado (a coluna travada, o freio) não liga a decisão — ela
+ * segue solta, na Sua vez, e a tarefa não muda. Fora de tarefa (ou com a flag desligada), nada: o caminho de hoje.
  */
 export async function ligarDecisaoATarefa(deps: Deps, decisao: Decisao, executor: Executor = "catcher"): Promise<RuntimeEvent[]> {
   if (!tarefaCasaLigada() || !decisao.turnoId) return [];
   const tarefaId = await deps.repos.quadros.tarefaDoTurno(decisao.turnoId);
   if (!tarefaId) return [];
-  const ligada = await deps.repos.decisoes.ligarATarefa(decisao.id, tarefaId);
-  const tq = ligada ? await tarefaEQuadro(deps, tarefaId) : null;
+  const tq = await tarefaEQuadro(deps, tarefaId);
   if (!tq) return [];
   const events: RuntimeEvent[] = [];
+  // P6 (2026-11-10): a marca primeiro; o lote recusado (a coluna travada "só a pessoa", o freio) deixa a decisão solta, no
+  // caminho de sempre (a Sua vez), em vez de ligada a uma tarefa que não espera ninguém.
   if (tq.t.status !== "voce" && tq.t.status !== "bloqueado") {
     const pergunta = [...decisao.frase].slice(0, LIMITES_QUADRO.pergunta).join("");
     const r = await aplicarLoteQuadro(deps, { autor: { tipo: "agente", agenteId: decisao.agenteId }, quadro: tq.q.id, executor, turnoId: decisao.turnoId, conversaId: decisao.conversaId, limite: "normal", ops: [{ tipo: "mudar_tarefa", tarefa: tq.t.id, status: "voce", pergunta }] });
-    if (r.data.ok) events.push(...(r.events ?? []));
+    if (!r.data.ok) return [];
+    events.push(...(r.events ?? []));
   }
+  if (!(await deps.repos.decisoes.ligarATarefa(decisao.id, tarefaId))) return events;
   events.push(...(await gravarLinhaDaTarefa(deps, { motivo: "precisa", ...tq, conversaId: decisao.conversaId, agenteId: decisao.agenteId, texto: textoDaLinha("precisa", codigoDaTarefa(tq.q.prefixo, tq.t), null) })));
   return events;
 }
@@ -167,8 +171,8 @@ export async function pedirODone(deps: Deps, p: { quadroId: string; tarefaIds: r
 }
 
 /**
- * A resposta à "pronta para o Done": "Dar Done" leva a tarefa à coluna Feito seguinte (lote da pessoa, com Desfazer);
- * qualquer outra resposta a devolve à coluna anterior do andamento e vira comentário na tarefa, que aciona quem cuida
+ * A resposta à "pronta para o Done": "Dar Done" (ou a variação escrita, ehDarDone) leva a tarefa à coluna Feito seguinte
+ * (lote da pessoa, com Desfazer); qualquer outra resposta a devolve à coluna anterior do andamento e vira comentário na tarefa, que aciona quem cuida
  * dela (o porquê de voltar). A tarefa que já saiu dali (a pessoa a moveu na tela) fica como está.
  */
 export async function responderPedidoDeDone(deps: Deps, d: Pick<Decisao, "tarefaId" | "tarefaPedeDone">, texto: string, executor: Executor = "catcher"): Promise<RuntimeEvent[]> {
@@ -177,7 +181,8 @@ export async function responderPedidoDeDone(deps: Deps, d: Pick<Decisao, "tarefa
   if (!tq) return [];
   const colunas = colunasDe(tq.q);
   if (grupoDe(colunas, tq.t.status) === "feito" || grupoDe(colunas, tq.t.status) === "fechado") return [];
-  const darDone = texto.trim().toLocaleLowerCase() === DAR_DONE.toLocaleLowerCase();
+  // P7 (2026-11-10): o botão e as variações escritas ("pode fechar", "fecha", "done"); na dúvida, não fecha.
+  const darDone = ehDarDone(texto);
   // QA do PR #702: Dar Done vai à coluna Feito seguinte, não à próxima — o merge pede o Done com a tarefa ainda em Fazendo.
   const destino = darDone ? colunaFeitoSeguinte(colunas, tq.t.status) : colunaAnterior(tq.q, tq.t.status)?.id ?? null;
   const ops: OpQuadro[] = [];

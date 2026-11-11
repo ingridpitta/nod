@@ -68,8 +68,8 @@
 /* O run na linha do tempo: o agente, o estado e o último passo, ao vivo; ao responder, compacta no cabeçalho. */
 .ta-run { display: flex; gap: 10px; padding: 9px 12px; border: 1px dashed var(--line-strong); border-radius: 12px; min-width: 0; list-style: none; }
 .ta-lista > .ta-run { margin-left: 0; }
-.ta-run-av { flex: none; line-height: 0; position: relative; }
-.ta-run[data-estado="rodando"] .ta-run-av::after { content: ""; position: absolute; inset: -3px; border-radius: 10px; border: 1.6px solid var(--ink-3); border-right-color: transparent; animation: ta-gira 1.1s linear infinite; }
+.ta-run-av { flex: none; align-self: flex-start; width: 24px; height: 24px; line-height: 0; position: relative; }
+.ta-run[data-estado="rodando"] .ta-run-av::after { content: ""; position: absolute; left: 50%; top: 50%; width: 32px; height: 32px; margin: -16px 0 0 -16px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid transparent; border-top-color: var(--ink-3); animation: ta-gira 1s linear infinite; pointer-events: none; }
 @keyframes ta-gira { to { transform: rotate(360deg); } }
 .ta-run-corpo { flex: 1; min-width: 0; }
 .ta-run-cab { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: baseline; font-size: 12.5px; color: var(--ink-3); }
@@ -189,3 +189,78 @@
 .ta-espera:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .ta-espera span { font-size: 12px; filter: grayscale(1); }
 .ta .qd-t-principal .qd-voce-frase { color: var(--ink); font-weight: 400; } /* Bloqueado: tinta normal, sem azul */
+
+/* 2026-11-10 (comparação Multica × nod): o run com estado verdadeiro, ações, passos com ícone, o recibo e "Ver o trabalho". */
+.ta-run[data-esperando="1"] { border-style: dashed; border-color: var(--line); }
+.ta-run-tempo { font-variant-numeric: tabular-nums; }
+.ta-run-gat { color: var(--ink-3); }
+.ta-run-nota { margin: 3px 0 0; font-size: 12px; color: var(--ink-3); }
+.ta-run-volta { margin: 3px 0 0; font-size: 12.5px; color: var(--ink-2); }
+.ta-run-erro { margin: 4px 0 0; padding: 6px 10px; border-left: 1.6px solid var(--danger); font-size: 12.5px; line-height: 1.45; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+.ta-run-acoes { margin: 4px 0 0; font-size: 12px; color: var(--ink-3); }
+.ta-run-acoes .qd-link { font-size: 12px; }
+.ta-run-passos { list-style: none; padding: 0; }
+.ta-passo { display: flex; align-items: flex-start; gap: 6px; min-width: 0; }
+.ta-passo-ic { flex: none; line-height: 0; color: var(--ink-3); padding-top: 2px; }
+.ta-passo-txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ta-passo-rot { color: var(--ink-2); }
+.ta-passo-res { color: var(--ink-3); font-family: var(--font-mono, ui-monospace, monospace); font-size: 11.5px; }
+.ta-passo[data-estado="vivo"] .ta-passo-ic { animation: ta-pulso 1.6s ease-in-out infinite; }
+.ta-passo[data-estado="falhou"] .ta-passo-ic, .ta-passo[data-estado="falhou"] .ta-passo-rot { color: var(--danger); }
+.ta-passo-grupo details { min-width: 0; width: 100%; }
+.ta-passo-grupo summary { display: flex; gap: 6px; align-items: flex-start; cursor: pointer; list-style: none; }
+.ta-passo-grupo summary::-webkit-details-marker { display: none; }
+.ta-passos-sub { list-style: none; margin: 2px 0 0 19px; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.ta-passo-recado .ta-passo-rot { color: var(--ink); }
+.ta-passo-lido { flex: none; margin-left: auto; font-size: 11px; color: var(--ink-3); }
+.ta-passo-mais { list-style: none; }
+.ta-com-recibo { margin: 4px 0 0; font-size: 12px; color: var(--ink-3); }
+.ta-com-recibo[data-estado="nao_entrou"] { color: var(--ink-2); }
+.ta-chip-topo { position: relative; display: inline-flex; }
+.ta-trabalhando[data-estado="parado"] { color: var(--ink-3); }
+.ta-pop { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; min-width: 300px; max-width: min(420px, 90vw); padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-raised); box-shadow: var(--shadow-pop); }
+.ta-pop-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ta-pop-l { display: flex; align-items: center; gap: 8px; font-size: 12.5px; min-width: 0; }
+.ta-pop-txt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ta-pop-ac { flex: none; font-size: 12px; color: var(--ink-3); }
+.ta-espera-bot { color: var(--ink-2); }
+.ta-reg-gat { display: block; font-size: 11.5px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ta-reg-ac { flex: none; font-size: 12px; }
+.ta-trans[open] { position: fixed; inset: 6vh 0 auto; margin: 0 auto; width: min(720px, 94vw); max-height: 86vh; overflow: auto; z-index: 40; }
+.ta-trans-busca { width: 100%; margin: 8px 0 4px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; background: none; font: 13px var(--font-sans); color: var(--ink); }
+.ta-trans-sub { margin: 12px 0 4px; font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.ta-trans-resp { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+.ta-trans .ta-passo-txt { white-space: normal; }
+/* 2026-11-10 (a lateral, o topo e a linha do tempo como os do Multica): tudo discreto, como mensagem — sem fundo chapado,
+   sem botão cheio. O "+ Propriedade" é um link; os menus (⋯, "+ Propriedade") são popovers leves; os avisos são texto. */
+.ta-prop-mais { position: relative; margin-top: 6px; }
+.ta-prop-bt { font-size: 12.5px; color: var(--ink-3); }
+.ta-prop-bt:hover, .ta-prop-bt[aria-expanded="true"] { color: var(--ink); }
+.ta-prop-menu, .ta-menu-pop { position: absolute; z-index: 9; min-width: 180px; padding: 6px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-raised); box-shadow: var(--shadow-pop); display: flex; flex-direction: column; }
+.ta-prop-menu { top: calc(100% + 4px); left: 0; }
+.ta-prop-op, .ta-menu-op { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 10px; border: 0; border-radius: 9px; background: none; text-align: left; font: 13px var(--font-sans); color: var(--ink); cursor: pointer; }
+.ta-prop-op:hover, .ta-menu-op:hover, .ta-prop-op:focus-visible, .ta-menu-op:focus-visible { background: var(--surface); outline: none; }
+.ta-menu { position: relative; display: inline-flex; margin-left: 6px; }
+.ta-menu-bt { display: inline-grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 1px solid transparent; border-radius: 999px; background: none; color: var(--ink-3); cursor: pointer; }
+.ta-menu-bt:hover, .ta-menu-bt[aria-expanded="true"] { color: var(--ink); border-color: var(--line); }
+.ta-menu-bt:focus-visible, .ta-prop-bt:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.ta-menu-pop { top: calc(100% + 6px); right: 0; width: 220px; max-height: 70vh; overflow-y: auto; }
+.ta-menu-sub { display: flex; flex-direction: column; margin: 0 0 4px 10px; padding-left: 6px; border-left: 1.6px solid var(--line); }
+.ta-menu-g { margin: 6px 10px 2px; font-size: 11px; color: var(--ink-3); }
+.ta-menu-col { padding-left: 28px; position: relative; }
+.ta-menu-col[aria-checked="true"]::before { content: "✓"; position: absolute; left: 10px; font-size: 12px; color: var(--ink-2); }
+.ta-parada { margin: -4px 0 0; font-size: 12.5px; color: var(--ink-3); }
+.ta-nota-sel { margin: 3px 0 0; font-size: 11.5px; color: var(--ink-2); }
+.ta-nota-sel[hidden] { display: none; }
+/* O "×N" do evento juntado e o "N atividades" que abre os antigos. */
+.ta-ev-n { flex: none; font-size: 11.5px; color: var(--ink-3); }
+.ta-ev-mais-bt { font-size: 12.5px; color: var(--ink-3); }
+.ta-ev-mais-bt:hover { color: var(--ink); }
+/* O pedido de quem participa: um comentário só de leitura (tracejado leve, como algo de fora da conversa). */
+.ta-th-pedido { border-style: dashed; }
+/* O "Citar" flutuante sobre o trecho selecionado. */
+.ta-citar { position: fixed; z-index: 30; height: 28px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-raised); box-shadow: var(--shadow-pop); color: var(--ink); font: 500 12.5px var(--font-sans); cursor: pointer; }
+.ta-citar[hidden] { display: none; }
+.ta-citar:hover { border-color: var(--line-strong); }
+.ta-citar:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+@media (forced-colors: active) { .ta-prop-op:focus-visible, .ta-menu-op:focus-visible { outline: 2px solid CanvasText; outline-offset: -2px; } }

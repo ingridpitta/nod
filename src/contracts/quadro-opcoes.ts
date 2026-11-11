@@ -17,8 +17,8 @@ export type VistaDoQuadro = (typeof VISTAS_DO_QUADRO)[number];
 /** Agrupar por: as colunas de status (o padrão) ou o responsável. */
 export const AGRUPAMENTOS_DO_QUADRO = ["status", "responsavel"] as const;
 export type AgrupamentoDoQuadro = (typeof AGRUPAMENTOS_DO_QUADRO)[number];
-/** Ordenar por: a ordem manual (a de arrastar, o padrão), criação, atualização, prioridade ou título. */
-export const ORDENS_DO_QUADRO = ["manual", "criacao", "atualizacao", "prioridade", "titulo"] as const;
+/** Ordenar por: a ordem manual (a de arrastar, o padrão), criação, atualização, prioridade, título ou prazo (2026-11-10). */
+export const ORDENS_DO_QUADRO = ["manual", "criacao", "atualizacao", "prioridade", "titulo", "prazo"] as const;
 export type OrdemDoQuadro = (typeof ORDENS_DO_QUADRO)[number];
 /** O que o card mostra (cada uma liga e desliga). */
 export const PROPRIEDADES_DO_CARD = ["prioridade", "descricao", "responsavel", "datas", "linear", "pr", "comentarios", "labels", "prazo"] as const;
@@ -32,5 +32,15 @@ export const PROPRIEDADES_PADRAO: readonly PropriedadeDoCard[] = ["prioridade", 
  * agrupar por status, ordem manual crescente, todas as colunas à mostra, PROPRIEDADES_PADRAO. `ocultas` = os ids das
  * colunas escondidas (no máximo LIMITES_OPCOES.ocultas, cada id até LIMITES_OPCOES.idColuna).
  */
-export type OpcoesDoQuadro = { vista?: VistaDoQuadro; agrupar?: AgrupamentoDoQuadro; ordenar?: OrdemDoQuadro; inverter?: boolean; ocultas?: string[]; propriedades?: PropriedadeDoCard[] };
-export const LIMITES_OPCOES = { ocultas: 30, idColuna: 60 } as const;
+export type OpcoesDoQuadro = { vista?: VistaDoQuadro; agrupar?: AgrupamentoDoQuadro; ordenar?: OrdemDoQuadro; inverter?: boolean; ocultas?: string[]; propriedades?: PropriedadeDoCard[] } & FiltrosLembrados;
+export const LIMITES_OPCOES = { ocultas: 30, idColuna: 60, filtros: 50, valorDoFiltro: 200 } as const;
+
+/** Os campos do funil (web/lib/campos-do-filtro.ts os descreve; a lista mora aqui para o servidor validar). */
+export const CAMPOS_DO_FILTRO = ["tipo", "status", "agente", "prioridade", "responsavel", "criador", "relacao", "data", "label", "prazo"] as const;
+export type CampoDoFiltro = (typeof CAMPOS_DO_FILTRO)[number];
+/**
+ * 2026-11-10 (comparação Multica × nod): o funil e o filtro rápido lembrados por quadro, como as Opções. `filtros` = as
+ * condições (campo = valor; OU dentro do campo, E entre campos); `negados` = os campos em "não é"; `rapido` = Todas
+ * ("todos"), "comigo", "trabalhando" ou "agente:<id>". Ausente = sem filtro.
+ */
+export type FiltrosLembrados = { filtros?: { campo: CampoDoFiltro; valor: string }[]; negados?: CampoDoFiltro[]; rapido?: string };

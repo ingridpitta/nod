@@ -8,12 +8,13 @@
  */
 import type { ColunaDto, GrupoColuna } from "../../src/contracts/quadro.ts";
 import { NOME_DO_STATUS, STATUS, type Status } from "./quadro.ts";
+import type { PreviaDeMover } from "./acionamento.ts";
 
 /** Espelho de LIMITES_QUADRO.coluna/.colunas (a web só importa tipos de src, ADR-018; o teste confere). */
 export const LIMITE_NOME_COLUNA = 40;
 export const LIMITE_COLUNAS = 30;
 /** ADR-142: o "O que essa etapa faz" (espelha LIMITES_QUADRO.instrucoes). */
-export const LIMITE_INSTRUCOES = 500;
+export const LIMITE_INSTRUCOES = 2000;
 
 /** ADR-142 (espelha aceitaPassagem do domínio): só não iniciado e iniciado, fora Bloqueado e Cancelado. */
 export const aceitaPassagem = (c: Pick<ColunaDto, "id" | "grupo">): boolean =>
@@ -27,23 +28,14 @@ export const acionaNaColuna = (c: Pick<ColunaDto, "id" | "grupo">): boolean =>
   c.id === "afazer" || (c.grupo === "iniciado" && c.id !== "voce" && c.id !== "bloqueado");
 
 /**
- * O card que entra aqui faz o responsável da coluna começar (coluna com responsável que aciona). Definido em 2026-11-10 (o
- * handoff do Multica): entrar já é a passagem, sem "Confirmar · Não iniciar ainda"; a rede é o Desfazer do recibo, e quem
- * quer estacionar a tarefa a deixa no Backlog.
+ * O recibo do card movido, pela prévia da regra única (web/lib/acionamento.ts, 2026-11-10): "começa" só quando aciona;
+ * quando só troca de mão, "passa para"; sem nada disso, só o destino.
  */
-export const comecaAoEntrar = (c: Pick<ColunaDto, "id" | "grupo" | "responsavel">): boolean => !!c.responsavel && acionaNaColuna(c);
-
-/** O recibo do card movido: "começa" só quando aciona; numa coluna com responsável que não aciona, "passa para". */
-export function reciboDeMover(titulo: string, c: Pick<ColunaDto, "id" | "grupo" | "nome" | "responsavel" | "responsavelNome">): string {
-  const quem = c.responsavelNome ?? "o responsável";
-  if (comecaAoEntrar(c)) return `${titulo} foi para ${c.nome}; ${quem} começa`;
-  if (c.responsavel) return `${titulo} foi para ${c.nome}; passa para ${quem}`;
+export function reciboDeMover(titulo: string, c: Pick<ColunaDto, "nome">, p: PreviaDeMover, quem: string | null): string {
+  const nome = quem ?? "o responsável";
+  if (p.aciona && p.agenteId) return `${titulo} foi para ${c.nome}; ${nome} começa`;
+  if (p.passa) return `${titulo} foi para ${c.nome}; passa para ${nome}`;
   return `${titulo} foi para ${c.nome}`;
-}
-
-/** Por que o card não vai para esta coluna pelo Mover para… (null = vai). ADR-162: toda coluna recebe (não há mais a da pergunta). */
-export function porqueNaoRecebeCard(_c: Pick<ColunaDto, "id">, _nomeDoBot = "o bot"): string | null {
-  return null;
 }
 
 /** Quem pode receber a passagem (ADR-142): os bots da pessoa, fora os excluídos e o Nod (ADR-081, o servidor recusa). */
@@ -56,7 +48,7 @@ export const NOME_DO_GRUPO: Readonly<Record<GrupoColuna, string>> = { nao_inicia
 /** O que o grupo faz, numa linha (o topo do menu e a escolha da coluna nova). */
 export const FRASE_DO_GRUPO: Readonly<Record<GrupoColuna, string>> = {
   nao_iniciado: "Não aciona ninguém",
-  iniciado: "Entrar aciona o responsável",
+  iniciado: "Trocar o responsável aciona",
   feito: "Conta no progresso",
   fechado: "Sai da conta",
 };
@@ -71,8 +63,9 @@ export function colunaDeEspera(cs: readonly Pick<ColunaDto, "id" | "grupo">[]): 
 }
 
 /**
- * O que ESTA coluna faz (o topo do menu): a do grupo, com as exceções das padrão que o motor trata à parte
- * (`deveComecar`): A fazer aciona apesar de ser Não iniciado; Revisão e Bloqueado não acionam.
+ * O que ESTA coluna faz (o topo do menu), pela regra única (web/lib/acionamento.ts, 2026-11-10): com responsável, entrar
+ * passa para ele (e aciona onde a coluna aciona); A fazer aciona o da tarefa; no andamento sem responsável, entrar não
+ * aciona ninguém, só trocar o responsável; Bloqueado não aciona.
  */
 export function fraseDaColuna(c: Pick<ColunaDto, "id" | "grupo"> & Partial<Pick<ColunaDto, "responsavel" | "responsavelNome">>): string {
   if (c.responsavel && aceitaPassagem(c)) {
@@ -80,7 +73,6 @@ export function fraseDaColuna(c: Pick<ColunaDto, "id" | "grupo"> & Partial<Pick<
     return acionaNaColuna(c) ? `Entrar passa para ${quem} e aciona` : `Entrar passa para ${quem}, sem acionar`;
   }
   if (c.id === "afazer") return "Entrar aciona o responsável";
-  if (c.id === "revisao") return "Trocar o responsável aciona";
   if (c.id === "bloqueado") return "Não aciona ninguém";
   return FRASE_DO_GRUPO[c.grupo];
 }
@@ -212,7 +204,9 @@ export type EdicaoDeColuna =
    * ADR-142 (revisão do PR #622): o "Mover para…" do card, o caminho do teclado e do toque até o mesmo "soltar".
    * `estreito`: aberto na lista do celular (o menu só aparece na vista de onde veio).
    */
-  | { tipo: "mover"; tarefa: string; estreito?: boolean };
+  | { tipo: "mover"; tarefa: string; estreito?: boolean }
+  /** 2026-11-10: o seletor de prioridade aberto nas barrinhas do card. */
+  | { tipo: "prioridade"; tarefa: string; estreito?: boolean };
 
 /**
  * Revisão do QA do PR #615: o botão da coluna não tem id, então o aviso do servidor que regrava o quadro logo depois de

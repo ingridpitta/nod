@@ -35,6 +35,10 @@ export function fraseDaEspera(t: Pick<TarefaDto, "esperaPessoa" | "decide" | "es
   const l = t.estadoLinha;
   if (l?.tipo !== "esperando") return null;
   if (l.volta.quando === "ci") return { texto: "Esperando a CI", voce: false };
+  // 2026-11-10 (os wait.* do Multica): as esperas por evento do me_chame_as.
+  if (l.volta.quando === "merge") return { texto: "Esperando o merge", voce: false };
+  if (l.volta.quando === "conflito") return { texto: "Esperando conflito", voce: false };
+  if (l.volta.quando === "tarefa") return { texto: `Esperando ${l.volta.tarefa ?? "outra tarefa"}`, voce: false };
   if (l.volta.em !== null) {
     const d = new Date(l.volta.em);
     const h = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;

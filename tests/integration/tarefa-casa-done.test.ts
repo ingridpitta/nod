@@ -90,6 +90,17 @@ describeIntegracao("ADA-28: quem dá o Done", () => {
       expect((await m.pedidosDeDone())[0]?.estado).toBe("decidida");
     }));
 
+  it("P7 (10/11): \"aprovado, pode fechar\" escrito à mão também dá o Done", () =>
+    withRollback(MARLON, async (trx) => {
+      const m = await montar(trx, "pessoa");
+      await lote(m.d, m.host, [{ tipo: "terminei", tarefa: "Login" }], m.comoAda);
+      const [p] = await m.pedidosDeDone();
+      const texto = "Aprovado, pode fechar!";
+      const fechada = await fecharComResposta(m.d, { decisaoId: p!.id, texto });
+      await retomarComResposta(m.d, { decisao: fechada.data.decisao, texto, respondidaPor: { id: PESSOA_MARLON, nome: "Marlon" }, executor: "catcher" });
+      expect(await m.status()).toBe("feito");
+    }));
+
   it("outra resposta volta a tarefa à etapa anterior e vira comentário", () =>
     withRollback(MARLON, async (trx) => {
       const m = await montar(trx, "pessoa");

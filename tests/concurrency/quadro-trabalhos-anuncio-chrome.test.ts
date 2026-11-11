@@ -102,7 +102,7 @@ descrever("revisão 5 do PR #625: a região de status das Execuções no Chrome 
     // O trabalho falhou: o frame relê e o anúncio entra no MESMO nó.
     await avaliar(cdp, `window.__mudar("falhou")`);
     await ate(`document.querySelector("#quadro .qd-trab-atual[data-estado='falhou']")`);
-    await ate(`window.__no.textContent === "Trabalho #1: falhou"`);
+    await ate(`window.__no.textContent === "Run #1: falhou"`);
     expect(await avaliar(cdp, `window.__no.isConnected && document.getElementById("qd-trab-anuncio") === window.__no`)).toBe(true);
     expect(await avaliar(cdp, `document.querySelectorAll('#quadro [role="status"][aria-atomic="true"]').length`)).toBe(1);
     // A releitura sem mudança de estado (outro frame) e o redesenho (abrir os anteriores) não reescrevem o texto.

@@ -132,10 +132,11 @@ export type MotivoRenovacaoNegada = (typeof MOTIVOS_RENOVACAO_NEGADA)[number];
 export type RespostaRenovar = { ativo: boolean | "indefinido"; versaoMinimaApp: string; motivo?: MotivoRenovacaoNegada; mensagens?: string[]; mensagensIds?: string[]; mensagensSemMoldura?: string[]; ligacaoEncerrada?: boolean };
 
 /**
- * O que o app desktop viu do turno vivo desde a última renovação, NA ORDEM: texto do modelo e nomes
- * de ferramenta (nunca input/resultado). O servidor republica como turno.delta / turno.atividade.
- * NOD-353: `id` do tool_use (o app antigo não manda); `{fim, falhou}`: a chamada terminou, e se `tool_result.isError`. */
-export type TrechoVivo = { texto: string } | { ferramenta: string; id?: string } | { fim: string; falhou: boolean } | { tarefas: TarefaDoBot[] } | { vigia: VigiaVivo } | { subagentes: SubagenteVivo[]; ocioso?: boolean };
+ * O que o app desktop viu do turno vivo desde a última renovação, NA ORDEM: texto do modelo e nomes de ferramenta (nunca o
+ * resultado). Republicado como turno.delta / turno.atividade e gravado em turno_passos. NOD-353: `id` do tool_use; `{fim,
+ * falhou}`: a chamada terminou. ADR-165: `resumo` é UMA linha do argumento (até 120), já redigida no executor
+ * (src/domain/resumo-do-passo.ts); o servidor corta em 160 e redige de novo. Nunca o argumento inteiro nem a saída. */
+export type TrechoVivo = { texto: string } | { ferramenta: string; id?: string; resumo?: string } | { fim: string; falhou: boolean } | { tarefas: TarefaDoBot[] } | { vigia: VigiaVivo } | { subagentes: SubagenteVivo[]; ocioso?: boolean };
 
 /**
  * O vigia do turno (definido em 2026-10-05, NOD-73; src/domain/vigia-turno.ts): só AVISA, nunca corta. `mudoMs` > 0

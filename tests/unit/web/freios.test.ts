@@ -7,6 +7,7 @@ import { decidirSoltura, ECO_DO_AGENTE_MS, ecoDoAgente, fraseDaTrava, fraseDoMov
 import { colunaDeEspera } from "../../../web/lib/colunas.ts";
 import { aposDoCabecalho, popoverDeTrava } from "../../../web/telas/colunas-quadro.ts";
 import { cardDaTarefa, historicoDaTarefa, quadroDaMeta, tarefaAberta } from "../../../web/telas/quadro-real.ts";
+import { eventosDaTarefa } from "../../../web/telas/linha-do-tempo.ts";
 
 /** NOD-419 na tela, sem DOM: os espelhos dos freios, a trava no cabeçalho e no menu, o eco do agente e o histórico. */
 
@@ -29,6 +30,15 @@ const q = (tarefas: TarefaDto[], cs = dto()): QuadroDto => ({
 });
 const tela = (tarefas: TarefaDto[], o: Partial<Parameters<typeof quadroDaMeta>[0]> = {}) =>
   quadroDaMeta({ q: q(tarefas), nome: "Ada", agente: () => null, filtro: "todos", alternadas: new Set(), acesas: new Set(), agora: AGORA, agentes: [{ id: "caio", nome: "Caio" }], ...o });
+
+describe("linha do tempo da tarefa: o movimento para a espera da pessoa (10/11)", () => {
+  it("diz \"Esperando você\", não o id cru voce (ADR-162: voce não é coluna)", () => {
+    const tarefa = t({ status: "voce", voltarPara: "fazendo", movimentos: [mov({ de: "fazendo", para: "voce", agenteDepois: "caio" })] });
+    const html = eventosDaTarefa(tarefa, dto(), AGORA).map((e) => e.html).join("");
+    expect(html).toContain("para Esperando você");
+    expect(html).not.toMatch(/para voce\b/);
+  });
+});
 
 describe("web/lib/freios: os espelhos do domínio", () => {
   it("fraseDaTrava igual à do domínio", () => {

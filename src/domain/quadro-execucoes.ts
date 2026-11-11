@@ -1,6 +1,6 @@
 import type { MotivoFalha, MotivoInterrupcao } from "../contracts/motivos.ts";
 import { cercado } from "./quadro.ts";
-import { AVISO_SEM_SAIDA, type ClasseFalha, type EstadoExecucao, type EstadoLinhaTarefa, type ExecucaoQuadro, MOTIVO_SEM_SAIDA, type OrigemExecucao, type SaidaTrabalho, SEM_SAIDA_MAX, TENTATIVAS_AUTOMATICAS_MAX, VOLTA_CI_SEM_CHECKS_MS, type VoltaDoTrabalho } from "../contracts/quadro-execucoes.ts";
+import { AVISO_SEM_SAIDA, type ClasseFalha, type EstadoExecucao, type EstadoLinhaTarefa, type ExecucaoQuadro, MOTIVO_SEM_SAIDA, type OrigemExecucao, type SaidaTrabalho, SEM_SAIDA_MAX, TENTATIVAS_AUTOMATICAS_MAX, VOLTA_CI_SEM_CHECKS_MS, type VoltaDoTrabalho, ESTADOS_ESPERADOS, type EstadoEsperado, type QuandoVolta } from "../contracts/quadro-execucoes.ts";
 import type { PrDaTarefa } from "../contracts/prs-da-tarefa.ts";
 import type { EstadoTurno } from "../contracts/turno.ts";
 
@@ -139,6 +139,16 @@ export function saidaDoTurno(p: {
   return "nenhuma";
 }
 
+/**
+ * P4 da comparação Multica (definido em 2026-11-10, ADR-155 §6): o turno do responsável aberto por um comentário também
+ * termina numa das 4 saídas, menos quando só respondeu: parou sem saída mas comentou na tarefa durante o turno (a pergunta
+ * ou a consulta da pessoa teve resposta; no Multica responder não muda o status). Esse não é cobrado (a saída não se
+ * grava, e saída null nunca reaciona). O comentário que aciona um bot que não é o responsável nem vira trabalho da tarefa.
+ */
+export function cobraTurnoDeComentario(p: { saida: SaidaTrabalho; respondeuNaTarefa: boolean }): boolean {
+  return !(p.saida === "nenhuma" && p.respondeuNaTarefa);
+}
+
 /** O pedido do reacionamento sem saída, na mesma sessão (o bot já tem o contexto da tarefa). */
 export function entradaDoReacionamento(p: { titulo: string; tarefaId: string; quadroId: string }): string {
   return `${AVISO_SEM_SAIDA}\n\nTarefa ${p.tarefaId} do quadro ${p.quadroId}: ${cercado(p.titulo)}`;
@@ -174,6 +184,26 @@ export function voltaCiPronta(pr: (Pick<PrDaTarefa, "estado" | "ci"> & { vistoEm
   if (pr.ci === "pendente") return false;
   if (pr.ci !== null && pr.vistoEm >= desde) return true;
   return agora - desde >= VOLTA_CI_SEM_CHECKS_MS;
+}
+
+/**
+ * 2026-11-10 (os wakeups --until-pr merged/conflicts e --until-issue do Multica): a volta por evento está pronta? Mesmo
+ * varredor da volta por CI. merge: o PR saiu de aberto (mergeou, ou fechou e não vai mais mergear). conflito: o PR aberto
+ * ficou com conflito, ou saiu de aberto (a espera perdeu o sentido). tarefa: a outra tarefa chegou no estado esperado
+ * (null = Feito, Em revisão ou Bloqueado), foi cancelada ou apagada (null). PR ainda não visto: dorme (o prazo acorda).
+ */
+export function voltaPorEventoPronta(
+  quando: QuandoVolta,
+  o: { pr?: (Pick<PrDaTarefa, "estado" | "ci"> & { vistoEm: number; conflito?: boolean }) | null; tarefa?: { status: string; grupo: string | null } | null; estado?: EstadoEsperado | null; desde: number; agora: number },
+): boolean {
+  if (quando === "ci") return voltaCiPronta(o.pr ?? null, o.desde, o.agora);
+  if (quando === "merge") return !!o.pr && o.pr.estado !== "aberto";
+  if (quando === "conflito") return !!o.pr && (o.pr.estado !== "aberto" || o.pr.conflito === true);
+  const t = o.tarefa;
+  if (t === undefined) return false;
+  if (t === null || t.grupo === "fechado") return true;
+  const chegou = (e: EstadoEsperado): boolean => (e === "feito" ? t.grupo === "feito" : t.status === e);
+  return o.estado ? chegou(o.estado) : ESTADOS_ESPERADOS.some(chegou);
 }
 
 export function decidirAposTermino(p: {
@@ -275,5 +305,5 @@ export function estadoLinha(p: { status: string; vivo: boolean; volta: VoltaDoTr
 
 /** ADA-232: a volta como a tela a lê — o id do turno que dorme fica no servidor. */
 export function voltaNaTela(v: (VoltaDoTrabalho & { turnoId?: string | null }) | null): VoltaDoTrabalho | null {
-  return v ? { motivo: v.motivo, em: v.em, quando: v.quando, prUrl: v.prUrl } : null;
+  return v ? { motivo: v.motivo, em: v.em, quando: v.quando, prUrl: v.prUrl, ...(v.tarefa ? { tarefa: v.tarefa } : {}) } : null;
 }

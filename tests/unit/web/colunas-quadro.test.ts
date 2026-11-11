@@ -54,11 +54,11 @@ describe("web/lib/colunas", () => {
     expect(iconeDaColuna({ id: "c-x", grupo: "fechado" })).toBe("cancelado");
   });
 
-  it("a frase de cada coluna é a regra do motor (deveComecar): A fazer aciona, Revisão e Bloqueado não", () => {
+  it("a frase de cada coluna é a regra do motor (2026-11-10): A fazer aciona; no andamento sem responsável só trocar aciona", () => {
     expect(fraseDaColuna({ id: "afazer", grupo: "nao_iniciado" })).toMatch(/aciona o responsável/);
     expect(fraseDaColuna({ id: "backlog", grupo: "nao_iniciado" })).toBe("Não aciona ninguém");
-    expect(fraseDaColuna({ id: "fazendo", grupo: "iniciado" })).toMatch(/aciona o responsável/);
-    expect(fraseDaColuna({ id: "c-x", grupo: "iniciado" })).toMatch(/aciona o responsável/);
+    expect(fraseDaColuna({ id: "fazendo", grupo: "iniciado" })).toBe("Trocar o responsável aciona");
+    expect(fraseDaColuna({ id: "c-x", grupo: "iniciado" })).toBe("Trocar o responsável aciona");
     expect(fraseDaColuna({ id: "revisao", grupo: "iniciado" })).toBe("Trocar o responsável aciona");
     expect(fraseDaColuna({ id: "bloqueado", grupo: "iniciado" })).toBe("Não aciona ninguém");
   });

@@ -17,13 +17,25 @@ export type ComentarioTarefa = { id: string; quadroId: string; tarefaId: string;
 export type ComentarioDto = ComentarioTarefa & {
   autorNome: string | null;
   acionados: string[];
-  /** 2026-11-10 (0159): a raiz da thread (null = é raiz), os turnos que ele abriu e a marca de editado/apagado. */
+  /** 2026-11-10 (0162): a raiz da thread (null = é raiz), os turnos que ele abriu e a marca de editado/apagado. */
   paiId?: string | null;
   turnos?: string[];
   editadoEm?: number | null;
   /** Apagado com respostas: fica como marcador, texto vazio. */
   apagado?: boolean;
+  /** 2026-11-10 (0169): o comentário do agente escrito dentro de um run: o turno raiz dele (a ligação exata com o run). */
+  turnoId?: string | null;
+  /** 2026-11-10 (0169): é a pergunta à pessoa (ADR-162), gravada assim; a tela não casa mais pelo texto. */
+  pergunta?: boolean;
+  /** 2026-11-10 (0169): o "manda agora" (steer) virou recado: chegou ao agente? null = o comentário não mandou recado. */
+  recibo?: ReciboDoComentario | null;
 };
+
+/**
+ * O recibo do "manda agora" (como o steer do Multica): aguardando = o agente ainda não leu; lido = a sessão leu no próximo
+ * passo (`entregueEm`); nao_entrou = o run acabou antes de ler (a tela oferece "Mandar como run novo").
+ */
+export type ReciboDoComentario = { agenteId: string; agenteNome: string | null; estado: "aguardando" | "lido" | "nao_entrou"; entregueEm: number | null; turnoId: string | null };
 
 /**
  * NOD-443 (revisão 3 do PR #628, achado 7): o aviso de "Com você" que a dona põe na conversa de quem participa. Só isto

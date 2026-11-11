@@ -247,11 +247,16 @@ descrever("NOD-442 no Chrome real", () => {
     expect(e.rolagem).toBeLessThanOrEqual(0);
   });
 
-  it("2026-11-10 · Mover para… uma coluna com responsável move e aciona na hora (sem confirmar); o card já mostra o responsável começando", async () => {
+  it("2026-11-10 · Mover para… uma coluna com responsável abre o diálogo de handoff; Mover para move e aciona", async () => {
     await abrir(1440, true, true);
     await avaliar(cdp, `[...document.querySelectorAll('#quadro [data-act="tarefa-mover"][data-tarefa="t3"]')].find((b) => b.offsetParent).click()`);
     await ate(`[...document.querySelectorAll('#quadro [data-act="tarefa-mover-para"][data-coluna="fazendo"]')].some((b) => b.offsetParent)`);
     await avaliar(cdp, `[...document.querySelectorAll('#quadro [data-act="tarefa-mover-para"][data-coluna="fazendo"]')].find((b) => b.offsetParent).click()`);
+    // O diálogo do Multica: o título e quem pega; nada muda até Mover para.
+    await ate(`document.querySelector("dialog#qd-handoff[open]")`);
+    expect(await avaliar<string>(cdp, `document.querySelector("#qd-ho-titulo").textContent`)).toMatch(/^Mover .+ para Fazendo\?$/);
+    expect(await avaliar(cdp, "window.__chamadas.filter((c) => c[0] === 'mudar')")).toEqual([]);
+    await avaliar(cdp, `document.querySelector("#qd-handoff [data-ho='mover']").click()`);
     await ate(`window.__chamadas.some((c) => c[0] === "mudar")`);
     expect(await avaliar(cdp, "window.__chamadas.filter((c) => c[0] === 'mudar')")).toEqual([["mudar", "t3", { status: "fazendo" }]]);
     expect(await avaliar<boolean>(cdp, `!document.querySelector('#quadro [data-act="col-soltar"], #quadro [data-act="col-soltar-sem"]')`)).toBe(true);

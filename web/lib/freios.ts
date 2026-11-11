@@ -13,8 +13,8 @@ export const ECO_DO_AGENTE_MS = 10 * 60_000;
 /** Espelho de ESPERA (src/domain/freios-quadro.ts): pedir ajuda nunca fica travado. */
 const ESPERA: ReadonlySet<string> = new Set(["voce", "bloqueado"]);
 
-// ADR-162: `voce` não é coluna; o movimento para a espera da pessoa diz "Esperando você" (espelho de NOME_DA_ESPERA).
-const nomeDe = (cs: readonly { id: string; nome: string }[], id: string): string => cs.find((c) => c.id === id)?.nome ?? (id === "voce" ? "Esperando você" : id);
+/** ADR-162: `voce` não é coluna; o movimento para a espera da pessoa diz "Esperando você" (espelho de NOME_DA_ESPERA). */
+export const nomeDe = (cs: readonly { id: string; nome: string }[], id: string): string => cs.find((c) => c.id === id)?.nome ?? (id === "voce" ? "Esperando você" : id);
 
 /** Espelho de temTrava. */
 export function temTrava(t: TravaColuna | undefined): boolean {

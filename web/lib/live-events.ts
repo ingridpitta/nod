@@ -30,6 +30,12 @@ export type LiveEvents = {
    * stream nem relê nada.
    */
   retomar: () => void;
+  /**
+   * 2026-11-10: quando chegou o último DADO de verdade (frame ou ping; o `open` não conta). Um proxy que segura o stream
+   * (o túnel rápido do Cloudflare do servidor de teste) abre a conexão e nunca entrega um byte: quem lê a tela usa isto
+   * para cair numa releitura de segurança. 0 = nenhum ainda.
+   */
+  ultimoDado: () => number;
 };
 
 /** O que usamos do EventSource (o nativo do navegador satisfaz; o teste injeta um falso). */
@@ -156,6 +162,7 @@ export function criarLiveEvents(url: string, opcoes: OpcoesLiveEvents = {}): Liv
   let ultimo: { streamId: string; seq: number } | null = null;
   let ativo = false;
   let ultimoSinalEm = 0;
+  let ultimoDadoEm = 0;
   let vigia: unknown = null;
 
   const emitir = (ev: EventoLive): void => {
@@ -251,12 +258,13 @@ export function criarLiveEvents(url: string, opcoes: OpcoesLiveEvents = {}): Liv
     f.addEventListener("error", () => cair(f));
     // `ping` fica fora de TIPOS (espelho de TipoFrame): não é frame, só sinal de vida (sse.ts, PING_MS).
     f.addEventListener("ping", () => {
-      if (fonte === f) sinal();
+      if (fonte === f) { sinal(); ultimoDadoEm = relogio.agora(); }
     });
     for (const tipo of Object.keys(TIPOS)) {
       f.addEventListener(tipo, (ev) => {
         if (fonte !== f) return;
         sinal();
+        ultimoDadoEm = relogio.agora();
         const frame = interpretarFrame(ev.data);
         if (frame) aoFrame(frame, ev.lastEventId);
       });
@@ -275,6 +283,7 @@ export function criarLiveEvents(url: string, opcoes: OpcoesLiveEvents = {}): Liv
       fechar();
       emitir({ tipo: "conexao", estado: "parado", tentativa: 0, proximaEmMs: null });
     },
+    ultimoDado: () => ultimoDadoEm,
     subscribe(fn) {
       ouvintes.add(fn);
       return () => {

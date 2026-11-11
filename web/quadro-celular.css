@@ -25,7 +25,7 @@
   .qd-cl-acoes:focus-visible { top: 50%; right: 8px; width: 44px; height: 44px; clip: auto; overflow: visible; transform: translateY(-50%); display: inline-flex; align-items: center;
     justify-content: center; padding: 0; border: 0; border-radius: 10px; background: var(--surface-raised, var(--surface)); color: var(--ink);
     outline: 2px solid var(--focus-ring, var(--signal)); outline-offset: 0; }
-  .qd-cl-bt { display: grid; gap: 2px; min-width: 0; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; }
+  .qd-cl-bt { display: grid; align-content: center; gap: 2px; min-width: 0; min-height: 44px; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; }
   .qd-cl-tit { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: 16px; line-height: 1.3; }
   .qd-cl-sub { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12.5px; line-height: 1.3; color: var(--ink-3); }
   .qd-cl-sub .qd-id { font-size: inherit; color: inherit; }
@@ -34,6 +34,23 @@
   .qd-cl-av-vazio { width: 26px; border: 1.5px dashed var(--line-strong); border-radius: 50%; }
   .qd-cl > .qd-card-resp, .qd-cl > .qd-menu, .qd-cl > .qd-aviso { grid-column: 1 / -1; }
   .qd-cl-vazio { padding: 8px 20px 14px; font-size: 14px; color: var(--ink-3); }
+  /* 2026-11-11: a prioridade do card (as barrinhas do computador) antes do avatar; o botão tem o alvo de 44. */
+  .qd-cl.qd-cl-com-pri { grid-template-columns: minmax(0, 1fr) auto auto; gap: 0 4px; }
+  .qd-cl-pri { display: inline-flex; align-items: center; margin-right: 4px; }
+  .qd-cl-pri .qm-pri-bt { width: 44px; height: 44px; margin: 0; }
+  /* 2026-11-11 (auditoria de 44 px): a barra mínima no celular — o funil, a busca, a pílula de quem trabalha e as Opções. */
+  .qm-barra .qm-icbt, .qm-barra .qm-ativos { min-width: 44px; min-height: 44px; }
+  .qm-barra .qd-busca-in { min-width: 44px; min-height: 44px; }
+  /* ADA-302 (QA do #725): com o campo de 44 px, a busca não encolhe abaixo do conteúdo; a barra quebra linha em vez de rolar na horizontal. */
+  .qm-barra .qm-esq { flex-wrap: wrap; row-gap: 4px; }
+  .qm-barra .qd-busca-l, .qm-barra .qd-busca { min-width: min-content; }
+  .qm-barra .qd-busca { height: auto; min-height: 44px; }
+  /* Os popovers da barra: os itens, a busca do funil, os seletores, os interruptores e os chips removíveis. */
+  .qm-pop .qm-it, .qm-pop .qm-fil-in, .qm-pop .qm-sel, .qm-pop .qm-seg-bt, .qm-pop .qm-tog, .qm-pop .qm-inv, .qm-chip-x, .qm-sub .qm-it { min-height: 44px; }
+  .qm-pop button, .qm-chip-x { min-width: 44px; }
+  /* A dica do Backlog (a .qd-col-dica do computador) logo abaixo do cabeçalho do grupo. */
+  .qd-cg-dica { margin: -6px 20px 6px; font-size: 12.5px; }
+  .qd-cc .qd-cg-dica { margin-inline: 14px; }
 
   /* ---------- Visão no título (passo 3) ---------- */
   .qd-cel-topo { display: flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 4px 0 16px; }
@@ -74,13 +91,46 @@
 
   /* ---------- O ⋯ do topo (passo 7) ---------- */
   .qd-cel-it-sub { margin-left: auto; font-size: 14px; color: var(--ink-3); }
+  /* 2026-11-10: o que mover faz (a mesma linha da dica ao arrastar), discreta à direita. */
+  .qd-cel-nota { margin-left: auto; font-size: 13px; color: var(--ink-3); text-align: right; }
   .qd-cel-perigo { color: var(--danger, var(--ink)); }
   .qd-cel-teste { margin: 8px 16px 4px; font-size: 12px; color: var(--ink-3); }
   .qd-cel-meta { display: flex; padding: 4px 16px 8px; }
   .qd-cel-meta .qd-meta-in { flex: 1; }
   .qd-cel-imp { margin: 0 16px 6px; font-size: 13px; color: var(--ink-3); }
   .qd-cel-data input { margin-left: auto; min-height: 44px; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: 16px; }
+/* 2026-11-10: a tarefa aberta no celular usa a MESMA linha do tempo do computador (web/telas/linha-do-tempo.ts, classes
+   ta-* de web/tarefa-aberta.css). Aqui só o que o toque pede: alvo de 44, campo de 16 (sem zoom do iOS), ações sempre à
+   vista, menus que cabem na largura. */
+  .qd-tarefa-cel .ta-tempo { margin-top: 4px; }
+  .qd-tarefa-cel .ta-th { padding: 10px 12px; }
+  .qd-tarefa-cel .ta-com-cab { align-items: center; }
+  .qd-tarefa-cel .ta-com-acoes { opacity: 1; flex-wrap: wrap; margin-left: -6px; width: 100%; }
+  .qd-tarefa-cel .ta-com-ac, .qd-tarefa-cel .ta-th-responder, .qd-tarefa-cel .ta-campo-fechar, .qd-tarefa-cel .ta-run-tg, .qd-tarefa-cel .ta-ev-acao,
+  .qd-tarefa-cel .ta-ev-mais-bt, .qd-tarefa-cel .ta-run-mini { min-height: var(--cel-alvo, 44px); min-width: var(--cel-alvo, 44px); font-size: 13px; }
+  .qd-tarefa-cel .ta-th-responder { margin-left: 0; }
+  .qd-tarefa-cel .ta-resps { margin-left: 4px; padding-left: 12px; }
+  .qd-tarefa-cel .ta-campo-resp.qd-com-form { margin-left: 0; }
+  .qd-tarefa-cel .ta-campo .qd-com-in { font-size: 16px; min-height: var(--cel-alvo, 44px); }
+  /* 2026-11-11 (auditoria de 44 px): Repetir, Parar e Ver o trabalho do bloco do run. */
+  .qd-tarefa-cel .ta-trans-busca { min-height: var(--cel-alvo, 44px); font-size: 16px; }
+  .qd-tarefa-cel .ta-dialogo-cab .qd-link { min-height: var(--cel-alvo, 44px); min-width: var(--cel-alvo, 44px); }
+  .qd-tarefa-cel .ta-run-ac { display: inline-flex; align-items: center; justify-content: center; min-height: var(--cel-alvo, 44px); min-width: var(--cel-alvo, 44px); }
+  .qd-tarefa-cel .ta-pe { position: sticky; bottom: 0; z-index: 2; padding: 8px 0 calc(env(safe-area-inset-bottom) + 8px); background: var(--surface); }
+  .qd-tarefa-cel .ta-enviar { min-height: var(--cel-alvo, 44px); min-width: var(--cel-alvo, 44px); justify-content: center; }
+  .qd-tarefa-cel .ta-enviar kbd { display: none; }
+  .qd-tarefa-cel .ta-chip, .qd-tarefa-cel .ta-chip-aviso { height: var(--cel-alvo, 44px); }
+  .qd-tarefa-cel .ta-chip-menu { position: fixed; left: 12px; right: 12px; bottom: calc(env(safe-area-inset-bottom) + 72px); width: auto; }
+  .qd-tarefa-cel .ta-chip-op { min-height: var(--cel-alvo, 44px); }
+  .qd-tarefa-cel .ta-trabalhando, .qd-tarefa-cel .ta-espera { min-height: var(--cel-alvo, 44px); }
+  .qd-tarefa-cel .ta-cab-dir { margin-left: auto; }
+  .qd-tarefa-cel .ta-run { padding: 8px 10px; }
+  .qd-tarefa-cel .ta-run-passo { white-space: normal; }
+  .qd-tarefa-cel .ta-editar-in { font-size: 16px; }
+  .qd-tarefa-cel .ta-editar-pe .qd-link, .qd-tarefa-cel .ta-editar-pe .qd-com-bt { min-height: var(--cel-alvo, 44px); }
+  .ta-citar { height: var(--cel-alvo, 44px); padding: 0 16px; font-size: 14px; }
 }
 .qd-com-resposta { margin-left: 22px; padding-left: 10px; border-left: 1.6px solid var(--line); } /* 2026-11-10: a resposta na thread, recuada */
 .qd-t-espera { margin: 6px 0 0; font-size: 12.5px; color: var(--ink-2); } /* 2026-11-10: a pergunta do bot é comentário */
 .qd-t-espera span { filter: grayscale(1); }
+

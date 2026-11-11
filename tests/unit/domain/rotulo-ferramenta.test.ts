@@ -118,7 +118,7 @@ describe("ferramentaEmUso", () => {
 
 describe("frameDaFerramenta (QA do #508)", () => {
   it("leva nome, rótulo e emUso", () => {
-    expect(frameDaFerramenta("mcp__nod__linear__LINEAR_LIST_ISSUES")).toEqual({ nome: "mcp__nod__linear__LINEAR_LIST_ISSUES", rotulo: rotuloFerramenta("mcp__nod__linear__LINEAR_LIST_ISSUES"), emUso: { texto: "Usando Linear", frentes: false } });
+    expect(frameDaFerramenta("mcp__nod__linear__LINEAR_LIST_ISSUES")).toEqual({ nome: "mcp__nod__linear__LINEAR_LIST_ISSUES", rotulo: rotuloFerramenta("mcp__nod__linear__LINEAR_LIST_ISSUES"), emUso: { texto: "Usando Linear", frentes: false }, resumo: null, classe: "app", ferramenta: "linear__LINEAR_LIST_ISSUES" });
   });
   it("compor.ts: todo turno.atividade de ferramenta sai por frameDaFerramenta (a ponte e o laço local)", () => {
     const compor = readFileSync(new URL("../../../src/adapters/http/compor.ts", import.meta.url), "utf8");

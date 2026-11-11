@@ -70,7 +70,7 @@ const FRASE: Record<EstadoDoTrabalho, { curta: string; longa: string }> = {
   esperando: { curta: "esperando", longa: "esperando a CI, um colega ou um comando" },
   falhou: { curta: "falhou", longa: "falhou e vai tentar de novo" },
 };
-const VERBO: Record<EstadoDoTrabalho, string> = { rodando: "executando", fila: "na fila", esperando: "esperando", falhou: "falhou" };
+const VERBO: Record<EstadoDoTrabalho, string> = { rodando: "trabalhando", fila: "na fila", esperando: "esperando", falhou: "falhou" };
 
 /** O anel com a inicial: uma pessoa; você, cheio. */
 export function anel(iniciais: string, rotulo: string, voce = false): Html {
@@ -174,6 +174,10 @@ export interface Card {
   espera?: { texto: string; voce: boolean };
   /** Quadro minimalista (2026-11-10): o ícone de prioridade antes do código (já pronto, web/telas/opcoes-quadro.ts). */
   prioridade?: Html;
+  /** 2026-11-10: o nome da prioridade; com o card editável (arrastavel), as barrinhas viram o botão do seletor. */
+  prioridadeNome?: string;
+  /** O seletor de prioridade está aberto neste card (o menu vem em `menu`). */
+  priAberta?: boolean;
   /** A descrição em até duas linhas, debaixo do título (propriedade do card ligada). */
   descricao?: string;
   /** "Atualizado há 1 h", à direita do rodapé (quando não há o "parada há" da coluna). */
@@ -199,6 +203,17 @@ function extrasDoCard(c: Card): string {
 const COMENTARIO = svg('<path d="M4.5 18.5V6.5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2V14a2 2 0 0 1-2 2H8z"/>', "qm-ic-com", 12, 1.8);
 
 export const fraseEsperando = (motivo: string | null): string => (motivo ? `Esperando · ${motivo}` : "Esperando");
+
+/**
+ * 2026-11-10 (a edição inline do Multica): no card editável, clicar nas barrinhas abre o seletor de prioridade (o recibo
+ * traz o Desfazer). Sem botão pesado: o próprio ícone, com o foco e o hover discretos.
+ */
+export function prioridadeDoCard(c: Card): string {
+  if (!c.prioridade) return "";
+  if (!c.arrastavel || !c.prioridadeNome) return String(c.prioridade);
+  return `<button type="button" class="qm-pri-bt" data-act="tarefa-prioridade" data-tarefa="${esc(c.id)}" aria-haspopup="menu" aria-expanded="${!!c.priAberta}"${c.priAberta ? ' aria-controls="qd-menu"' : ""}` +
+    ` aria-label="${esc(`Prioridade: ${c.prioridadeNome}. Mudar`)}" title="${esc(`Prioridade: ${c.prioridadeNome}`)}">${c.prioridade}</button>`;
+}
 
 /** O "Mover para…" do card (ADR-142, revisão do PR #622): leva ao mesmo lugar que arrastar, sem precisar de mouse. */
 export function botaoDeMover(c: Card): string {
@@ -299,7 +314,7 @@ export function card(c: Card): Html {
   const l3 = c.pr || c.tags?.length ? `<span class="qd-tags">${c.pr ? `<span class="qd-tag qd-tag-pr" title="${esc(c.pr.titulo)}"><i class="qd-pr-ponto qd-pr-${c.pr.tom}" aria-hidden="true"></i>${esc(c.pr.texto)}<span class="qd-sr"> (${esc(c.pr.titulo)})</span></span>` : ""}${(c.tags ?? []).map((t) => `<span class="qd-tag">${esc(t)}</span>`).join("")}${extrasDoCard(c)}</span>` : extrasDoCard(c) ? `<span class="qd-tags">${extrasDoCard(c)}</span>` : "";
   const classe = cl("qd-card", c.menu && "qd-com-menu", c.motivo && "qd-bloqueado", c.brilho && "qd-brilho", c.aviso && "qd-com-aviso", c.classe && esc(c.classe));
   return h(`<li class="${classe}" data-tarefa="${esc(c.id)}"${c.arrastavel ? ' draggable="true"' : ""}>` +
-    `<div class="qd-card-l1">${c.prioridade ?? ""}<span class="qd-id">${c.codigoHtml ?? esc(c.codigo ?? c.id)}</span>${l1}</div>` +
+    `<div class="qd-card-l1">${prioridadeDoCard(c)}<span class="qd-id">${c.codigoHtml ?? esc(c.codigo ?? c.id)}</span>${l1}</div>` +
     `<button type="button" class="qd-card-bt" data-act="abrir-tarefa" data-id="${esc(c.id)}" aria-label="${esc(rotuloDoCard(c))}"><span class="qd-card-tit">${c.tituloHtml ?? esc(c.titulo)}</span></button>` +
     (c.descricao ? `<p class="qm-desc">${esc(c.descricao)}</p>` : "") +
     l3 + resp + (quem || quando || coms ? `<div class="qd-card-pe">${quem}${coms}${quando}</div>` : "") + botaoDeMover(c) + (c.menu ?? "") + `</li>`);
@@ -349,6 +364,8 @@ export interface Coluna {
   trava?: string;
   /** NOD-420: o prazo (SLA) da coluna, em palavras ("2 h"), discreto ao lado do nome. */
   prazo?: string;
+  /** 2026-11-10 (o backlog_hint do Multica): uma linha discreta debaixo do cabeçalho ("Parada no Backlog: …"). */
+  dica?: string;
   vazio?: string;
   mais?: number;
   /** O `data-act` do "e mais N" (a ação de mostrar o resto da coluna). */
@@ -399,6 +416,7 @@ export function coluna(c: Coluna): Html {
     : `${ic}${nome}<span class="qd-n">${n}</span>`);
   return h(`<section class="${base}" aria-label="${esc(`${c.nome}, ${n}`)}" ${dados}${presa}>` +
     `<h3 class="qd-col-cab">${cab}${trava}${prazo}${add}${c.apos ?? ""}</h3>` +
+    (c.dica ? `<p class="qd-col-dica">${esc(c.dica)}</p>` : "") +
     `<ul class="qd-col-lista">${cards.join("")}${mais}${vazio}</ul></section>`);
 }
 
@@ -479,18 +497,6 @@ export function barra(o: { filtro: Filtro; trabalhando?: QuemRoda[]; curto?: boo
 /** O selo do recurso em teste (decisão da NOD-343: o quadro nasce só para o Marlon). */
 export function seloEmTeste(texto = "Em teste · só você vê", titulo = "Recurso em teste, liberado só para a sua conta"): Html {
   return h(`<span class="qd-flag" title="${esc(titulo)}">${esc(texto)}</span>`);
-}
-
-/** Meta, prazo e progresso: uma linha discreta acima do quadro. */
-export function meta(o: { objetivo: string; prazo: string; feitas: number; total: number; falta?: string; risco?: string; selo?: Html }): Html {
-  const inteiro = (n: number): number => (Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0);
-  const total = inteiro(o.total);
-  const feitas = Math.min(inteiro(o.feitas), total);
-  const pct = total ? Math.round((100 * feitas) / total) : 0;
-  return h(`<div class="qd-meta"><span class="qd-meta-obj">${esc(o.objetivo)}</span><span class="qd-meta-prazo">${esc(o.prazo)}</span>` +
-    `<span class="qd-barra" role="progressbar" aria-label="Progresso da meta" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${feitas}"><i style="width:${pct}%"></i></span>` +
-    `<span class="qd-meta-n">${feitas} de ${total} feitas</span>${o.falta ? `<span class="qd-meta-falta">${esc(o.falta)}</span>` : ""}` +
-    `${o.risco ? `<span class="qd-risco">${esc(o.risco)}</span>` : ""}${o.selo ?? ""}</div>`);
 }
 
 /* ---------- Celular: o quadro vira lista agrupada por estado ---------- */

@@ -3,7 +3,10 @@
  * NOME que o CLI viu (mcp__nod__<nome>, mcp__<servidor>__<nome> no Codex, ou nativa como Bash) e
  * nunca input/resultado: o cartão diz o que o agente está fazendo, não o conteúdo que ele tocou.
  */
+import type { DadosDaAtividade } from "../contracts/frame.ts";
+import { RESUMO_DO_PASSO_MAX } from "../contracts/quadro-comentarios.ts";
 import type { EventoStream } from "../contracts/turno.ts";
+import { classeDaFerramenta, nomeCurtoDaFerramenta, redigirResumo, resumoDaFerramenta } from "./resumo-do-passo.ts";
 /**
  * NOD-352 (definido em 2026-10-28): cada ferramenta do nod no passado (etapas, resumo gravado, último passo do subagente)
  * e no presente (cabeçalho do pensamento, grupo que roda, leitor de tela). Verbo + objeto genérico, como as copies do
@@ -254,15 +257,17 @@ export const ROTULO_DA_ACAO_MAX = 120;
 
 /** O frame `turno.atividade` de uma ferramenta: o mesmo nos dois caminhos (ponte HTTP e laço local); `id` do tool_use (NOD-353). */
 export function frameVivoDoEvento(ev: EventoStream): { tipo: "turno.atividade"; dados: ReturnType<typeof frameDaFerramenta> } | { tipo: "turno.acao_fim"; dados: { id: string; falhou: boolean } } | null {
-  if (ev.tipo === "tool_use") return { tipo: "turno.atividade", dados: frameDaFerramenta(ev.nome, ev.id) };
+  // ADR-165: no laço local o servidor É o executor — o resumo sai do input aqui (redigido), como o app do Mac o monta.
+  if (ev.tipo === "tool_use") return { tipo: "turno.atividade", dados: frameDaFerramenta(ev.nome, ev.id, resumoDaFerramenta(ev.nome, ev.input)) };
   // O fim de cada chamada leva só o Falhou de tool_result.isError (nunca o conteúdo do resultado).
   if (ev.tipo === "tool_result") return { tipo: "turno.acao_fim", dados: { id: ev.toolUseId, falhou: ev.isError } };
   return null;
 }
 
 /** NOD-353: o desktop e o motor repassam à ponte a chamada e o fim dela (o mesmo mapa nos dois). */
-export function repassarAcaoDoEvento(alvo: { ferramenta(turnoId: string, nome: string, id?: string): void; fimDaFerramenta(turnoId: string, id: string, falhou: boolean): void }, turnoId: string, ev: EventoStream): void {
-  if (ev.tipo === "tool_use") alvo.ferramenta(turnoId, ev.nome, ev.id);
+/** ADR-165: com o resumo de uma linha do argumento (`resumoDaFerramenta`, já redigido), nunca o input inteiro. */
+export function repassarAcaoDoEvento(alvo: { ferramenta(turnoId: string, nome: string, id?: string, resumo?: string): void; fimDaFerramenta(turnoId: string, id: string, falhou: boolean): void }, turnoId: string, ev: EventoStream): void {
+  if (ev.tipo === "tool_use") alvo.ferramenta(turnoId, ev.nome, ev.id, resumoDaFerramenta(ev.nome, ev.input));
   else if (ev.tipo === "tool_result") alvo.fimDaFerramenta(turnoId, ev.toolUseId, ev.isError);
 }
 
@@ -271,7 +276,12 @@ function comTeto(e: FerramentaEmUso): FerramentaEmUso {
   return { ...e, texto: e.texto.slice(0, ROTULO_DA_ACAO_MAX) };
 }
 
-/** O laço local manda o mesmo frame da ponte, com o `emUso` da fala viva (NOD-348) e o fim de cada chamada (NOD-353). */
-export function frameDaFerramenta(nomeCli: string, id?: string): { nome: string; rotulo: string; emUso: FerramentaEmUso; id?: string } {
-  return { nome: nomeCli, rotulo: rotuloFerramenta(nomeCli).slice(0, ROTULO_DA_ACAO_MAX), emUso: comTeto(ferramentaEmUso(nomeCli)), ...(id ? { id } : {}) };
+/**
+ * O laço local manda o mesmo frame da ponte, com o `emUso` da fala viva (NOD-348) e o fim de cada chamada (NOD-353).
+ * ADR-165: `resumo` (o do executor) é cortado em RESUMO_DO_PASSO_MAX e redigido DE NOVO aqui, no servidor; `classe` e
+ * `ferramenta` (o nome curto) saem do nome. O `seq` entra depois de gravado (passos-vivos.ts).
+ */
+export function frameDaFerramenta(nomeCli: string, id?: string, resumo?: string | null): Omit<DadosDaAtividade, "seq"> {
+  const r = typeof resumo === "string" ? redigirResumo(resumo, RESUMO_DO_PASSO_MAX) : "";
+  return { nome: nomeCli, rotulo: rotuloFerramenta(nomeCli).slice(0, ROTULO_DA_ACAO_MAX), emUso: comTeto(ferramentaEmUso(nomeCli)), ...(id ? { id } : {}), resumo: r || null, classe: classeDaFerramenta(nomeCli), ferramenta: nomeCurtoDaFerramenta(nomeCli) };
 }

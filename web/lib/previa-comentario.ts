@@ -8,7 +8,7 @@ import type { ColunaDto } from "../../src/contracts/quadro.ts";
  * bot. 2026-11-10: o computador mostra os chips da prévia do servidor (GET …/comentarios/previa); este espelho segue no
  * campo do celular, sem thread. O responsável é acionado em qualquer coluna; @todos o tira.
  */
-export type PreviaDoComentario = { acionados: string[]; motivo: "andamento" | "mencao" | "todos" | "sem_responsavel" };
+export type PreviaDoComentario = { acionados: string[]; motivo: "andamento" | "mencao" | "todos" | "sem_responsavel" | "nota" };
 
 type Agente = { id: string; nome: string; nod?: boolean };
 
@@ -40,7 +40,12 @@ function mencionadosNaTela(texto: string, agentes: readonly Agente[]): Agente[] 
 /** Igual a `mencionaTodos` do domínio: @todos ou @all inteiros. */
 const TODOS = /(^|[^\p{L}\p{N}_])@(todos|all)(?![\p{L}\p{N}_])/iu;
 
+/** Igual a `ehNota` e `NOTA_NAO_ACIONA` do domínio (2026-11-10, o /note do Multica): anotação, não aciona ninguém. */
+const NOTA = /^\s*\/note(?![\p{L}\p{N}_])/iu;
+export const NOTA_NAO_ACIONA = "nota, não aciona";
+
 export function previaDoComentario(p: { tarefa: { agenteId: string | null; status: string }; colunas: readonly Pick<ColunaDto, "id" | "grupo">[]; texto: string; agentes: readonly Agente[] }): PreviaDoComentario {
+  if (NOTA.test(p.texto)) return { acionados: [], motivo: "nota" };
   const todos = TODOS.test(p.texto);
   const responsavel = !todos && p.tarefa.agenteId ? p.agentes.find((a) => a.id === p.tarefa.agenteId && !a.nod) ?? null : null;
   const mencoes = mencionadosNaTela(p.texto, p.agentes);
@@ -56,6 +61,7 @@ export function textoDaPrevia(p: PreviaDoComentario, _nomeDaColuna?: string | nu
   const n = p.acionados;
   if (n.length === 1) return `${n[0]} vai ver agora`;
   if (n.length > 1) return `${n.slice(0, -1).join(", ")} e ${n.at(-1)} vão ver agora`;
+  if (p.motivo === "nota") return NOTA_NAO_ACIONA;
   if (p.motivo === "todos") return "@todos é anúncio: não aciona o responsável (@nome chama um bot)";
   return "fica só registrado (a tarefa não tem responsável; @nome chama um bot)";
 }

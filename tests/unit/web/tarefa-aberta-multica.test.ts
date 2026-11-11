@@ -32,7 +32,7 @@ describe("linha do tempo", () => {
     const h = linhaDoTempo(dados({
       comentarios: [com("c1")],
       runs: [run("r1", { comentarioId: "c1", estado: "rodando", terminouEm: null, turnoAtual: "tr1" }), run("r2", { comentarioId: "c1", estado: "falhou", motivo: `caiu ${MAL}`, criadoEm: agora - 25 * min })],
-      passos: (turno) => (turno === "tr1" ? { ultimo: "Lendo o arquivo", n: 3, lista: [] } : null),
+      passos: (turno) => (turno === "r1" ? { ultimo: "Lendo o arquivo", n: 3, lista: [], carregado: true } : null),
     }));
     expect(h).toContain('data-run-vivo="tr1">Lendo o arquivo</p>');
     expect(h).toContain("› 3 passos");
@@ -73,7 +73,7 @@ describe("chips do campo", () => {
 describe("lateral e formatos", () => {
   it("o chip do topo junta quem roda; o Registro diz quando não há custo; Runs no tempo tem uma barra por run", () => {
     const runs = [run("r1", { estado: "rodando", terminouEm: null }), run("r2", { agenteId: "gil", agenteNome: "Gil", estado: "rodando", terminouEm: null })];
-    expect(chipTrabalhando(runs, agente)).toContain("Dev 1 e Gil estão trabalhando");
+    expect(chipTrabalhando(runs, agente)).toContain("2 agentes trabalhando");
     expect(chipTrabalhando([run("r3")], agente)).toBe("");
     expect(registroDeExecucao({ runs: [run("r3")], agente, agora, aberto: true })).toContain("Sem custo registrado");
     expect(registroDeExecucao({ runs: [run("r3", { custoUsd: 0.5, tokens: 12000 })], agente, agora, aberto: true })).toContain("concluído · 9 min · US$ 0,50 · 12 mil tokens");

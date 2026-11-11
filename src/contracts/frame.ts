@@ -1,11 +1,14 @@
+import type { PassoDoRun } from "./quadro-comentarios.ts";
+
 export type TipoFrame =
   | "mensagem.nova"
   /** O turno começou ou saiu da fila. NOD-348: traz `agente_id` (o bot do turno; na sala, cada turno é de um bot). */
   | "turno.iniciado"
   | "turno.delta"
   /**
-   * Ferramenta chamada no turno vivo: só {nome, rotulo, emUso}, nunca input/resultado (`frameDaFerramenta` em
-   * src/domain/rotulo-ferramenta.ts). Separa as etapas da atividade; `emUso` é a linha viva no presente ("Rodando um comando", "Usando Linear"; NOD-348, NOD-352).
+   * Ferramenta chamada no turno vivo: `DadosDaAtividade` (abaixo), nunca o input inteiro nem o resultado
+   * (`frameDaFerramenta` em src/domain/rotulo-ferramenta.ts). Separa as etapas da atividade; `emUso` é a linha viva no
+   * presente ("Rodando um comando", "Usando Linear"; NOD-348, NOD-352). ADR-165: mais `seq`, `resumo`, `classe`, `ferramenta`.
    */
   | "turno.atividade"
   /** NOD-353: {id, falhou} — a chamada `id` (o mesmo do turno.atividade) terminou; `falhou` vem de tool_result.isError. */
@@ -77,4 +80,21 @@ export type FrameSse = {
   pessoaId: string;
   tipo: TipoFrame;
   dados: Record<string, unknown>;
+};
+
+/**
+ * Os dados do frame `turno.atividade` (ADR-165, 2026-11-10). `seq`: o do passo gravado em turno_passos (o mesmo da rota
+ * GET …/runs/:turno/passos; a tela mescla por ele); null = a gravação falhou e o frame saiu mesmo assim. `resumo`: uma
+ * linha do argumento, redigida no executor e de novo no servidor (até 160); null = o app antigo não mandou ou não havia o
+ * que dizer. `classe`: o ícone; `ferramenta`: o nome curto (agrupa 3 ou mais iguais seguidas).
+ */
+export type DadosDaAtividade = {
+  nome: string;
+  rotulo: string;
+  emUso: { texto: string; frentes: boolean };
+  id?: string;
+  seq: number | null;
+  resumo: string | null;
+  classe: PassoDoRun["classe"];
+  ferramenta: string;
 };

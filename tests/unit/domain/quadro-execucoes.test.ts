@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { MOTIVOS_FALHA, MOTIVOS_INTERRUPCAO } from "../../../src/contracts/motivos.ts";
 import { AVISO_SEM_SAIDA, SEM_SAIDA_MAX, TENTATIVAS_AUTOMATICAS_MAX, VOLTA_CI_SEM_CHECKS_MS } from "../../../src/contracts/quadro-execucoes.ts";
 import type { DesfechoExecucao } from "../../../src/contracts/quadro-execucoes.ts";
-import { classificarFalha, decidirAposTermino, type DesfechoCadeia, entradaDoNovoTrabalho, entradaDoReacionamento, entradaDoRecado, esperandoNaCadeia, estadoDaExecucao, estadoLinha, molduraDoRecado, saidaDoTurno, tentativasAutomaticasSeguidas, voltaCiPronta, voltaNaTela } from "../../../src/domain/quadro-execucoes.ts";
+import { classificarFalha, decidirAposTermino, type DesfechoCadeia, entradaDoNovoTrabalho, entradaDoReacionamento, entradaDoRecado, esperandoNaCadeia, estadoDaExecucao, estadoLinha, molduraDoRecado, saidaDoTurno, tentativasAutomaticasSeguidas, voltaCiPronta, voltaNaTela, voltaPorEventoPronta } from "../../../src/domain/quadro-execucoes.ts";
 
 const falhou = (m: Partial<DesfechoCadeia>): DesfechoCadeia => ({ estado: "interrompido", motivoInterrupcao: null, motivoFalha: null, parado: false, ...m });
 const exec = (m: { canceladaEm?: number | null; motivo?: string | null; desfecho?: DesfechoExecucao | null } = {}) => ({ canceladaEm: null, motivo: null, desfecho: null, ...m });
@@ -242,5 +242,30 @@ describe("ADA-232: estadoLinha (o card numa linha)", () => {
   it("voltaNaTela tira o turnoId interno", () => {
     expect(voltaNaTela({ ...volta, turnoId: "x" })).toEqual(volta);
     expect(voltaNaTela(null)).toBeNull();
+  });
+});
+
+describe("voltaPorEventoPronta (2026-11-10, os wakeups do Multica)", () => {
+  const pr = (estado: "aberto" | "mergeado" | "fechado", conflito = false) => ({ estado, ci: "ok" as const, conflito, vistoEm: 0 });
+  it("merge: só quando o PR sai de aberto; PR não visto dorme", () => {
+    expect(voltaPorEventoPronta("merge", { pr: pr("aberto"), desde: 0, agora: 1 })).toBe(false);
+    expect(voltaPorEventoPronta("merge", { pr: pr("mergeado"), desde: 0, agora: 1 })).toBe(true);
+    expect(voltaPorEventoPronta("merge", { pr: pr("fechado"), desde: 0, agora: 1 })).toBe(true);
+    expect(voltaPorEventoPronta("merge", { pr: null, desde: 0, agora: 1 })).toBe(false);
+  });
+  it("conflito: o PR aberto com conflito, ou que saiu de aberto", () => {
+    expect(voltaPorEventoPronta("conflito", { pr: pr("aberto"), desde: 0, agora: 1 })).toBe(false);
+    expect(voltaPorEventoPronta("conflito", { pr: pr("aberto", true), desde: 0, agora: 1 })).toBe(true);
+    expect(voltaPorEventoPronta("conflito", { pr: pr("mergeado"), desde: 0, agora: 1 })).toBe(true);
+  });
+  it("tarefa: o estado esperado (feito = o grupo), qualquer dos três sem estado, cancelada ou apagada", () => {
+    const t = (status: string, grupo: string) => ({ status, grupo });
+    expect(voltaPorEventoPronta("tarefa", { tarefa: t("fazendo", "iniciado"), estado: "feito", desde: 0, agora: 1 })).toBe(false);
+    expect(voltaPorEventoPronta("tarefa", { tarefa: t("c-entregue", "feito"), estado: "feito", desde: 0, agora: 1 })).toBe(true);
+    expect(voltaPorEventoPronta("tarefa", { tarefa: t("revisao", "iniciado"), estado: "feito", desde: 0, agora: 1 })).toBe(false);
+    expect(voltaPorEventoPronta("tarefa", { tarefa: t("revisao", "iniciado"), estado: null, desde: 0, agora: 1 })).toBe(true);
+    expect(voltaPorEventoPronta("tarefa", { tarefa: t("bloqueado", "iniciado"), estado: "bloqueado", desde: 0, agora: 1 })).toBe(true);
+    expect(voltaPorEventoPronta("tarefa", { tarefa: t("cancelado", "fechado"), estado: "feito", desde: 0, agora: 1 })).toBe(true);
+    expect(voltaPorEventoPronta("tarefa", { tarefa: null, estado: "feito", desde: 0, agora: 1 })).toBe(true);
   });
 });

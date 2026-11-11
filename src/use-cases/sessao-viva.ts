@@ -5,6 +5,7 @@ import { ateOPrimeiroAnexo, ateOPrimeiroComando } from "../domain/ordem-das-fala
 import { autoriaAgente, autoriaPessoa, evento } from "./autoria-evento.ts";
 import { contaminarSeAbsorveuDeFora } from "./coordenar-trabalhos.ts";
 import type { CasoDeUso, Deps } from "./tipos.ts";
+import { avisosDeRecadoLido } from "./quadro-execucoes.ts";
 
 /**
  * Sessão viva (definido em 2026-10-01, ADR-067): o turno do Claude Code não acaba na primeira resposta. Enquanto há
@@ -102,11 +103,12 @@ export const confirmarNaSessao: CasoDeUso<{ turnoId: string; executor: Executor;
   // NOD-418 (emenda da ADR-083): os recados da tarefa do quadro oferecidos pela renovação saem lidos na confirmação.
   // Os ids são de quadro_recados: os de turno não casam lá, e os de recado não casam nos turnos.
   await deps.repos.quadroExecucoes.entregarRecados(e.ids, turno.id);
+  const lidos = await avisosDeRecadoLido(deps, e.ids);
   // Revisão do épico (S18, 2026-10-08): no turno de um trabalho, as confirmadas são os recados da faixa DELE (a fala da
   // pessoa na tela da task, o mandar_para_task) — o absorverNaSessao só olha a conversa (`trabalho_id is null`).
   const absorvidos = turno.trabalhoId ? await deps.repos.turnos.absorverDoTrabalho(turno, e.ids) : await deps.repos.turnos.absorverNaSessao(turno, e.ids);
   if (turno.trabalhoId) await contaminarSeAbsorveuDeFora(deps, turno.id, absorvidos);
-  return { data: { confirmadas: absorvidos.length }, events: eventosDeAbsorcao(deps, e.executor, turno.id, absorvidos) };
+  return { data: { confirmadas: absorvidos.length }, events: [...eventosDeAbsorcao(deps, e.executor, turno.id, absorvidos), ...lidos] };
 };
 
 function eventosDeAbsorcao(deps: Deps, executor: Executor, turnoId: string, absorvidos: readonly Turno[]) {

@@ -11,17 +11,22 @@
  * - O modo é por conversa e só em memória: trocar de conversa (ou sair dela) volta para Conversa, sem animação.
  */
 import { previaDoComentario, textoDaPrevia } from "./previa-comentario.ts";
-import { direcaoDaTroca, ehModo, ADIAR_ATE_MS, ARRASTO_ATE_MS, ECO_DA_PESSOA_MS, GESTO_MS, RESERVA_MS, movimentoDaTroca, releComecando, TURNO_MUDA_A_EXECUCAO, type ModoDaConversa } from "./quadro.ts";
-import { comColunas, FAIXA_DO_PRAZO, fraseDoErroDeColuna, nomeRepetido, passoDeMover, comecaAoEntrar, porqueNaoRecebeCard, porqueNaoRemove, prazoEmMin, prazoLegivelMin, reciboDaResposta, reciboDeMover, saidaComErroDesiste, seletorDoFocoDaColuna, soltarEm, type EdicaoDeColuna, type Lado, type UnidadeDePrazo } from "./colunas.ts";
+import { direcaoDaTroca, ehModo, ADIAR_ATE_MS, ARRASTO_ATE_MS, ECO_DA_PESSOA_MS, GESTO_MS, RESERVA_MS, movimentoDaTroca, releComecando, TURNO_MUDA_A_EXECUCAO, VIGIA_DO_QUADRO_MS, deveVigiarQuadro, type ModoDaConversa } from "./quadro.ts";
+import { dicaDeMover, nomeNaPrevia, previaDaTarefa } from "./acionamento.ts";
+import { abrirDialogoDeHandoff } from "../telas/dialogo-handoff.ts";
+import { aceitaPassagem, comColunas, FAIXA_DO_PRAZO, fraseDoErroDeColuna, nomeRepetido, passoDeMover, porqueNaoRemove, prazoEmMin, prazoLegivelMin, reciboDaResposta, reciboDeMover, saidaComErroDesiste, seletorDoFocoDaColuna, soltarEm, type EdicaoDeColuna, type Lado, type UnidadeDePrazo } from "./colunas.ts";
 import { ErroApi, ehRecusaDoServidor } from "./erro-api.ts";
+import { aplicarMudanca, desfazerMudanca, ESPERE_A_ANTERIOR, patchDoMover, reaplicarNoAr, tiqueDoRelogio, TIQUE_MS, type MudancaNoAr } from "./otimista-do-quadro.ts";
 import { anunciarEm } from "./posicao-da-lista.ts";
 import { campoComFocoNoToque, criarGestoNaTela, rolagemDoPrograma } from "./gesto-na-tela.ts";
 import { focarSemRolar, guardarRolagem, restaurarRolagem, seletorDoFocoDoCard, type RolagemGuardada } from "./rolagem-guardada.ts";
 import { criarAlvosDeRolagem, criarReservaDeAltura } from "./alvo-de-rolagem-na-tela.ts";
 import { COLADO_PX } from "./alvo-de-rolagem.ts";
 import { acharAncora, topoPelaAncora } from "./ancora-de-leitura.ts";
+import type { PassosDoRunDto } from "../../src/contracts/quadro-comentarios.ts";
 import type { CamposDeLabel } from "../../src/contracts/quadro-labels.ts";
-import type { EntradaHistoricoDto, GrupoColuna, LinhaMuralDto, ModoConversa, QuadroDaPessoaDto, QuadroDto, TarefaDto } from "../../src/contracts/quadro.ts";
+import type { PreviaDoMoverDto } from "../../src/contracts/previa-mover.ts";
+import type { ColunaDto, EntradaHistoricoDto, GrupoColuna, LinhaMuralDto, ModoConversa, QuadroDaPessoaDto, QuadroDto, TarefaDto } from "../../src/contracts/quadro.ts";
 import type { ConversaDto, RespostaMutacao } from "../../src/contracts/api.ts";
 import type { MutacaoQuadro } from "./api.ts";
 import type { FiltroImportacao, ImportacaoDto, PreviaDaTela } from "../../src/contracts/quadro-importacao.ts";
@@ -43,22 +48,24 @@ import { ligarComposer, type ComposerLigado } from "./composer-ligado.ts";
 import { CONSULTA_CELULAR, ehCelular, enterEnvia } from "./celular.ts";
 import { abrirFolha, engolirCliqueDoToque, folhaAberta, type FolhaAberta } from "./folha.ts";
 import { autorDoComentario, fimDaTrocaCel, tarefaAbertaCelular, textoDaResposta, trechoDe, type NaoSalvouCel, type Respondendo, type TrocaCel } from "../telas/tarefa-celular.ts";
-import { casaNaBusca, folhaDeAjustes, folhaDeCancelar, folhaDeMover, folhaDeStatus, folhaDoBranch, folhaDoComentario, folhaDoResponsavel } from "../telas/folhas-da-tarefa.ts";
+import { casaNaBusca, folhaDeAjustes, folhaDeCancelar, folhaDeMover, folhaDePrioridade, folhaDeStatus, folhaDoBranch, folhaDoComentario, folhaDoResponsavel } from "../telas/folhas-da-tarefa.ts";
 import type { Aceita } from "./anexos.ts";
 import { anuncioDaFaixa, cartaoDaResposta, faixaDoQuadro, ICONE_ENVIAR_PILULA, ICONE_PARAR_PILULA, idDaNovaTarefa, ideiasDaPilula, pilulaDoQuadro, quadroCarregando, quadroComErro, quadroDaMeta, rotuloDoModo, semQuadro, tarefaAberta, tempoDoTurno, type AgenteDoQuadro, type AvisoDaFaixa, type PainelDoQuadro, type TrocaDaFaixa } from "../telas/quadro-real.ts";
 import { anuncioDaOrdem, anuncioDaPagina, CONVERSA, ehForma, indicePeloId, moverNaOrdem, paginaPelaTecla, presa, TAREFAS, type FormaDasTarefas, type Pagina } from "./paginas.ts";
 import { guardarOrdem, ordemDoAgente, paginasDtoDe } from "./ordem-das-paginas.ts";
 import { menuDaPagina, paginaDoApp } from "../telas/paginas.ts";
 import { criarBarraDoQuadro } from "./barra-do-quadro.ts";
-import { NOME_DA_PRIORIDADE, opcoesEfetivas, PRIORIDADES, prioridadeDe } from "./opcoes-do-quadro.ts";
+import { dicaDaOrdem, NOME_DA_PRIORIDADE, opcoesEfetivas, PRIORIDADES, prioridadeDe } from "./opcoes-do-quadro.ts";
 import type { Prioridade } from "../../src/contracts/quadro-opcoes.ts";
 import type { BuscaDaPilula } from "./gesto-da-pilula-na-tela.ts";
 import { ligarGestosDaPilula, type PilulaDePaginas } from "./paginas-na-tela.ts";
 import { criarComentariosNaTela, type ApiDosComentarios } from "./comentarios-na-tela.ts";
-import { trecho } from "../telas/linha-do-tempo.ts";
+import { duracao as duracaoCurta, trecho } from "../telas/linha-do-tempo.ts";
 import { criarTrabalhosDaTarefa, type ApiDosTrabalhos } from "./trabalhos-da-tarefa.ts";
 import { criarEnvios } from "./envio-idempotente.ts";
 import { atualizarPontos } from "./pontos-das-colunas.ts";
+import { notaDeComecar } from "./vai-comecar.ts";
+import { ligarCitar, textoDaCitacao } from "./citar-na-tela.ts";
 import { criarToqueLongo } from "./toque-longo.ts";
 import { TOQUE_LONGO_DA_LINHA_MS } from "./celular-do-quadro.ts";
 import { PRAZO_DO_ENVIO_MS, comPrazo } from "./com-prazo.ts";
@@ -73,6 +80,8 @@ const ehPrioridade = (v: string): v is Prioridade => (PRIORIDADES as readonly st
 const EXIBIR_PADRAO: ExibirDoQuadro = { recolhidas: true, compacto: false };
 
 export interface ApiDoQuadro extends ApiDosComentarios, ApiDosTrabalhos {
+  /** ADR-165: os passos persistidos de um run da tarefa (turno raiz), a página depois do seq `depois`. Opcional: sem ele, só os frames ao vivo. */
+  passosDoRun?(agenteId: string, tarefaId: string, turnoId: string, depois?: number | null): Promise<PassosDoRunDto>;
   quadro(agenteId: string): Promise<{ quadro: QuadroDto | null }>;
   conversa(conversaId: string): Promise<Pick<ConversaDto, "mensagens"> & Partial<Pick<ConversaDto, "turnosEmCurso" | "turnosPendentes">>>;
   enviar(conversaId: string, texto: string, anexos?: readonly string[], idEnvio?: string): Promise<RespostaMutacao>;
@@ -95,7 +104,9 @@ export interface ApiDoQuadro extends ApiDosComentarios, ApiDosTrabalhos {
   definirPassagem?(agenteId: string, coluna: string, p: { agente: string | null; instrucoes: string | null; proxima?: string | null; volta_para?: string | null }): Promise<MutacaoQuadro>;
   /** NOD-416 (ADR-144): criar (cai no Backlog), mudar status e responsável, mudar de quadro, o histórico e os quadros. */
   criarTarefa?(agenteId: string, campos: { titulo: string; status?: string; descricao?: string; agente?: string | null; prioridade?: Prioridade }): Promise<MutacaoQuadro>;
-  mudarTarefa?(agenteId: string, tarefaId: string, campos: { status?: string; agente?: string | null; prioridade?: Prioridade; titulo?: string; descricao?: string } & CamposDeLabel): Promise<MutacaoQuadro>;
+  mudarTarefa?(agenteId: string, tarefaId: string, campos: { status?: string; agente?: string | null; prioridade?: Prioridade; titulo?: string; descricao?: string; parar_anterior?: boolean } & CamposDeLabel): Promise<MutacaoQuadro>;
+  /** 2026-11-10 (ADR-142): o diálogo de handoff (só leitura). Sem ela, o diálogo usa a prévia local, sem o texto da etapa. */
+  previaMover?(agenteId: string, tarefaId: string, coluna: string): Promise<PreviaDoMoverDto>;
   /** NOD-419: a trava da coluna e o Desfazer de um movimento (o eco do agente e o histórico da tarefa). */
   travarColuna?(agenteId: string, coluna: string, t: { sai_para?: string[] | null; so_pessoa?: boolean }): Promise<MutacaoQuadro>;
   desfazerMovimento?(agenteId: string, tarefaId: string, movimentoId: string): Promise<MutacaoQuadro>;
@@ -138,6 +149,8 @@ export interface DadosDoQuadro {
   validadeDaChaveMs?: number;
   /** A janela que junta frames em rajada numa releitura só (ms). */
   juntarEm?: number;
+  /** 2026-11-10: quando chegou o último dado do SSE (live-events `ultimoDado`); mudo há 20 s, o quadro relê sozinho. */
+  ultimoDadoAoVivo?: () => number;
   /** NOD-415: a confirmação antes de remover o quadro (padrão: window.confirm). */
   confirmar?: (texto: string) => boolean;
   /** NOD-416: o código da tarefa aberta vai para a URL (`?tarefa=ZE-12`); null = voltou ao quadro. */
@@ -151,6 +164,8 @@ export interface DadosDoQuadro {
   irParaTarefa?: (agenteId: string, tarefaId: string, quadroId?: string) => boolean;
   /** NOD-422: de quanto em quanto tempo a linha "Trazendo do Linear" se relê (ms). */
   releImportacaoEm?: number;
+  /** T4: de quanto em quanto tempo o relógio do quadro confere se o minuto virou (ms; o teste encurta). */
+  tiqueMs?: number;
   /** ADA-5: o composer do chat na pílula (web/lib/composer.ts). Sem isto, a pílula é só o campo e o Enviar. */
   composer?: ComposerDoQuadro;
   /** ADA-12: o prazo da reserva da altura (o teste encurta; o app usa RESERVA_MS). */
@@ -284,7 +299,8 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
   /** A última página da vista (Tarefas ou um app): o `trocar("quadro")` de fora volta a ela. */
   let ultimaDaVista = 1;
   let forma: FormaDasTarefas = "quadro";
-  let filtro: Filtro = "todos";
+  /** 2026-11-10 (comparação Multica × nod): o filtro rápido fica lembrado por quadro, no Exibir (como as Opções e o funil). */
+  const filtroRapido = (): Filtro => { const r = q ? exibirDoQuadro().rapido : undefined; return ehFiltro(r) ? r : "todos"; };
   /** NOD-460: a busca da barra, os menus abertos (o "+N" e o Exibir), o Exibir da pessoa e o campo "+" aberto numa coluna. */
   let busca = "";
   let maisAberto = false;
@@ -527,6 +543,8 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
   let leituraHist = 0;
   /** NOD-430: a tarefa pedida pelo código num chat (`nod-tarefa:`): abre quando a conversa do dono dela estiver na tela. */
   let pendente: { agenteId: string; tarefaId: string } | null = null;
+  /** T2: o mover que está no ar (o frame que chega antes da resposta o reaplica). */
+  let noAr: MudancaNoAr | null = null;
   /** NOD-443: o painel aberto abaixo do topo (Pessoas ou Atividade), o mural (null = carregando) e o porquê de uma recusa. */
   let painel: PainelDoQuadro = null;
   let mural: LinhaMuralDto[] | null = null;
@@ -545,7 +563,13 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
   let pedidoDoChat: { agenteId: string; tarefaId: string } | null = null;
   /** NOD-417: os comentários da tarefa aberta. */
   // ADA-7 (revisão 3): a leitura que chega sozinha (o frame, o abrir) redesenha só com a tela livre do gesto.
-  const coms = criarComentariosNaTela({ api: () => dd?.api() ?? null, redesenhar: () => { if (aberta) redesenharQuandoLivre(); } });
+  const coms = criarComentariosNaTela({
+    api: () => dd?.api() ?? null, redesenhar: () => { if (aberta) redesenharQuandoLivre(); },
+    // 2026-11-10 (bugs 2 e 3): cada releitura dos runs recalcula o que se escuta (o run que sai da fila entra na hora).
+    aoLer: (runs) => { trabs.escutar(runs.filter((r) => r.estado === "fila" || r.estado === "rodando")); armarTickDosRuns(); },
+    acaoDoTrabalho: (act) => { trabs.aoClicar(act); },
+    carregarPassos: (raiz) => trabs.carregarPassos(raiz),
+  });
   /** NOD-418: o trabalho da tarefa aberta (o atual ao vivo, os anteriores, Repetir, Cancelar e o recado). */
   const trabs = criarTrabalhosDaTarefa({
     api: () => dd?.api() ?? null,
@@ -566,7 +590,43 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
     aoPasso: (turno, ultimo) => {
       for (const el of vista()?.querySelectorAll<HTMLElement>(`[data-run-vivo="${CSS.escape(turno)}"]`) ?? []) el.textContent = trecho(ultimo, 140) || el.textContent;
     },
+    // Passo 2: a lista de passos de um run aberto (o bloco ou "Ver o trabalho") mudou: redesenha quando a tela estiver livre.
+    // Com o bloco fechado, só a contagem do toggle "› N passos" troca, no lugar; o toggle que ainda não existe (o run que
+    // começou sem passos) pede o redesenho, que também espera a tela livre.
+    aoPassos: (raiz) => {
+      if (!aberta) return;
+      if (coms.runAberto(raiz)) { redesenharQuandoLivre(); return; }
+      const run = coms.runs(aberta).find((r) => r.turnoId === raiz);
+      if (!run) return;
+      const n = Math.max(trabs.passosDe(raiz, run.nPassos ?? 0)?.n ?? 0, run.nPassos ?? 0);
+      if (!n) return;
+      const tgs = vista()?.querySelectorAll<HTMLElement>(`[data-act="run-abrir"][data-turno="${CSS.escape(raiz)}"]`) ?? [];
+      if (!tgs.length) { redesenharQuandoLivre(); return; }
+      for (const tg of tgs) tg.textContent = `› ${n} ${n === 1 ? "passo" : "passos"}`;
+    },
   });
+
+  /**
+   * 2026-11-10 (Passo 0): o tempo dos runs vivos anda a cada 1 s — só o texto de `[data-run-desde]` troca (o mesmo truque
+   * do aoPasso: o campo de comentário e a rolagem ficam). Sem run trabalhando, o relógio para.
+   */
+  let timerRuns: ReturnType<typeof setInterval> | null = null;
+  function armarTickDosRuns(): void {
+    const vivos = aberta ? coms.runs(aberta).some((r) => r.estado === "rodando" && !r.esperando) : false;
+    if (vivos && !timerRuns) timerRuns = setInterval(() => {
+      const els = vista()?.querySelectorAll<HTMLElement>("[data-run-desde]") ?? [];
+      if (!aberta || !els.length) { if (!aberta && timerRuns) { clearInterval(timerRuns); timerRuns = null; } return; }
+      const agora = Date.now();
+      for (const el of els) { const desde = Number(el.dataset["runDesde"]); if (desde) el.textContent = duracaoCurta(agora - desde); }
+    }, 1000);
+    if (!vivos && timerRuns) { clearInterval(timerRuns); timerRuns = null; }
+  }
+  /** Releitura dos runs depois de um frame de turno (juntada: vários bots começando juntos relêem uma vez). */
+  let timerRunsFrame: ReturnType<typeof setTimeout> | null = null;
+  function relerRunsLogo(): void {
+    if (timerRunsFrame) clearTimeout(timerRunsFrame);
+    timerRunsFrame = setTimeout(() => { timerRunsFrame = null; if (aberta) void coms.reler(); }, dd?.juntarEm ?? 400);
+  }
 
   /** Os itens de menu que andam pelas setas: o menu da coluna e os da barra do quadro (NOD-460). */
   const ITEM_DE_MENU = '#qd-menu [role="menuitem"], #qd-menu-exibir [role="menuitemcheckbox"], #qd-menu-agentes [role="menuitemradio"], #qd-menu-agentes [role="menuitem"]';
@@ -589,7 +649,7 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
     timerAviso = null;
     doc.querySelector('#quadro [data-form="conversa-no-quadro"]')?.removeAttribute("aria-busy");
     painel = null; mural = null; erroPessoas = null; leituraMural++;
-    historico = []; histAberto = false; lendo = false; ultimaResposta = null; tarefasPedem = false; leitura++; leituraConversa++; dica = []; editandoMeta = false; edicao = null; importando = null; otimistaCel = naoSalvouCel = respondendo = null; folhaAberta()?.fechar(false); coms.fechar(); trabs.fechar();
+    historico = []; histAberto = false; lendo = false; ultimaResposta = null; tarefasPedem = false; leitura++; leituraConversa++; dica = []; editandoMeta = false; edicao = null; importando = null; otimistaCel = naoSalvouCel = respondendo = null; noAr = null; folhaAberta()?.fechar(false); coms.fechar(); trabs.fechar();
     if (timerReler) clearTimeout(timerReler);
     if (timerImportacao) clearTimeout(timerImportacao);
     timerImportacao = null;
@@ -611,17 +671,16 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
   function conteudoHtml(): Html | string {
     const p = paginas[pagina];
     if (p?.app) return paginaDoApp(p, nome, { lendo: agenteId !== null && (o.paginas?.lendo?.(agenteId) ?? false) });
-    if (!dd) return quadroVazio({ nome, filtro, alternadas });
+    if (!dd) return quadroVazio({ nome, filtro: filtroRapido(), alternadas });
     if (carga === "nada" || carga === "carregando") return quadroCarregando();
     if (carga === "erro") return quadroComErro();
     if (!q) return semQuadro(nome, Date.now());
     const t = tarefaNoQuadro(q, aberta);
     if (t) {
-      const trabalhos = trabs.html(t.id, { bloqueada: t.status === "bloqueado" || (t.esperaPessoa === true && t.voltarPara !== null), agenteId: t.agenteId, conversaAtual: chave, hora: dd.hora });
+      const trabalhos = trabs.html(t.id, { bloqueada: t.status === "bloqueado" || (t.esperaPessoa === true && t.voltarPara !== null), agenteId: t.agenteId, conversaAtual: chave, motivoFila: t.motivoFila ?? null, hora: dd.hora });
       const resp = dd.agentes?.();
       // 2026-11-10 (a issue do Multica): a linha do tempo, o chip do topo e a lateral (Registro, Entregas, Runs no tempo).
-      trabs.escutar(coms.runs(t.id).filter((r) => r.estado === "rodando").map((r) => r.turnoAtual));
-      const partes = coms.partes(t, { colunas: comColunas(q).colunas, agente: dd.agente, nomes: (resp ?? []).map((a) => a.nome), passos: (turno) => trabs.passosDe(turno), ...(trabalhos !== undefined ? { trabalho: trabalhos } : {}) });
+      const partes = coms.partes(t, { colunas: comColunas(q).colunas, agente: dd.agente, nomes: (resp ?? []).map((a) => a.nome), passos: (turno, n) => trabs.passosDe(turno, n), quadro: q });
       if (ehCelular()) {
         // ADA-17 (ADR-148): a mesma tarefa, os mesmos dados e handlers; só a árvore muda no celular.
         const trabalho = trabs.vista(t.id, { bloqueada: t.status === "bloqueado" || (t.esperaPessoa === true && t.voltarPara !== null), agenteId: t.agenteId, conversaAtual: chave });
@@ -629,16 +688,19 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
         return tarefaAbertaCelular({
           t, q, agente: dd.agente, hora: dd.hora, historico: dd.api()?.historicoTarefa ? histTarefa : undefined, ...(resp ? { responsaveis: resp } : {}), ...(cd ? { coms: cd } : {}), ...(trabalho ? { trabalho } : {}),
           respondendo: respondendo?.tarefa === t.id ? respondendo : null, otimista: otimistaCel?.tarefa === t.id ? otimistaCel : null, naoSalvou: naoSalvouCel?.tarefa === t.id ? naoSalvouCel.qual : null,
+          // 2026-11-10: a mesma linha do tempo do computador (e o chip "trabalhando" no topo).
+          // 2026-11-11: e os diálogos dela ("Ver o trabalho", o Registro): sem eles, o toque em "Ver o trabalho" não abria nada.
+          ...(partes ? { linha: partes.linha, topo: partes.topo, ...(partes.dialogo ? { dialogo: partes.dialogo } : {}) } : {}),
         });
       }
-      return tarefaAberta({ t, q, agente: dd.agente, comentarios: coms.html(t.id, dd.agente, dd.hora), hora: dd.hora, historico: dd.api()?.historicoTarefa ? histTarefa : undefined, ...(resp ? { responsaveis: resp } : {}), ...(quadros ? { destinos: destinosDaTarefa(quadros, q.id), moverPara } : {}), ...(trabalhos !== undefined ? { trabalhos } : {}), ...(partes ?? {}) });
+      return tarefaAberta({ t, q, agente: dd.agente, hora: dd.hora, historico: dd.api()?.historicoTarefa ? histTarefa : undefined, ...(resp ? { responsaveis: resp } : {}), ...(quadros ? { destinos: destinosDaTarefa(quadros, q.id), moverPara } : {}), ...(trabalhos !== undefined ? { trabalhos } : {}), ...(partes ?? {}), ...coms.lateral(t.id) });
     }
     const comPessoas = !!dd.api()?.adicionarPessoa;
     const agentes = dd.agentes && dd.api()?.definirPassagem ? dd.agentes() : undefined;
     const seletor = seletorDeQuadro(sel, { aberto: selAberto, busca: selBusca, criando: selCriando, erro: selErro });
     // Quadro mínimo: no computador o seletor mora no cabeçalho (o item "Trocar de quadro…" do menu o abre).
     const noCab = !noCelular();
-    return confiar((noCab ? "" : seletor) + quadroDaMeta({ q, ...(noCab && mostraSeletor(sel) ? { seletor, trocar: true } : {}), nome, agente: dd.agente, filtro, alternadas, acesas, edicao, agora: Date.now(), editandoMeta, ...(comPessoas ? { pessoas: { painel, mural, hora: dd.hora, erro: erroPessoas } } : {}), ...(agentes ? { agentes } : {}), ...(importando ? { importando } : {}), ...(recusa ? { avisos: new Map([[recusa.tarefa, recusa.aviso]]) } : {}), busca, exibir: { ...exibirDoQuadro(), aberto: exibirAberto }, maisAberto, nova, podeCriar: !!dd.api()?.criarTarefa, ui: barraUi.ui(), ...(noCelular() ? { celular: { visao: visaoDoQuadro(), folha: cel.folha() } } : {}) }));
+    return confiar((noCab ? "" : seletor) + quadroDaMeta({ q, ...(noCab && mostraSeletor(sel) ? { seletor, trocar: true } : {}), nome, agente: dd.agente, filtro: filtroRapido(), alternadas, acesas, edicao, agora: Date.now(), editandoMeta, ...(comPessoas ? { pessoas: { painel, mural, hora: dd.hora, erro: erroPessoas } } : {}), ...(agentes ? { agentes } : {}), ...(importando ? { importando } : {}), ...(recusa ? { avisos: new Map([[recusa.tarefa, recusa.aviso]]) } : {}), busca, exibir: { ...exibirDoQuadro(), aberto: exibirAberto }, maisAberto, nova, podeCriar: !!dd.api()?.criarTarefa, ui: barraUi.ui(), ...(noCelular() ? { celular: { visao: visaoDoQuadro(), folha: cel.folha() } } : {}) }));
   }
 
   /** ADA-18: o quadro do celular (o teste injeta; o app lê a consulta canônica a cada desenho). */
@@ -667,6 +729,8 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
   let aoVivo = false;
   /** ADA-12 (QA, bug 1): até quando o redesenho de uma leitura é eco da ação da pessoa (sem alvo nem reserva). */
   let daPessoaAte = 0;
+  /** ADA-12 (revisão 10): o próximo redesenho é do clique da pessoa (abrir os passos de um run), não de uma leitura. */
+  let desenhoDaPessoa = false;
   /** ADA-12 (revisão 10): até quando os desenhos seguem o fim depois do comentário que a pessoa mandou colada no fim. */
   let fimDoComentarioAte = 0;
   /** A tarefa do comentário: fechar e reabrir na janela não leva a tarefa recém-aberta ao fim. */
@@ -1174,7 +1238,8 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
   }
 
   function aplicarQuadro(novo: QuadroDto | null, extra: readonly string[] = [], doFrame = false, gestoDesde: number | null = null, vivo = false): void {
-    if (novo) novo = comColunas(novo);
+    // T2 (2026-11-10): o frame que chega com a mudança no ar não derruba o card otimista (ele piscava de volta).
+    if (novo) novo = reaplicarNoAr(comColunas(novo), noAr);
     // NOD-445: Tarefas acende o laranja na pílula quando alguma tarefa espera a pessoa (ADR-162: o bot perguntou).
     const pedem = !!novo?.tarefas.some((t) => t.esperaPessoa);
     if (pedem !== tarefasPedem) { tarefasPedem = pedem; o.aoTarefasPedirem?.(pedem); }
@@ -1192,7 +1257,8 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
     // de nascer ainda pendente ("na fila"). O despacho vem logo depois e o frame dele relê o quadro, mas, quando a resposta
     // HTTP chega DEPOIS dessa releitura, ela regrava o quadro velho e o card fica em "começando" até o próximo frame. Uma
     // releitura a mais, só quando há card na fila, fecha a corrida.
-    if (releComecando(novo, doFrame)) pedirReleitura();
+    // T10: só os cards que esta mudança mexeu (o lote dela, ou os que quem chamou passou); a importação (vivo) não relê.
+    if (releComecando(novo, doFrame, vivo ? [] : [...extra, ...(novo?.ultimoLote?.tarefaIds ?? [])])) pedirReleitura();
     trilharAbertura();
     if (aberta && !tarefaNoQuadro(q, aberta)) { aberta = null; dd?.naUrl?.(null); }
     if (trilhaPendente && aberta === trilhaPendente) trilhar(trilhaPendente, "link");
@@ -1322,7 +1388,7 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
   }
 
   /** NOD-416: uma mudança na tarefa (criar, status, responsável): o lote volta com Desfazer, na faixa. */
-  async function mudarTarefa(fazer: (a: ApiDoQuadro, de: string) => Promise<MutacaoQuadro> | undefined, recibo: string | ((r: MutacaoQuadro) => string), acoes?: (r: MutacaoQuadro) => AcoesDoRecibo | undefined): Promise<boolean> {
+  async function mudarTarefa(fazer: (a: ApiDoQuadro, de: string) => Promise<MutacaoQuadro> | undefined, recibo: string | ((r: MutacaoQuadro) => string), acoes?: (r: MutacaoQuadro) => AcoesDoRecibo | undefined, aoFalhar?: (semRede: boolean) => void): Promise<boolean> {
     const a = dd?.api();
     // Revisão 5 do PR #623: a mudança descartada (outra no ar) redesenha a tarefa, para o select não mostrar o que não valeu.
     if (!a || !agenteId || mexendo) { desenharVista(); return false; }
@@ -1347,6 +1413,7 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
       daPessoaAte = 0;
       if (c !== chave) return false;
       const semRede = e instanceof ErroApi && (e.codigo === "servidor_indisponivel" || e.codigo === "sem_internet");
+      aoFalhar?.(semRede);
       mudarFaixa({ tipo: "erro", texto: semRede ? "Sem conexão com o servidor agora. Tente de novo em instantes." : "Não deu para mudar a tarefa: o quadro mudou. Relendo." });
       if (!semRede) void lerQuadro();
       else desenharVista();
@@ -1362,18 +1429,28 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
    * (que para o turno). Nos outros casos, o recibo de sempre. Definido em 2026-11-10 (o handoff do Multica): o Status numa
    * coluna com responsável que aciona muda e aciona na hora, sem "Confirmar · Não iniciar ainda"; o Desfazer é a rede.
    */
-  function mudarNaTarefaAberta(t: TarefaDto, campos: { status: string } | { agente: string | null }): void {
+  /** O recibo do mover pela tela, pela prévia da regra única. */
+  const reciboDeTela = (t: TarefaDto, col: ColunaDto): string => {
+    const previa = previaDaTarefa(t, col.id, q?.colunas ?? []);
+    return reciboDeMover(t.titulo, col, previa, previa.agenteId ? nomeNaPrevia(q?.colunas ?? [], t)(previa.agenteId) : null);
+  };
+  function mudarNaTarefaAberta(t: TarefaDto, campos: { status: string } | { agente: string | null }, handoff?: { parar: boolean }): void {
     const ehStatus = "status" in campos;
     const col = ehStatus ? colunaDe(campos.status) : undefined;
+    // 2026-11-10: o Status para uma coluna com responsável passa pelo mesmo diálogo de handoff do arrasto.
+    if (ehStatus && col && !handoff) {
+      void confirmarHandoff(t, col).then((ok) => { if (ok) mudarNaTarefaAberta(t, campos, ok); else desenharVista(); });
+      return;
+    }
     const recibo = ehStatus
-      ? (col?.responsavel ? reciboDeMover(t.titulo, col) : `${t.titulo}: ${col?.nome ?? campos.status}`)
+      ? (col && q ? reciboDeTela(t, col) : `${t.titulo}: ${campos.status}`)
       : `${t.titulo}: com ${campos.agente ? (dd?.agente(campos.agente)?.nome ?? "outro bot") : "ninguém"}`;
     const comecou = (r: MutacaoQuadro): string => {
       const nomes = [...new Set((r.comecaram ?? []).map((c) => c.agenteNome))];
       return nomes.length ? `${nomes.join(" e ")} ${nomes.length === 1 ? "começou" : "começaram"}` : recibo;
     };
     const foco = ehStatus ? "qd-t-status" : "qd-t-resp";
-    const envio = campos;
+    const envio = ehStatus && handoff?.parar ? { ...campos, parar_anterior: true } : campos;
     // ADA-17: no celular o chip troca na hora (otimista); se não salvar, diz para onde voltou e oferece Tentar de novo.
     const cel = ehCelular();
     let minha: TrocaCel | null = null;
@@ -1411,6 +1488,7 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
     const conteudo: { titulo: string; corpo: string } | null =
       qual === "status" ? { titulo: "Status", corpo: folhaDeStatus(t, cs) }
       : qual === "resp" ? (bots ? { titulo: "Responsável", corpo: folhaDoResponsavel(t, bots) } : null)
+      : qual === "prioridade" ? { titulo: "Prioridade", corpo: folhaDePrioridade(t) }
       : qual === "branch" ? (t.branch ? { titulo: "Branch", corpo: folhaDoBranch(t.branch) } : null)
       : qual === "mover" ? (destinos.length ? { titulo: "Mover para…", corpo: folhaDeMover(destinos) } : null)
       : qual === "ajustes" ? { titulo: "Ajustes", corpo: folhaDeAjustes({ t, q, nomeStatus: colunaDe(t.status)?.nome ?? t.status, nomeResp, podeResp: !!bots, podeMover: destinos.length > 0 }) }
@@ -1446,6 +1524,8 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
       if (novo !== t.agenteId) mudarNaTarefaAberta(t, { agente: novo });
       return;
     }
+    // 2026-11-10: a Prioridade no celular (o mesmo mudar_tarefa do select do computador, com Desfazer).
+    if (acao === "prioridade") { f.fechar(); if (ehPrioridade(valor) && valor !== prioridadeDe(t)) void mudarTarefa((a, de) => a.mudarTarefa?.(de, t.id, { prioridade: valor }), `${t.titulo}: ${NOME_DA_PRIORIDADE[valor].toLowerCase()}`); return; }
     if (acao === "copiar") { copiarNaFolha(el, valor, "Branch copiado"); return; }
     if (acao === "mover") { f.fechar(false); void moverDeQuadro(t.id, valor); return; }
     if (acao.startsWith("abrir-")) { abrirFolhaDaTarefa(acao.slice(6), t.id, qual === "ajustes" ? "#qd-t-ajustes" : undefined); return; }
@@ -1504,6 +1584,55 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
       const novo = el.value || null;
       if (novo !== t.agenteId) mudarNaTarefaAberta(t, { agente: novo });
     }
+  }
+  /**
+   * 2026-11-10 (a tarefa aberta como a issue do Multica), num bloco só: o ⋯ do topo (Mudar status e Concluir pelo mesmo
+   * mudarNaTarefaAberta do select; Copiar link pelo do celular), os menus (⋯ e "+ Propriedade") que fecham com o clique
+   * fora ou o Esc, a nota "Ada vai começar" sob os selects de Status e Responsável (web/lib/vai-comecar.ts) e o "Citar"
+   * de um trecho selecionado (web/lib/citar-na-tela.ts).
+   */
+  function ligarTopoDaTarefa(): void {
+    ligarCitar(doc, (c) => { if (aberta) coms.citar(c.raiz, textoDaCitacao(c), doc); });
+    doc.addEventListener("click", (ev) => {
+      if (!dd || !aberta) return;
+      const alvo = ev.target instanceof Element ? ev.target : null;
+      const el = alvo?.closest<HTMLElement>("#quadro .qd-tarefa [data-act]") ?? null;
+      const act = el?.dataset["act"];
+      if (el && (act === "tmenu-coluna" || act === "tmenu-link")) {
+        coms.fecharMenus();
+        const t = tarefaNoQuadro(q, el.dataset["id"] ?? "");
+        desenharVista();
+        if (!t) return;
+        if (act === "tmenu-link") { void copiarLinkDaTarefa(t.id); return; }
+        const col = el.dataset["coluna"] ?? "";
+        if (col && col !== t.status) mudarNaTarefaAberta(t, { status: col });
+        return;
+      }
+      if (act === "tmenu" || act === "tmenu-status" || act === "prop-menu") return;
+      // Fora dos menus, ou numa ação de dentro deles (Repetir, Parar, Mover, a propriedade): fecham.
+      if ((!alvo?.closest(".ta-menu, .ta-prop-mais") || act) && coms.fecharMenus()) {
+        queueMicrotask(() => { if (vista()?.querySelector(".ta-menu-pop, .ta-prop-menu")) desenharVista(); });
+      }
+    }, true);
+    doc.addEventListener("keydown", (ev) => {
+      if (!dd || !aberta || ev.key !== "Escape" || !(ev.target instanceof Element) || !ev.target.closest(".ta-menu, .ta-prop-mais")) return;
+      const doMenu = !!ev.target.closest(".ta-menu");
+      if (!coms.fecharMenus()) return;
+      ev.preventDefault();
+      desenharVista();
+      focarSemRolar(vista()?.querySelector<HTMLElement>(doMenu ? ".qd-tarefa .ta-menu-bt" : ".qd-tarefa .ta-prop-bt") ?? null);
+    });
+    doc.addEventListener("input", (ev) => {
+      const el = ev.target;
+      if (!dd || !q || !ehCampoDaTarefa(el) || !el.closest(".qd-tarefa")) return;
+      const t = tarefaNoQuadro(q, el.dataset["id"] ?? "");
+      if (!t) return;
+      const campo = el.dataset["campo"] === "status" ? "status" : "agente";
+      const texto = notaDeComecar({ t, campo, valor: el.value, colunas: comColunas(q).colunas, viva: coms.lateral(t.id).vivo, nome: (id) => dd?.agente(id)?.nome ?? null });
+      coms.notar(campo, texto);
+      const nota = vista()?.querySelector<HTMLElement>(`#qd-t-${campo}-nota`);
+      if (nota) { nota.textContent = texto; nota.hidden = !texto; }
+    });
   }
   const ehCampoDaTarefa = (el: unknown): el is HTMLSelectElement =>
     el instanceof HTMLSelectElement && !!el.closest("#quadro .qd-conteudo") && (el.dataset["campo"] === "status" || el.dataset["campo"] === "agente");
@@ -1571,7 +1700,7 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
   function redesenharQuandoLivre(desde?: number): void {
     if (timerDetalhe) return;
     if (!detalheDesde) detalheDesde = desde ?? Date.now();
-    if (!segura(detalheDesde)) { detalheDesde = 0; aoVivo = Date.now() >= daPessoaAte; desenharVista(); return; }
+    if (!segura(detalheDesde)) { detalheDesde = 0; aoVivo = !(desenhoDaPessoa && rol?.alvo("caixa")?.colado) && Date.now() >= daPessoaAte; desenhoDaPessoa = false; desenharVista(); return; }
     timerDetalhe = setTimeout(() => { timerDetalhe = null; redesenharQuandoLivre(); }, GESTO_MS);
   }
   /** O gesto segura a regravação até ADIAR_ATE_MS; o arrasto de card ou de coluna e o dedo que segue mexendo, até soltar
@@ -1584,6 +1713,16 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
   const naVista = (ev: Event): boolean => { const v = vista(); return !!v && ev.target instanceof Node && v.contains(ev.target); };
   const gesto = criarGestoNaTela(doc, naVista);
   const gestoAtivo = (): boolean => gesto.ativo();
+  // T4 (2026-11-10): o relógio da tela. Sem frame o "começando", o "Trabalhando · há X", o "parada há" e o eco de 10 min
+  // ficavam congelados; com card na fila (o despacho que falhou sem frame) a tela relê em vez de mostrar "começando" para sempre.
+  const tique = (): void => {
+    const quadroAVista = modo === "quadro" && !paginas[pagina]?.app && paginas[pagina]?.id !== "canvas" && carga === "ok" && !mexendo;
+    const acao = tiqueDoRelogio({ agora: Date.now(), minutoDesenhado, visivel: doc.visibilityState !== "hidden" && !!vista(), quadro: quadroAVista ? q : null });
+    if (acao === "reler") void lerQuadro(true);
+    else if (acao === "redesenhar") redesenharQuandoLivre();
+  };
+  doc.defaultView?.setInterval(tique, dd?.tiqueMs ?? TIQUE_MS);
+  doc.addEventListener("visibilitychange", tique);
   rol = criarAlvosDeRolagem(doc, { caixa: () => vista(), conteudo: () => vista()?.querySelector<HTMLElement>(":scope > .qd-conteudo") ?? null, segura: () => gesto.ativo(), esperaMs: GESTO_MS, aoRolarDaPessoa: () => reserva.aoRolarDaPessoa() });
   // ADA-12 (revisão 5): abrir ou fechar o histórico de movimentos (o clique no summary; o teclado também vira clique) é
   // gesto da pessoa: o corte que ele causa não é do navegador (a vista não volta ao lugar de antes) e a reserva de altura
@@ -2138,9 +2277,9 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
 
   /** Fecha o que está aberto; dentro da folha do celular, volta para a folha. O card que se movia leva o foco de volta. */
   const fechar = (): void => {
-    if (edicao?.tipo === "mover") {
+    if (edicao?.tipo === "mover" || edicao?.tipo === "prioridade") {
       const t = CSS.escape(edicao.tarefa);
-      editar(null, `[data-act="tarefa-mover"][data-tarefa="${t}"]`);
+      editar(null, `[data-act="${edicao.tipo === "mover" ? "tarefa-mover" : "tarefa-prioridade"}"][data-tarefa="${t}"]`);
       return;
     }
     // NOD-420 (revisão 3 do PR #624): o prazo abre pelo ⋯ da coluna; fechar devolve o foco a ele. Na folha do celular
@@ -2322,6 +2461,20 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
   let engolirClique = false;
   let mexendo = false;
 
+  /**
+   * 2026-11-10: a releitura de segurança. Com o SSE mudo (deveVigiarQuadro), o quadro à vista relê como se tivesse
+   * chegado um `quadro.mudou`: o card, os comentários, os runs e as Execuções da tarefa aberta. Só no navegador (o unit
+   * sem `defaultView` não arma o relógio).
+   */
+  function vigiarQuadro(): void {
+    if (!dd?.ultimoDadoAoVivo || !agenteId || chave === null || !q || modo !== "quadro") return;
+    const comVivo = q.tarefas.some((t) => t.execucao === "fila" || t.execucao === "rodando" || t.execucao === "esperando");
+    const visivel = (doc as { visibilityState?: string }).visibilityState !== "hidden";
+    if (!deveVigiarQuadro({ agora: Date.now(), ultimoDado: dd.ultimoDadoAoVivo(), visivel, comVivo, aberta: !!aberta })) return;
+    aoFrame({ tipo: "quadro.mudou", dados: { agenteId, quadroId: q.id } });
+  }
+  doc.defaultView?.setInterval(vigiarQuadro, VIGIA_DO_QUADRO_MS);
+
   function aoFrame(frame: { tipo: string; dados: Record<string, unknown> }): void {
     if (!dd || chave === null || !agenteId) return;
     const d = frame.dados;
@@ -2335,6 +2488,10 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
       return;
     }
     if (aberta && frame.tipo.startsWith("turno.")) trabs.aoFrame(frame);
+    // 2026-11-10 (bugs 2 e 3): o começo, o fim e a interrupção de um turno releem os runs da tarefa aberta (o run que
+    // falha ou é cancelado sem comentário não fica "trabalhando"; o que sai da fila passa a ser escutado). Qualquer
+    // turno.iniciado conta (o run de @menção que começa ainda não está na lista como vivo).
+    if (aberta && (frame.tipo === "turno.iniciado" || ((frame.tipo === "turno.encerrado" || frame.tipo === "turno.interrompido") && coms.runs(aberta).some((r) => r.turnoId === d["turnoId"] || r.turnoAtual === d["turnoId"])))) relerRunsLogo();
     // A execução dos cards (rodando, na fila, falhou) vem dos turnos: com o quadro à vista e com tarefas, relê. Só o
     // começo e o fim de um turno mudam a execução; o delta, a fala e a atividade (várias por segundo enquanto qualquer
     // bot escreve) regravavam o quadro inteiro e travavam a rolagem (ADA-7, ADR-061).
@@ -2723,7 +2880,6 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
       viaDaAbertura = "tela";
       pagina = 0;
       ultimaDaVista = 1;
-      filtro = "todos";
       busca = "";
       maisAberto = exibirAberto = false;
       nova = null;
@@ -2782,8 +2938,8 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
     if (lendo && alvo?.closest?.("#quadro .qd-conteudo")) alternarLeitura({ focar: false });
     if (engolirClique) { engolirClique = false; ev.preventDefault(); ev.stopPropagation(); return; }
     // NOD-448: clicar fora do menu ou do popover fecha (a coluna nova e a folha fecham pelo Cancelar, Pronto ou Esc).
-    const solta = edicao?.tipo === "menu" || edicao?.tipo === "passagem" || edicao?.tipo === "trava" || edicao?.tipo === "mover" || (edicao?.tipo === "remover" && !edicao.naFolha);
-    if (solta && alvo?.closest?.("#quadro") && !alvo.closest(".qd-menu, .qd-pop, .qd-col-mais, .qd-col-passa, .qd-card-mover")) { edicao = null; desenharVista(); }
+    const solta = edicao?.tipo === "menu" || edicao?.tipo === "passagem" || edicao?.tipo === "trava" || edicao?.tipo === "mover" || edicao?.tipo === "prioridade" || (edicao?.tipo === "remover" && !edicao.naFolha);
+    if (solta && alvo?.closest?.("#quadro") && !alvo.closest(".qd-menu, .qd-pop, .qd-col-mais, .qd-col-passa, .qd-card-mover, .qm-pri-bt")) { edicao = null; desenharVista(); }
     // NOD-460: clicar fora do "+N" ou do Exibir fecha o menu.
     // Revisão do PR #645: quando o clique tem ação, ela redesenha (redesenhar antes soltaria o alvo do DOM e o clique se
     // perderia); sem ação, ou se a ação não redesenhou, o menu fecha aqui.
@@ -2807,6 +2963,7 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
       const id = el.dataset["id"] ?? "";
       if (act === "abrir-tarefa" && id) { abrirTarefa(id, "card"); return; }
       if (act === "tarefa-mover" || act === "tarefa-mover-para") { aoMoverCard(el, act); return; }
+      if (act === "tarefa-prioridade" || act === "tarefa-prioridade-para") { aoPrioridadeDoCard(el, act); return; }
       if (act === "voltar-ao-quadro") { voltarAoQuadro(); return; }
       if (act === "cel-folha" && id) { abrirFolhaDaTarefa(el.dataset["folha"] ?? "", id); return; }
       if (act === "cel-tentar") { const n = naoSalvouCel; naoSalvouCel = null; if (n) n.refazer(); else desenharVista(); return; }
@@ -2817,6 +2974,10 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
       if (act === "label-tirar" && id) { const nome = tarefaNoQuadro(q, id)?.labels?.find((l) => l.id === el.dataset["label"])?.nome ?? "label"; mudarLabelOuPrazo(id, { tirar_labels: [el.dataset["label"] ?? ""] }, `tirou ${nome}`, el.closest(".qd-tarefa-cel") ? "qd-t-label-cel" : "qd-t-label-lado"); return; }
       if (act === "prazo-tarefa-limpar" && id) { mudarLabelOuPrazo(id, { prazo_em: null }, "sem prazo", el.closest(".qd-tarefa-cel") ? "qd-t-prazo-em-cel" : "qd-t-prazo-em-lado"); return; }
       // 2026-11-10: a linha do tempo e a lateral da tarefa aberta (thread, chips, editar/apagar, runs, seções).
+      // ADA-12 revisão 10: abrir os passos de um run ou um grupo de atividades é gesto da pessoa; com a vista colada no fim,
+      // esse desenho não segue o fim (o botão fica sob o dedo). Fora do fim ele leva a vista ao alvo, como a leitura, e os
+      // passos que chegam depois seguem ao vivo (revisão 2).
+      if (act === "run-abrir" || act === "run-passos-todos" || act === "ativ-abrir") desenhoDaPessoa = true;
       if (act && aberta && coms.aoClicar(act, el, doc)) return;
       if (act === "mover-quadro" && id) {
         const destino = el.closest(".qd-mover")?.querySelector<HTMLSelectElement>('[data-campo="mover"]')?.value ?? "";
@@ -2981,6 +3142,7 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
     // A linha do vazio, quando há, é o que se diz (inclusive o "N em colunas recolhidas").
     const vazia = vista()?.querySelector(".qd-vazio-1 span")?.textContent;
     if (vazia) { anunciar(vazia); return; }
+    const filtro = filtroRapido();
     const n = contarNaVista(q.tarefas, filtro, termoDaBusca(busca), comColunas(q).colunas);
     anunciar(filtro === "todos" && !busca.trim() ? `Todas as ${n === 1 ? "tarefa" : "tarefas"} à vista: ${n}.` : n === 0 ? "Nenhuma tarefa com esse filtro." : `${n} ${n === 1 ? "tarefa" : "tarefas"} à vista.`);
   }
@@ -2988,9 +3150,11 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
   function escolherFiltro(f: string | undefined): void {
     if (!ehFiltro(f)) return;
     // Clicar no chip ligado volta a Todas.
-    filtro = f === filtro && f !== "todos" ? "todos" : f;
+    const antes = filtroRapido();
+    const filtro = f === antes && f !== "todos" ? "todos" : f;
     maisAberto = exibirAberto = false;
-    desenharVista();
+    // mudarExibir desenha e guarda (só com quadro; sem ele não há filtro a lembrar).
+    if (q) mudarExibir({ rapido: filtro }); else desenharVista();
     focarNaVista(`.qd-barra-q [data-act="filtro-do-quadro"][data-filtro="${CSS.escape(filtro)}"]`);
     anunciarVista();
   }
@@ -3115,6 +3279,25 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
   }
 
   /**
+   * 2026-11-10 (a edição inline do Multica): as barrinhas do card abrem o seletor de prioridade; escolher muda pelo mesmo
+   * mudar_tarefa da tarefa aberta (um lote: o recibo traz o Desfazer). O foco volta às barrinhas do card.
+   */
+  function aoPrioridadeDoCard(el: HTMLElement, act: string): void {
+    const tarefa = el.dataset["tarefa"] ?? "";
+    const foco = `[data-act="tarefa-prioridade"][data-tarefa="${CSS.escape(tarefa)}"]`;
+    if (act === "tarefa-prioridade") {
+      const aberto = edicao?.tipo === "prioridade" && edicao.tarefa === tarefa;
+      editar(aberto ? null : { tipo: "prioridade", tarefa, ...(el.closest(".qd-so-estreito") ? { estreito: true } : {}) }, aberto ? foco : undefined);
+      return;
+    }
+    const p = el.dataset["valor"] ?? "";
+    const t = q?.tarefas.find((x) => x.id === tarefa);
+    editar(null, foco);
+    if (!t || !ehPrioridade(p) || p === prioridadeDe(t)) return;
+    void mudarTarefa((a, de) => a.mudarTarefa?.(de, t.id, { prioridade: p }), `${t.titulo}: ${NOME_DA_PRIORIDADE[p].toLowerCase()}`).then(() => focarSemRolar(vista()?.querySelector<HTMLElement>(foco)));
+  }
+
+  /**
    * A pessoa solta a tarefa numa coluna (o arrasto ou o "Mover para…"). A trava recusa no próprio card, com o "Mandar
    * para…"; o resto move direto (2026-11-10: entrar na coluna com responsável já aciona; o Desfazer é a rede).
    */
@@ -3132,7 +3315,25 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
       return;
     }
     tirarRecusa();
-    moverTarefa(tarefa, c.id);
+    if (!t) { moverTarefa(tarefa, c.id); return; }
+    // 2026-11-10: a coluna com responsável pergunta antes (o diálogo de handoff); sem responsável, move direto.
+    void confirmarHandoff(t, c).then((ok) => { if (ok) moverTarefa(tarefa, c.id, ok.parar); else desenharVista(); });
+  }
+
+  /**
+   * 2026-11-10 (o confirm do Multica, ADR-142): mover para uma coluna com responsável abre o diálogo de handoff — quem pega,
+   * se começa, o run de quem estava (parar ou não) e o que o próximo recebe. Sem responsável na coluna: segue sem perguntar.
+   * A prévia vem do servidor (a mesma regra e o mesmo texto do turno); sem ela, a local, sem o texto da etapa.
+   */
+  async function confirmarHandoff(t: TarefaDto, c: ColunaDto): Promise<{ parar: boolean } | null> {
+    if (!q || !c.responsavel || !aceitaPassagem(c) || c.id === t.status) return { parar: false };
+    const local = previaDaTarefa(t, c.id, q.colunas);
+    let dados: PreviaDoMoverDto = { ...local, deNome: t.agenteNome ?? null, paraNome: c.responsavelNome ?? null, anterior: null, texto: null };
+    const a = dd?.api();
+    if (a?.previaMover && agenteId) {
+      try { dados = await a.previaMover(agenteId, t.id, c.id); } catch { /* fica a prévia local */ }
+    }
+    return abrirDialogoDeHandoff(doc, { ...dados, codigo: t.codigo, coluna: c.nome });
   }
 
   function tirarRecusa(): void {
@@ -3226,7 +3427,7 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
       const r = dd?.composer?.rascunhos;
       if (k && r && r.ler(k).trim() === texto) r.guardar(k, "");
     }); return; }
-    if (qual === "editar-comentario") { ev.preventDefault(); coms.salvarEdicao(form); return; }
+    if (qual === "editar-comentario") { ev.preventDefault(); coms.salvarEdicao(form, (ev as SubmitEvent).submitter?.getAttribute("name") === "refazer"); return; }
     if (qual === "comentar-tarefa") {
       ev.preventDefault();
       const de = agenteId;
@@ -3257,7 +3458,12 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
           // A vista pode ter se redesenhado no meio: o campo da tela que ainda tem o texto enviado é limpo também.
           const atual = enviado ? doc.getElementById(enviado.id) : null;
           if (atual instanceof HTMLTextAreaElement && atual.value.trim() === textoCom) atual.value = "";
-          if (chaveCom && (!(atual instanceof HTMLTextAreaElement) || !atual.value.trim())) dd.composer?.rascunhos?.guardar(chaveCom, "");
+          // Com o campo fora da tela (a pessoa trocou de tarefa no voo), só sai o rascunho que ainda é o texto enviado: o
+          // digitado durante o voo fica (M12, a mesma regra do recado na revisão 7).
+          const rasc = dd.composer?.rascunhos;
+          const guardado = chaveCom && rasc ? rasc.ler(chaveCom).trim() : "";
+          const sai = atual instanceof HTMLTextAreaElement ? !atual.value.trim() : !guardado || guardado === textoCom;
+          if (chaveCom && rasc && sai) rasc.guardar(chaveCom, "");
           if (de === agenteId) aplicarQuadro(r.quadro, aberta ? [aberta] : []);
         }
       });
@@ -3412,6 +3618,7 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
     txt.focus();
   });
   doc.addEventListener("focusout", (ev) => { if (dd && ehCampoDaTarefa(ev.target) && ev.target.dataset["teclado"]) aplicarCampoDaTarefa(ev.target); });
+  ligarTopoDaTarefa();
   // ADA-6: digitar na pílula esconde as sugestões e mostra o contador perto do limite.
   doc.addEventListener("input", (ev) => { if (dd && ev.target instanceof HTMLTextAreaElement && ev.target.id === "qc-txt") desenharIdeias(); });
   // ADA-28 (escopo D): a linha embaixo do campo diz se o comentário aciona alguém (local, sem rede).
@@ -3428,6 +3635,11 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
   // 2026-11-10: no campo da linha do tempo os chips vêm do servidor (a mesma conta do envio); o do celular segue local.
   const previaDoCampo = (campo: HTMLTextAreaElement): void => { if (campo.closest(".ta-campo")) coms.previa(campo); else desenharPrevia(campo); };
   doc.addEventListener("input", (ev) => { if (dd && ev.target instanceof HTMLTextAreaElement && ev.target.classList.contains("qd-com-in")) previaDoCampo(ev.target); });
+  // 2026-11-10 (Passo 4): a busca de "Ver o trabalho" regrava só a lista de passos.
+  doc.addEventListener("input", (ev) => {
+    const t = aberta && q ? tarefaNoQuadro(q, aberta) : null;
+    if (dd && t && ev.target instanceof HTMLInputElement && ev.target.dataset["busca"] === "trans") coms.buscar(ev.target, (turno, n) => trabs.passosDe(turno, n), dd.agente, t);
+  });
   doc.addEventListener("focusin", (ev) => { if (dd && ev.target instanceof HTMLTextAreaElement && ev.target.classList.contains("qd-com-in")) previaDoCampo(ev.target); });
   // 2026-11-10: título e descrição se editam na própria tarefa aberta; sair do campo salva (mudar_tarefa, com Desfazer).
   const salvarTexto = (el: HTMLElement): void => {
@@ -3530,22 +3742,33 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
    * coluna, com o responsável dela e "começando" (otimista), até a resposta do servidor trazer o estado real; se a mudança
    * não valeu, o quadro é relido e o card volta.
    */
-  function moverTarefa(tarefa: string, coluna: string): void {
+  function moverTarefa(tarefa: string, coluna: string, pararAnterior = false): void {
     const t = q?.tarefas.find((x) => x.id === tarefa);
     const c = colunaDe(coluna);
     if (!q || !t || !c || t.status === coluna) { editar(null); return; }
-    if (mexendo) { desenharVista(); return; }
-    const recibo = reciboDeMover(t.titulo, c);
-    const otimista: QuadroDto = { ...q, tarefas: q.tarefas.map((x) => (x.id !== tarefa ? x : { ...x, status: coluna, ...(c.responsavel ? { agenteId: c.responsavel } : {}), ...(comecaAoEntrar(c) ? { execucao: "fila" as const } : {}) })) };
-    q = otimista;
+    // T3 (2026-11-10): com outra mudança no ar o arraste não sai, e a pessoa sabe por quê (antes o card voltava calado).
+    if (mexendo) { desenharVista(); mudarFaixa({ tipo: "erro", texto: ESPERE_A_ANTERIOR }); return; }
+    // A prévia (regra única de vai começar, espelho do servidor) decide o responsável e se começa.
+    const previa = previaDaTarefa(t, coluna, q.colunas);
+    const recibo = reciboDeMover(t.titulo, c, previa, previa.agenteId ? nomeNaPrevia(q.colunas, t)(previa.agenteId) : null);
+    const m: MudancaNoAr = { tarefa, de: t.status, para: coluna, patch: patchDoMover(coluna, previa.agenteId, previa.aciona) };
+    noAr = m;
+    q = aplicarMudanca(q, m);
     edicao = null;
     desenharVista();
-    void mexer((a, de) => a.mudarTarefa?.(de, tarefa, { status: coluna }), recibo).then(() => {
-      // A resposta troca o quadro inteiro (aplicarQuadro); o mesmo objeto aqui = não valeu (recusa ou sem rede): relê.
-      if (q === otimista) void lerQuadro();
-    });
+    // T1: sem rede o card volta ao que era (a releitura também falharia); recusado, relê (mudarTarefa já relê).
+    void mudarTarefa((a, de) => a.mudarTarefa?.(de, tarefa, { status: coluna, ...(pararAnterior ? { parar_anterior: true } : {}) }), recibo, undefined, (semRede) => {
+      if (noAr === m) noAr = null;
+      if (semRede && q) q = desfazerMudanca(q, t);
+    }).then((ok) => { if (noAr === m) noAr = null; if (!ok && q?.tarefas.find((x) => x.id === tarefa)?.status === coluna) void lerQuadro(); });
   }
   let cardArrastado: string | null = null;
+  /** A linha da coluna sob o card arrastado (null = nada a dizer). */
+  const dicaAoSoltar = (tarefa: string | null, coluna: string | undefined): string | null => {
+    const t = tarefa ? q?.tarefas.find((x) => x.id === tarefa) : undefined;
+    if (!q || !t || !coluna || coluna === t.status) return null;
+    return dicaDeMover(previaDaTarefa(t, coluna, q.colunas), nomeNaPrevia(q.colunas, t));
+  };
   const colunaSob = (alvo: EventTarget | null): HTMLElement | null => (alvo as Element | null)?.closest?.<HTMLElement>("#quadro section.qd-col[data-coluna]") ?? null;
   // NOD-420 (revisão do PR #624): o campo Responder mora dentro do card arrastável. Medido em 2026-11-02 no Chrome (teste
   // quadro-jornada-chrome): selecionar sobre o texto já funcionava, mas apertar na borda de dentro do campo (o padding,
@@ -3585,12 +3808,24 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
     const sec = cardArrastado ? colunaSob(ev.target) : null;
     if (!sec) return;
     ev.preventDefault();
-    vista()?.querySelectorAll(".qd-alvo").forEach((x) => { if (x !== sec) x.classList.remove("qd-alvo"); });
+    if (sec.classList.contains("qd-alvo")) return;
+    vista()?.querySelectorAll(".qd-alvo").forEach((x) => x.classList.remove("qd-alvo"));
+    vista()?.querySelectorAll(".qd-dica-soltar").forEach((x) => x.remove());
     sec.classList.add("qd-alvo");
+    // 2026-11-10 (o drop_hint do Multica): a coluna sob o card diz o que soltar faz, pela regra única do servidor.
+    const dica = dicaAoSoltar(cardArrastado, sec.dataset["coluna"]);
+    if (!dica) return;
+    const p = doc.createElement("p");
+    p.className = "qd-dica-soltar";
+    p.setAttribute("aria-live", "polite");
+    p.textContent = dica;
+    const cab = sec.querySelector(".qd-col-cab");
+    if (cab) cab.after(p); else sec.prepend(p);
   });
   function fimDoArrastoDoCard(): void {
     cardArrastado = null;
     vista()?.querySelectorAll(".qd-alvo, .qd-arrastando").forEach((x) => x.classList.remove("qd-alvo", "qd-arrastando"));
+    vista()?.querySelectorAll(".qd-dica-soltar").forEach((x) => x.remove());
   }
   doc.addEventListener("dragend", fimDoArrastoDoCard);
   // O navegador não manda eventos de ponteiro durante o arrasto nativo: um movimento sem botão depois dele é o fim perdido.
@@ -3602,9 +3837,13 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
     ev.preventDefault();
     cardArrastado = null;
     const c = colunaDe(sec.dataset["coluna"]);
-    if (!c || q?.tarefas.find((x) => x.id === tarefa)?.status === c.id) { desenharVista(); return; }
-    const naoRecebe = porqueNaoRecebeCard(c, nome);
-    if (naoRecebe) { desenharVista(); mudarFaixa({ tipo: "erro", texto: naoRecebe }); return; }
+    if (!c || q?.tarefas.find((x) => x.id === tarefa)?.status === c.id) {
+      desenharVista();
+      // 2026-11-10 (o "Switch to Manual ordering" do Multica): soltar na própria coluna com outra ordem não reordena; diz por quê.
+      const ordem = q ? opcoesEfetivas(exibirDoQuadro()).ordenar : "manual";
+      if (c && ordem !== "manual") mudarFaixa({ tipo: "resposta", texto: dicaDaOrdem(ordem), loteId: null, mensagemId: "" });
+      return;
+    }
     pessoaSolta(tarefa, c);
   });
 
@@ -3953,7 +4192,7 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
     sel = { ...sel, aberto: quadroId };
     a.usarQuadro?.(de, quadroId);
     if (aberta) { aberta = null; dd?.naUrl?.(null); }
-    edicao = null; editandoMeta = false; nova = null; filtro = "todos"; busca = "";
+    edicao = null; editandoMeta = false; nova = null; busca = "";
     carga = "carregando"; desenharVista();
     void a.abrirQuadroDoBot?.(de, quadroId).catch(() => undefined);
     await lerQuadro();

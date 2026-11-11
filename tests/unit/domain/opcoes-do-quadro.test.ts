@@ -14,7 +14,7 @@ describe("Opções do quadro", () => {
   });
   it("recusa o que não é da lista, repetido, vazio ou acima do teto", () => {
     const muitas = Array.from({ length: LIMITES_OPCOES.ocultas + 1 }, (_, i) => `c-${i}`);
-    for (const v of [{ vista: "tabela" }, { agrupar: "projeto" }, { ordenar: "prazo" }, { inverter: 1 }, { ocultas: "backlog" }, { ocultas: [""] }, { ocultas: ["a", "a"] }, { ocultas: muitas }, { ocultas: ["x".repeat(LIMITES_OPCOES.idColuna + 1)] }, { propriedades: ["capa"] }, { propriedades: ["pr", "pr"] }]) {
+    for (const v of [{ vista: "tabela" }, { agrupar: "projeto" }, { ordenar: "inventada" }, { inverter: 1 }, { ocultas: "backlog" }, { ocultas: [""] }, { ocultas: ["a", "a"] }, { ocultas: muitas }, { ocultas: ["x".repeat(LIMITES_OPCOES.idColuna + 1)] }, { propriedades: ["capa"] }, { propriedades: ["pr", "pr"] }]) {
       expect(lerOpcoesDoQuadro(v), JSON.stringify(v)).toHaveProperty("erro");
     }
   });
@@ -30,5 +30,23 @@ describe("Opções do quadro", () => {
     expect(lerOps([{ tipo: "criar_tarefa", titulo: "T", prioridade: "media" }])).toEqual([{ tipo: "criar_tarefa", titulo: "T", prioridade: "media" }]);
     expect(lerOps([{ tipo: "mudar_tarefa", tarefa: "T", prioridade: "sem" }])).toEqual([{ tipo: "mudar_tarefa", tarefa: "T", prioridade: "sem" }]);
     expect(lerOps([{ tipo: "criar_tarefa", titulo: "T", prioridade: "Alta" }])).toHaveProperty("erro");
+  });
+});
+
+describe("2026-11-10: filtros lembrados por quadro e ordenar por prazo (comparação Multica × nod)", () => {
+  it("aceita o funil, os negados e o filtro rápido; recusa campo inventado, valor longo e rápido estranho", () => {
+    expect(lerOpcoesDoQuadro({ ordenar: "prazo" })).toEqual({ ordenar: "prazo" });
+    expect(lerOpcoesDoQuadro({ filtros: [{ campo: "status", valor: "afazer" }], negados: ["status"], rapido: "agente:abc" })).toEqual({ filtros: [{ campo: "status", valor: "afazer" }], negados: ["status"], rapido: "agente:abc" });
+    expect(lerOpcoesDoQuadro({ filtros: [{ campo: "inventado", valor: "x" }] })).toHaveProperty("erro");
+    expect(lerOpcoesDoQuadro({ filtros: [{ campo: "status", valor: "x".repeat(LIMITES_OPCOES.valorDoFiltro + 1) }] })).toHaveProperty("erro");
+    expect(lerOpcoesDoQuadro({ filtros: Array.from({ length: LIMITES_OPCOES.filtros + 1 }, () => ({ campo: "status", valor: "a" })) })).toHaveProperty("erro");
+    expect(lerOpcoesDoQuadro({ negados: ["status", "status"] })).toHaveProperty("erro");
+    expect(lerOpcoesDoQuadro({ rapido: "qualquer" })).toHaveProperty("erro");
+    expect(temOpcoes({ rapido: "comigo" })).toBe(true);
+  });
+  it("o chat (gerir_quadro exibir) também lembra os filtros, com a frase do que mudou", () => {
+    const ops = lerOps([{ tipo: "exibir", rapido: "comigo", filtros: [] }]);
+    expect(ops).toEqual([{ tipo: "exibir", rapido: "comigo", filtros: [] }]);
+    expect(fraseDasOpcoes({ rapido: "comigo", filtros: [], ordenar: "prazo" })).toEqual(["ordenado por prazo", "sem filtros no funil", "filtro rápido Comigo"]);
   });
 });

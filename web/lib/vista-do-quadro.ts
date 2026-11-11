@@ -42,13 +42,23 @@ export function termoDaBusca(busca: string): string {
  */
 export function ehComigo(t: Pick<TarefaDto, "status" | "decide" | "esperaPessoa">, colunas: readonly Pick<ColunaDto, "id" | "trava">[] = []): boolean {
   if (t.esperaPessoa) return !(t.decide && !t.decide.voce);
-  return t.status === "bloqueado" || colunas.find((c) => c.id === t.status)?.trava?.soPessoa === true;
+  // A marca `voce` de antes da ADR-162 (o status ainda existe no servidor) também é comigo, como o funil contava.
+  return t.status === "bloqueado" || t.status === "voce" || colunas.find((c) => c.id === t.status)?.trava?.soPessoa === true;
 }
 
-export function passaNoFiltro(t: Pick<TarefaDto, "status" | "decide" | "agenteId" | "execucao" | "esperaPessoa">, f: Filtro, colunas: readonly Pick<ColunaDto, "id" | "trava">[] = []): boolean {
+/**
+ * T5 (comparação Multica × nod, 2026-11-10): o bot está trabalhando agora nesta tarefa. A execução que o servidor calculou
+ * ou, sem ela, a linha de estado do card (a frente aberta conta como trabalhando). Uma regra só para o card, a pílula de
+ * agentes ativos, o filtro rápido e o funil ("Status do agente: Trabalhando agora"); antes as contagens não batiam.
+ */
+export function trabalhandoAgora(t: Pick<TarefaDto, "execucao" | "estadoLinha">): boolean {
+  return (t.execucao ?? (t.estadoLinha?.tipo === "trabalhando" ? "rodando" : null)) === "rodando";
+}
+
+export function passaNoFiltro(t: Pick<TarefaDto, "status" | "decide" | "agenteId" | "execucao" | "esperaPessoa" | "estadoLinha">, f: Filtro, colunas: readonly Pick<ColunaDto, "id" | "trava">[] = []): boolean {
   if (f === "todos") return true;
   if (f === "comigo") return ehComigo(t, colunas);
-  if (f === "trabalhando") return t.execucao === "rodando";
+  if (f === "trabalhando") return trabalhandoAgora(t);
   return t.agenteId === agenteDoFiltro(f);
 }
 

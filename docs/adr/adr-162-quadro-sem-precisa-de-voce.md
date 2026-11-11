@@ -32,9 +32,14 @@ aciona o agente de novo. Pergunta e comentário nunca mudam o status; mover de c
    precisa-humano do Linear também usam a marca, na coluna da tarefa.
 5. **Dados de antes, sem migração que mova linhas.** A tarefa gravada com `voce` já é lida na coluna de `voltarPara`
    com a marca; o parse segue aceitando `voce`.
-6. **A única concessão além do Multica**: o card mostra "te perguntou", pequeno e cinza (`perguntou` no card,
-   `.qd-perguntou`), sem cor nem selo. Tirar é apagar esse campo e a regra de CSS. O Responder no card fica só em
-   Bloqueado; a pergunta do bot se responde na tarefa (comentário ou o campo da pergunta).
+6. **A única concessão além do Multica**: o card mostra o **chip 🔔** de "esperando você" (decisão posterior do Marlon,
+   2026-11-10, no lugar do "te perguntou" pequeno e cinza da primeira versão), com prioridade sobre os outros estados da
+   linha do card (`web/telas/quadro.ts`). O Responder no card fica só em Bloqueado; a pergunta do bot se responde na
+   tarefa (comentário ou o campo da pergunta).
+7. **A resposta deixa o card onde está (emenda de 2026-11-10, P2 da comparação Multica).** A tarefa respondida volta à
+   coluna de onde a pergunta saiu (`voltaDaResposta`), também em Não iniciado: em **A fazer** o bot é chamado (a coluna
+   aciona), no **Backlog** a resposta fica guardada no card e ninguém roda. Antes a pergunta feita no Backlog ou em A
+   fazer levava a tarefa a Fazendo e acionava o bot.
 
 ## Consequências
 
