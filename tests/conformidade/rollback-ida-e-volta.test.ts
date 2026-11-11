@@ -175,6 +175,83 @@ describeIntegracao("NOD-195: o ROLLBACK de cada migração nova volta o schema e
       .catch((e: unknown) => { if (e !== DESCARTA) throw e; });
   }, 60_000);
 
+  // Revisão do PR #698 (ADA-16): com um trabalho de tarefa do quadro vivo, o rollback da 0163 tem de passar (o UPDATE
+  // para 'pessoa' esbarrava no CHECK trabalho_quadro_tarefa_so_quadro, que ainda estava de pé). Transação descartada.
+  it("o rollback da 0163 com um trabalho de origem 'quadro' ligado à tarefa passa e o deixa como task da pessoa", async () => {
+    if (!sql) throw new Error("banco descartável não foi criado");
+    const ler = (nome: string) => readFile(new URL(nome, DIR), "utf8");
+    const DESCARTA = Symbol("descarta");
+    const depois = (await readdir(DIR)).filter((f) => f.endsWith(".sql") && f > "0163_quadro_trabalho.sql").sort().reverse();
+    await sql
+      .begin(async (trx) => {
+        const t = trx as unknown as Sql;
+        for (const nome of depois) await t.unsafe(trechoDeRollback(await ler(nome)) ?? "");
+        // O dono tira o FORCE RLS e as FKs de trabalhos só para semear a linha.
+        await t.unsafe(`alter table trabalhos no force row level security;
+          do $$ declare r record; begin
+            for r in select conname from pg_constraint where contype = 'f' and conrelid = 'trabalhos'::regclass loop
+              execute format('alter table trabalhos drop constraint %I', r.conname);
+            end loop;
+          end $$;
+          insert into trabalhos (tenant_id, owner_id, agente_id, conversa_id, titulo, origem, quadro_tarefa_id) values
+            (gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), 'tarefa', 'quadro', gen_random_uuid());`);
+        await t.unsafe(trechoDeRollback(await ler("0163_quadro_trabalho.sql")) ?? "");
+        const linhas = await t.unsafe<{ origem: string }[]>(`select origem from trabalhos`);
+        expect(linhas.map((l) => l.origem)).toEqual(["pessoa"]);
+        throw DESCARTA;
+      })
+      .catch((e: unknown) => { if (e !== DESCARTA) throw e; });
+  }, 60_000);
+
+  // ADA-289 (0164): o trabalho da tarefa (origem 'quadro', forma 'task') sai de quadro_tarefa_id para tarefa_id; a frente
+  // da tarefa já estava em tarefa_id e continua lá. O rollback da 0164 devolve só o trabalho da tarefa para quadro_tarefa_id.
+  it("a 0164 copia quadro_tarefa_id para tarefa_id, e o rollback dela devolve", async () => {
+    if (!sql) throw new Error("banco descartável não foi criado");
+    const ler = (nome: string) => readFile(new URL(nome, DIR), "utf8");
+    const DESCARTA = Symbol("descarta");
+    const ida = (texto: string) => texto.split("-- ROLLBACK:")[0]!;
+    const depois = (await readdir(DIR)).filter((f) => f.endsWith(".sql") && f >= "0164_trabalho_da_tarefa_em_tarefa_id.sql").sort().reverse();
+    await sql
+      .begin(async (trx) => {
+        const t = trx as unknown as Sql;
+        for (const nome of depois) await t.unsafe(trechoDeRollback(await ler(nome)) ?? "");
+        await t.unsafe(`alter table trabalhos no force row level security;
+          do $$ declare r record; begin
+            for r in select conname from pg_constraint where contype = 'f' and conrelid = 'trabalhos'::regclass loop
+              execute format('alter table trabalhos drop constraint %I', r.conname);
+            end loop;
+          end $$;
+          alter table quadro_tarefas no force row level security;
+          do $$ declare r record; begin
+            for r in select conname from pg_constraint where contype = 'f' and conrelid = 'quadro_tarefas'::regclass loop
+              execute format('alter table quadro_tarefas drop constraint %I', r.conname);
+            end loop;
+          end $$;
+          insert into quadro_tarefas (tenant_id, id, quadro_id, titulo, status, owner_id) values
+            ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000f1', gen_random_uuid(), 't', 'fazendo', gen_random_uuid());
+          insert into trabalhos (tenant_id, owner_id, agente_id, conversa_id, titulo, origem, forma, quadro_tarefa_id, tarefa_id) values
+            ('00000000-0000-0000-0000-000000000001', gen_random_uuid(), '00000000-0000-0000-0000-00000000000a', gen_random_uuid(), 'tarefa', 'quadro', 'task', '00000000-0000-0000-0000-0000000000f1', null),
+            ('00000000-0000-0000-0000-000000000001', gen_random_uuid(), '00000000-0000-0000-0000-00000000000a', gen_random_uuid(), 'frente', 'quadro', 'frente', null, '00000000-0000-0000-0000-0000000000f1');`);
+        await t.unsafe(ida(await ler("0164_trabalho_da_tarefa_em_tarefa_id.sql")));
+        const apos = await t.unsafe<{ titulo: string; tarefa_id: string | null }[]>(`select titulo, tarefa_id::text from trabalhos order by titulo`);
+        expect(apos).toEqual([
+          { titulo: "frente", tarefa_id: "00000000-0000-0000-0000-0000000000f1" },
+          { titulo: "tarefa", tarefa_id: "00000000-0000-0000-0000-0000000000f1" },
+        ]);
+        const col = await t.unsafe(`select 1 from information_schema.columns where table_name = 'trabalhos' and column_name = 'quadro_tarefa_id'`);
+        expect(col).toHaveLength(0);
+        await t.unsafe(trechoDeRollback(await ler("0164_trabalho_da_tarefa_em_tarefa_id.sql")) ?? "");
+        const volta = await t.unsafe<{ titulo: string; tarefa_id: string | null; quadro_tarefa_id: string | null }[]>(
+          `select titulo, tarefa_id::text, quadro_tarefa_id::text from trabalhos order by titulo`);
+        expect(volta).toEqual([
+          { titulo: "frente", tarefa_id: "00000000-0000-0000-0000-0000000000f1", quadro_tarefa_id: null },
+          { titulo: "tarefa", tarefa_id: null, quadro_tarefa_id: "00000000-0000-0000-0000-0000000000f1" },
+        ]);
+        throw DESCARTA;
+      })
+      .catch((e: unknown) => { if (e !== DESCARTA) throw e; });
+  }, 60_000);
+
   // Regressão (QA NOD-195): a foto em si. Roda depois do teste acima, no mesmo banco, num schema próprio.
   it("a foto aceita o rollback certo de GRANT em ACL nula e acusa UNLOGGED/opções esquecidos", async () => {
     if (!sql) throw new Error("banco descartável não foi criado");

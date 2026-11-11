@@ -102,6 +102,9 @@ const ISENCOES_DE_ACOES_NOVAS: Readonly<Record<string, string>> = {
   // A main vermelha em 849a2d14 (semente 2224696596): o fuzz não semeia versão de perfil, e só a semente que sorteia um número
   // existente passa da busca. Semear a versão do perfil no fuzz é da NOD-20.
   "bots.restaurar_versao": "NOD-20",
+  // ADA-289 (PR #723): apagar comentário do quadro só leva ids (tarefa e comentário), sem corpo para barrar antes da busca;
+  // o fuzz não semeia comentário de tarefa. Semear as entidades do quadro é da NOD-409 (ADA-55).
+  "quadro.apagar_comentario": "NOD-409",
 };
 /** As ações do quadro que a NOD-420 mudou (o prazo_min): no PR levam as N entradas; as outras do quadro, metade. */
 const ACOES_DO_QUADRO_COM_N = new Set(["quadro.criar_coluna", "quadro.renomear_coluna"]);

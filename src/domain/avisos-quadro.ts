@@ -6,8 +6,8 @@ export { exigePessoa };
 /**
  * NOD-420 (definido em 2026-11-02): o quadro só chama a pessoa quando precisa dela. Puro: quem chama lê as marcas da
  * tarefa (migração 0141) e grava o que saiu.
- * 1. Espera da pessoa (Bloqueado, Precisa de você, e a coluna "só uma pessoa tira daqui" da NOD-419): um aviso por
- *    entrada na coluna. As que entram perto uma da outra chegam juntas: a primeira ainda não avisada abre uma janela
+ * 1. Espera da pessoa (Bloqueado, a pergunta do bot — ADR-162: a tarefa fica na coluna, marcada `voce` — e a coluna "só
+ *    uma pessoa tira daqui" da NOD-419): um aviso por entrada na espera. As que entram perto uma da outra chegam juntas: a primeira ainda não avisada abre uma janela
  *    curta (JANELA_AGRUPAR_MS) e, ao fim dela, tudo o que ainda não foi avisado sai numa mensagem só.
  * 2. Prazo (SLA) da coluna: a tarefa parada além dele numa coluna onde o trabalho anda faz o quadro cobrar o responsável
  *    uma vez; se depois de mais um prazo ela continuar ali, a pessoa é avisada (uma vez).
@@ -22,14 +22,14 @@ export const MAX_NA_MENSAGEM = 8;
 const MAX_PERGUNTA_NO_AVISO = 200;
 
 /**
- * A tarefa espera só porque a coluna é "só a pessoa tira daqui" (não Bloqueado nem Precisa de você): não há pergunta a
+ * A tarefa espera só porque a coluna é "só a pessoa tira daqui" (não Bloqueado nem uma pergunta do bot): não há pergunta a
  * responder, a pessoa decide e move (revisão 4 do PR #624).
  */
 export function soAPessoaTira(colunas: readonly ColunaQuadro[], id: IdColuna): boolean {
   return id !== "voce" && id !== "bloqueado" && exigePessoa(colunas.find((c) => c.id === id));
 }
 
-/** A tarefa nesta coluna espera a pessoa (e só por isso o quadro a chama). */
+/** A tarefa espera a pessoa (e só por isso o quadro a chama): a pergunta do bot (ADR-162), Bloqueado ou a trava "só a pessoa". */
 export function esperaPessoa(colunas: readonly ColunaQuadro[], id: IdColuna): boolean {
   return id === "voce" || id === "bloqueado" || exigePessoa(colunas.find((c) => c.id === id));
 }
@@ -80,7 +80,7 @@ function cortar(texto: string): string {
   return texto.length > MAX_PERGUNTA_NO_AVISO ? `${texto.slice(0, MAX_PERGUNTA_NO_AVISO - 1).trimEnd()}…` : texto;
 }
 
-/** Uma linha por tarefa: qual, onde (fora de Precisa de você), quem, e a pergunta (a de fora fica no quadro). */
+/** Uma linha por tarefa: qual, onde (fora da pergunta do bot), quem, e a pergunta (a de fora fica no quadro). */
 function linha(t: TarefaComMarcas, colunas: readonly ColunaQuadro[], nomes: ReadonlyMap<string, string>): string {
   const quem = t.agenteId ? nomes.get(t.agenteId) : undefined;
   const onde = t.status === "voce" ? "" : ` (${nomeDaColuna(colunas, t.status)})`;
@@ -89,7 +89,7 @@ function linha(t: TarefaComMarcas, colunas: readonly ColunaQuadro[], nomes: Read
   return `${rotulo(t)}${onde}${quem ? `, ${quem}` : ""}: ${pergunta}`;
 }
 
-const COMO_RESPONDER = "Responda na tarefa ou aqui mesmo: ela volta para onde estava e o responsável segue.";
+const COMO_RESPONDER = "Responda na tarefa (um comentário) ou aqui mesmo: o responsável segue.";
 /** A coluna "só a pessoa tira daqui" não tem pergunta: responder não a tira de lá, a pessoa move (revisão 4 do PR #624). */
 const SO_VOCE_UMA = "Só você tira esta tarefa daqui: mova-a quando decidir.";
 const SO_VOCE_VARIAS = "Só você tira estas tarefas daqui: mova cada uma quando decidir.";
@@ -126,7 +126,7 @@ export function textoDasDecisoes(tarefas: readonly TarefaComMarcas[], colunas: r
 export function entradaDaCobranca(a: { quadroId: string; tarefa: Pick<TarefaQuadro, "id" | "titulo" | "status">; colunaNome: string; prazoMin: number }): string {
   return [
     `[Quadro ${a.quadroId}] A tarefa "${a.tarefa.titulo}" (id ${a.tarefa.id}) está parada em ${a.colunaNome} há mais de ${prazoLegivelMin(a.prazoMin)}, o prazo da coluna.`,
-    "Dê andamento agora: avance a tarefa com gerir_quadro; se travou numa decisão da pessoa, mude para status voce com a pergunta; se depende de algo de fora, mova para bloqueado com a pergunta.",
+    "Dê andamento agora: avance a tarefa com gerir_quadro; se travou numa decisão da pessoa, pergunte (mudar_tarefa só com a pergunta: a tarefa fica na coluna); se depende de algo de fora, mova para bloqueado com a pergunta.",
     "Se continuar parada, o quadro avisa a pessoa.",
   ].join("\n");
 }

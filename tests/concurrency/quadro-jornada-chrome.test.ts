@@ -34,7 +34,7 @@ const tarefa = (id, titulo, status, extra = {}) => ({ id, quadroId: "q1", titulo
 const base = () => ({ id: "q1", agenteId: "a", meta: "Lançar a jornada do quadro", prazo: "2026-11-06", cumpridoEm: null, resumo: null, criadoEm: agora, atualizadoEm: agora,
   agenteNome: "Ada", ultimoLote: null, feitas: 1, total: 4, colunas: colunasDto(COLUNAS_PADRAO), tarefas: [
     tarefa("t1", "Escrever o executor das ações", "fazendo", { execucao: "rodando" }),
-    tarefa("t2", "Trocar o token do Linear", "voce", { pergunta: "Qual workspace do Linear?", voltarPara: "revisao" }),
+    tarefa("t2", "Trocar o token do Linear", "revisao", { pergunta: "Qual workspace do Linear?", voltarPara: "revisao", esperaPessoa: true }),
     tarefa("t3", "Abrir o PR da tela", "revisao", { prUrl: "https://github.com/gamefik/nod/pull/612", linearId: "NOD-442", linearUrl: "https://linear.app/x/NOD-442" }),
     tarefa("t4", "Plano da jornada", "feito"),
   ] });
@@ -97,6 +97,11 @@ window.__comTrava = () => { q = { ...q, colunas: colunasDto(COLUNAS_PADRAO).map(
 window.__comPassagem = () => {
   q = { ...q, colunas: colunasDto(COLUNAS_PADRAO).map((c) => c.id === "fazendo" ? { ...c, responsavel: "c", responsavelNome: "Caio" } : { ...c }) };
 };
+/**
+ * ADR-162: a pergunta do bot (a marca esperaPessoa) se responde na tarefa; o Responder no card (NOD-420) ficou só em
+ * Bloqueado com pergunta. t2 travada em Bloqueado (com a mesma pergunta e voltarPara) para os testes do Responder.
+ */
+window.__bloqueada = () => { q = { ...q, tarefas: q.tarefas.map((t) => t.id === "t2" ? { ...t, status: "bloqueado", esperaPessoa: false } : t) }; };
 window.__arrastes = 0;
 // Só o arraste do card (o alvo é o li); arrastar um texto já selecionado no campo é do navegador.
 document.addEventListener("dragstart", (e) => { if (e.target instanceof HTMLLIElement) window.__arrastes++; }, true);
@@ -144,7 +149,7 @@ descrever("NOD-442 no Chrome real", () => {
     throw new Error(`não chegou: ${expr}`);
   };
 
-  async function abrir(largura: number, edita = false, passagem = false): Promise<void> {
+  async function abrir(largura: number, edita = false, passagem = false, bloqueada = false): Promise<void> {
     const celular = largura < 700;
     await cdp.enviar("Emulation.setDeviceMetricsOverride", { width: largura, height: celular ? 844 : 900, deviceScaleFactor: 1, mobile: celular });
     await cdp.enviar("Emulation.setTouchEmulationEnabled", { enabled: celular, maxTouchPoints: celular ? 5 : 1 });
@@ -155,6 +160,7 @@ descrever("NOD-442 no Chrome real", () => {
     await cdp.enviar("Page.navigate", { url });
     await ate("window.__montar");
     if (passagem) await avaliar(cdp, "window.__comPassagem()");
+    if (bloqueada) await avaliar(cdp, "window.__bloqueada()");
     await avaliar(cdp, `window.__montar(${edita})`);
     // ADA-18: no celular o quadro abre na Lista (sem .qd-card); o que vale é a tarefa clicável à vista.
     await ate(celular ? `[...document.querySelectorAll('#quadro [data-act="abrir-tarefa"]')].some((b) => b.offsetParent)` : `document.querySelector("#quadro .qd-card")`);
@@ -181,7 +187,8 @@ descrever("NOD-442 no Chrome real", () => {
       pr: document.querySelector('#quadro .qd-so-largo [data-id="t3"]').closest(".qd-card").textContent,
       meta: document.querySelector("#quadro .qd-conteudo").textContent }))()`);
     expect(r.cards).toBe(4);
-    expect(r.voce).toContain("Qual workspace do Linear?");
+    // ADR-162: o card que espera a pessoa fica na coluna dele; 2026-11-10: com o chip com sino (a pergunta está na tarefa).
+    expect(r.voce).toContain("Esperando você responder");
     expect(r.pr).toContain("PR #612");
     expect(r.pr).toContain("NOD-442");
     expect(r.meta).toContain("até 6 nov");
@@ -240,23 +247,15 @@ descrever("NOD-442 no Chrome real", () => {
     expect(e.rolagem).toBeLessThanOrEqual(0);
   });
 
-  for (const [botao, semIniciar] of [["Não iniciar ainda", true], ["Confirmar", false]] as const) {
-    it(`NOD-417 · Mover para… uma coluna com responsável pede confirmação; "${botao}" manda ${semIniciar ? "sem_iniciar" : "sem o sem_iniciar"}`, async () => {
-      await abrir(1440, true, true);
-      await avaliar(cdp, `[...document.querySelectorAll('#quadro [data-act="tarefa-mover"][data-tarefa="t3"]')].find((b) => b.offsetParent).click()`);
-      await ate(`[...document.querySelectorAll('#quadro [data-act="tarefa-mover-para"][data-coluna="fazendo"]')].some((b) => b.offsetParent)`);
-      await avaliar(cdp, `[...document.querySelectorAll('#quadro [data-act="tarefa-mover-para"][data-coluna="fazendo"]')].find((b) => b.offsetParent).click()`);
-      // A confirmação aparece antes: nada foi mandado ainda.
-      const sel = semIniciar ? "col-soltar-sem" : "col-soltar";
-      await ate(`[...document.querySelectorAll('#quadro [data-act="${sel}"]')].some((b) => b.offsetParent)`);
-      expect(await avaliar(cdp, "window.__chamadas.filter((c) => c[0] === 'mudar').length")).toBe(0);
-      await avaliar(cdp, `[...document.querySelectorAll('#quadro [data-act="${sel}"]')].find((b) => b.offsetParent).click()`);
-      await ate(`window.__chamadas.some((c) => c[0] === "mudar")`);
-      expect(await avaliar(cdp, "window.__chamadas.filter((c) => c[0] === 'mudar')")).toEqual([
-        ["mudar", "t3", semIniciar ? { status: "fazendo", sem_iniciar: true } : { status: "fazendo" }],
-      ]);
-    });
-  }
+  it("2026-11-10 · Mover para… uma coluna com responsável move e aciona na hora (sem confirmar); o card já mostra o responsável começando", async () => {
+    await abrir(1440, true, true);
+    await avaliar(cdp, `[...document.querySelectorAll('#quadro [data-act="tarefa-mover"][data-tarefa="t3"]')].find((b) => b.offsetParent).click()`);
+    await ate(`[...document.querySelectorAll('#quadro [data-act="tarefa-mover-para"][data-coluna="fazendo"]')].some((b) => b.offsetParent)`);
+    await avaliar(cdp, `[...document.querySelectorAll('#quadro [data-act="tarefa-mover-para"][data-coluna="fazendo"]')].find((b) => b.offsetParent).click()`);
+    await ate(`window.__chamadas.some((c) => c[0] === "mudar")`);
+    expect(await avaliar(cdp, "window.__chamadas.filter((c) => c[0] === 'mudar')")).toEqual([["mudar", "t3", { status: "fazendo" }]]);
+    expect(await avaliar<boolean>(cdp, `!document.querySelector('#quadro [data-act="col-soltar"], #quadro [data-act="col-soltar-sem"]')`)).toBe(true);
+  });
 
   it("a resposta da tarefa em Você sai pela rota de responder, com o texto da pessoa", async () => {
     await abrir(1440);
@@ -279,13 +278,13 @@ descrever("NOD-442 no Chrome real", () => {
   };
 
   it("NOD-420 · o botão Enviar do Responder diz de qual tarefa é (o título escapado)", async () => {
-    await abrir(1440, true);
+    await abrir(1440, true, false, true);
     expect(await avaliar<string | null>(cdp, `document.querySelector('#quadro .qd-so-largo li.qd-card[data-tarefa="t2"] .qd-card-resp-bt').getAttribute("aria-label")`))
       .toBe("Enviar resposta: Trocar o token do Linear");
   });
 
   it("NOD-420 · responder no card com Enter: no li arrastável o campo deixa digitar e selecionar; a tarefa volta à coluna de antes e o recibo aparece", async () => {
-    await abrir(1440, true);
+    await abrir(1440, true, false, true);
     const campo = '#quadro .qd-so-largo li.qd-card[data-tarefa="t2"] .qd-card-resp-in';
     const r0 = await avaliar<{ arrastavel: string | null; x: number; y: number; w: number; h: number }>(cdp, `(() => {
       const t = document.querySelector('${campo}'); t.scrollIntoView({ block: "center" }); const b = t.getBoundingClientRect();

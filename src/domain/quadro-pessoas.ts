@@ -13,7 +13,7 @@ export type Papel = "dona" | "membro";
  * (editar_quadro) entram em todo turno de tarefa do quadro: são da dona (revisão 1, achado 1). A passagem de uma coluna
  * (definir_passagem: quem pega a tarefa e as instruções da etapa) é das colunas também (revisão 4 do PR #628, achado 3).
  */
-const SO_DA_DONA = new Set<OpQuadro["tipo"]>(["editar_quadro", "adicionar_pessoa", "tirar_pessoa", "mudar_modo", "remover_quadro", "mover_quadro", "criar_quadro", "criar_coluna", "renomear_coluna", "mover_coluna", "remover_coluna", "substituir_colunas", "definir_passagem"]);
+const SO_DA_DONA = new Set<OpQuadro["tipo"]>(["editar_quadro", "adicionar_pessoa", "tirar_pessoa", "mudar_modo", "remover_quadro", "mover_quadro", "criar_quadro", "criar_coluna", "renomear_coluna", "mover_coluna", "remover_coluna", "substituir_colunas", "definir_passagem", "criar_label", "editar_label", "remover_label"]);
 
 /**
  * O que a pessoa pode pedir ao quadro neste modo. A dona pede tudo. Quem participa não mexe nas pessoas, no modo, nas

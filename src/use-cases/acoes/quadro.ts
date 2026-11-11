@@ -145,7 +145,7 @@ function umaOpDosQuadros<I extends object>(tipo: OpQuadrosDoBot["tipo"]): CasoDe
   };
 }
 
-type CamposTarefa = { titulo?: string; descricao?: string; status?: string; agente?: string | null };
+type CamposTarefa = { titulo?: string; descricao?: string; status?: string; agente?: string | null; prioridade?: string; labels?: string[]; por_labels?: string[]; tirar_labels?: string[]; prazo_em?: string | null };
 
 export const EXECUTORES_QUADRO = {
   "quadro.criar": umaAcao<{ meta?: string | null; prazo?: string | null; nome?: string; projeto?: string | null }>("criar_quadro"),
@@ -156,7 +156,9 @@ export const EXECUTORES_QUADRO = {
   "quadro.assumir": assumirQuadro,
   "quadro.mudar_tarefa": umaAcao<CamposTarefa & { tarefa: string; pr_url?: string | null; pergunta?: string | null; excluir?: boolean; sem_iniciar?: boolean; motivo?: string }>("mudar_tarefa"),
   "quadro.responder": umaAcao<{ tarefa: string; resposta: string; avancar?: boolean }>("responder"),
-  "quadro.comentar": umaAcao<{ texto: string; tarefa?: string }>("comentar"),
+  "quadro.comentar": umaAcao<{ texto: string; tarefa?: string; responder_a?: string; acionar?: { agente: string; modo: string }[] }>("comentar"),
+  "quadro.editar_comentario": umaAcao<{ tarefa: string; comentario: string; texto: string }>("editar_comentario"),
+  "quadro.apagar_comentario": umaAcao<{ tarefa: string; comentario: string }>("apagar_comentario"),
   "quadro.desfazer": umaAcao<{ lote?: string }>("desfazer"),
   "quadro.mover_tarefa": umaAcao<{ tarefa: string; quadro: string }>("mover_quadro"),
   "quadro.remover": umaAcao<{ bot?: string }>("remover_quadro"),
@@ -166,7 +168,7 @@ export const EXECUTORES_QUADRO = {
   "quadro.remover_coluna": umaAcao<{ coluna: string; destino?: string }>("remover_coluna"),
   // Pela tela a pessoa é a confirmação; pela conversa o gerir_quadro abre o card (proposta colunas_quadro).
   "quadro.substituir_colunas": umaAcao<{ colunas: unknown; destinos?: unknown }>("substituir_colunas"),
-  "quadro.definir_passagem": umaAcao<{ coluna: string; agente?: string | null; instrucoes?: string | null }>("definir_passagem"),
+  "quadro.definir_passagem": umaAcao<{ coluna: string; agente?: string | null; instrucoes?: string | null; proxima?: string | null; volta_para?: string | null }>("definir_passagem"),
   "quadro.terminei": umaAcao<{ tarefa: string }>("terminei"),
   "quadro.adicionar_pessoa": umaAcao<{ pessoa: string; modo?: string }>("adicionar_pessoa"),
   "quadro.tirar_pessoa": umaAcao<{ pessoa: string }>("tirar_pessoa"),
@@ -186,4 +188,7 @@ export const EXECUTORES_QUADRO = {
   "quadro.arquivar_projeto": umaOpDosQuadros<{ projeto: string }>("arquivar_projeto"),
   "quadro.restaurar_projeto": umaOpDosQuadros<{ projeto: string }>("restaurar_projeto"),
   "quadro.acordar_trabalho": umaAcao<{ tarefa: string }>("acordar_trabalho"),
+  "quadro.criar_label": umaAcao<{ nome: string; cor?: string }>("criar_label"),
+  "quadro.editar_label": umaAcao<{ label: string; nome?: string; cor?: string }>("editar_label"),
+  "quadro.remover_label": umaAcao<{ label: string }>("remover_label"),
 } as const satisfies Partial<Record<IdAcao, CasoDeUso<never, unknown>>>;

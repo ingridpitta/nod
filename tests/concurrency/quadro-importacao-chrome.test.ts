@@ -126,9 +126,12 @@ descrever("NOD-422 no Chrome real: Trazer do Linear pela tela", () => {
     await cdp.enviar("Page.navigate", { url });
     await ate("window.__montar");
     await avaliar(cdp, "window.__montar()");
-    await ate(`document.querySelector('#quadro [data-act="trazer-linear"]')`);
+    // Quadro mínimo (2026-11-10): "Trazer do Linear…" mora no menu do quadro (o nome com o chevron).
+    await ate(`document.querySelector("#quadro .qm-cab-bt")`);
+    await clicar("#quadro .qm-cab-bt");
+    await ate(`document.querySelector('#qm-pop-quadro [data-act="trazer-linear"]')`);
 
-    // Abre o painel com o foco no time; sem conector, a recusa pede para conectar e nada é importado.
+    // Abre o painel com o foco no time (o menu fecha); sem conector, a recusa pede para conectar e nada é importado.
     await clicar('#quadro [data-act="trazer-linear"]');
     await ate(`document.activeElement?.id === "ci-time-in"`);
     await pedirPrevia("nod");
@@ -148,7 +151,7 @@ descrever("NOD-422 no Chrome real: Trazer do Linear pela tela", () => {
 
     // Trazer: o importar sai com o filtro; a linha anda sozinha e termina no resultado; o painel fecha.
     await clicar('#quadro [data-act="importar-confirmar"]');
-    await ate(`/Trouxe 2 tarefas/.test(document.querySelector("#quadro .qd-meta")?.textContent ?? "")`);
+    await ate(`/Trouxe 2 tarefas/.test(document.querySelector("#quadro .qm-cab-imp")?.textContent ?? "")`);
     expect((await chamadas()).filter((c) => c[0] === "importar")).toEqual([["importar", "NOD", "sem_backlog"]]);
     expect(await avaliar<boolean>(cdp, `!document.querySelector("#quadro .ci-painel")`)).toBe(true);
     expect(await texto("#qc-faixa")).toContain("Trazendo do Linear (NOD)");

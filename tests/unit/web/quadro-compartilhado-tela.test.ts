@@ -14,7 +14,7 @@ const EU = "p-bia";
 const DONA = "p-marlon";
 const ANA = "p-ana";
 const t = (id: string, extra: Partial<TarefaDto> = {}): TarefaDto => ({
-  id, quadroId: "q1", titulo: `Tarefa ${id}`, descricao: "", status: "afazer", voltarPara: null, agenteId: "a", ordem: 1, linearId: null, linearUrl: null, prUrl: null,
+  id, quadroId: "q1", titulo: `Tarefa ${id}`, descricao: "", status: "afazer", voltarPara: null, agenteId: "a", ordem: 1, prioridade: "sem", linearId: null, linearUrl: null, prUrl: null,
   pergunta: null, resposta: null, deFora: false, turnoId: null, criadoEm: 1, mudadoEm: 1, terminadaEm: null, execucao: null, agenteNome: "Ada", numero: 1, codigo: `ZE-${id}`, branch: "", ...extra,
 });
 const q = (tarefas: TarefaDto[], extra: Partial<QuadroDto> = {}): QuadroDto => ({
@@ -60,8 +60,8 @@ describe("a tela da participante", () => {
   });
 
   it("responde só quando ela decide", () => {
-    const minhaVez = t("4", { status: "voce", pergunta: "Qual cor?", decide: { pessoaId: EU, nome: "Bia", voce: true, saiu: null } });
-    const vezDaAna = t("5", { status: "voce", pergunta: "Qual?", decide: { pessoaId: ANA, nome: "Ana", voce: false, saiu: null } });
+    const minhaVez = t("4", { status: "fazendo", voltarPara: "fazendo", esperaPessoa: true, pergunta: "Qual cor?", decide: { pessoaId: EU, nome: "Bia", voce: true, saiu: null } });
+    const vezDaAna = t("5", { status: "fazendo", voltarPara: "fazendo", esperaPessoa: true, pergunta: "Qual?", decide: { pessoaId: ANA, nome: "Ana", voce: false, saiu: null } });
     expect(html(vista(q([minhaVez, vezDaAna]), { aberta: "4" }))).toContain('data-form="qcp-responder"');
     // ADA-6 critério 4: o Responder é leve, sem fundo cheio.
     expect(html(vista(q([minhaVez, vezDaAna]), { aberta: "4" }))).toMatch(/class="qd-bt qd-bt-leve">Responder</);
@@ -131,9 +131,9 @@ describe("a tela da participante", () => {
     expect(barra).toContain("&lt;script&gt;");
   });
 
-  it("a coluna 'Precisa de você' vira 'Precisa de alguém' e o status 'voce' não é opção (só quando já está nele)", () => {
+  it("ADR-162: não há coluna 'Precisa de você' (nem 'Precisa de alguém') e o status 'voce' não é opção", () => {
     const quadro = q([t("1", { pedidoPor: EU })]);
-    expect(html(vista(quadro))).toContain("Precisa de alguém");
+    expect(html(vista(quadro))).not.toContain("Precisa de alguém");
     expect(html(vista(quadro))).not.toContain("Precisa de você");
     expect(html(vista(quadro, { aberta: "1" }))).not.toContain('<option value="voce"');
   });
@@ -655,7 +655,7 @@ describe("o controlador", () => {
 
   it("C19: o status da que espera a Ana (select forjado) não sai", async () => {
     let mudancas = 0;
-    const vezDaAna = t("1", { status: "voce", pergunta: "?", pedidoPor: ANA, decide: { pessoaId: ANA, nome: "Ana", voce: false, saiu: null } });
+    const vezDaAna = t("1", { status: "fazendo", voltarPara: "fazendo", esperaPessoa: true, pergunta: "?", pedidoPor: ANA, decide: { pessoaId: ANA, nome: "Ana", voce: false, saiu: null } });
     const { c, disparar } = comStatus({ mudarTarefaNoQuadro: async () => { mudancas++; return mut(null); } }, q([vezDaAna]));
     c.abrir("q1");
     await esperar();
@@ -778,7 +778,7 @@ describe("o controlador", () => {
 
   it("M3: responder chama responderNoQuadro(qid, tarefa, resposta) e limpa o campo", async () => {
     const chamadas: unknown[] = [];
-    const tarefa = t("4", { status: "voce", pergunta: "Qual cor?", decide: { pessoaId: EU, nome: "Bia", voce: true, saiu: null } });
+    const tarefa = t("4", { status: "fazendo", voltarPara: "fazendo", esperaPessoa: true, pergunta: "Qual cor?", decide: { pessoaId: EU, nome: "Bia", voce: true, saiu: null } });
     const { c, disparar, porId } = montar({ quadroPorId: async () => ({ quadro: q([tarefa]) }), responderNoQuadro: async (...a) => { chamadas.push(a); return mut(null); } });
     c.abrir("q1");
     await esperar();

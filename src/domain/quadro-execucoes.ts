@@ -120,7 +120,7 @@ const CAMPOS_QUE_ANDAM = new Set(["status", "agente", "pr_url", "quadro"]);
  * ADA-232 (ADR-155): a saída com que um turno de trabalho de tarefa terminou concluído. Lê o efeito, nunca o nome da
  * ferramenta chamada (revisão do PR #705: o me_chame_as/esperar_comando recusado — sem_pr, voltas_demais — deixava a
  * tarefa parada como se esperasse uma volta que não existe) e o estado da tarefa depois dele:
- * - a tarefa está em Precisa de você / Bloqueado → voce / bloqueado (a pergunta e o motivo já estão no card);
+ * - a tarefa espera a pessoa (perguntou, ADR-162) / está em Bloqueado → voce / bloqueado (a pergunta e o motivo já estão no card);
  * - a volta existe (o despertar anotado pelo me_chame_as, a espera criada pelo esperar_comando) → volta;
  * - a tarefa mudou de coluna, de mão, de quadro ou ganhou PR durante o turno (por quem for: a pessoa na tela também
  *   conta, é a rede contra o falso "sem saída"), ou já saiu do andamento → andou;
@@ -262,7 +262,7 @@ function blocoDoRecado(p: { titulo: string; texto: string; pessoaNome: string; r
 }
 
 /**
- * ADA-232 (ADR-155): o estado do card numa linha. A coluna de espera manda (Precisa de você, Bloqueado); depois a volta
+ * ADA-232 (ADR-155): o estado do card numa linha. A espera manda (a pergunta à pessoa, ADR-162; Bloqueado); depois a volta
  * marcada (esperando + motivo); depois o trabalho vivo ou a frente aberta da tarefa (trabalhando). Fora disso, null.
  */
 export function estadoLinha(p: { status: string; vivo: boolean; volta: VoltaDoTrabalho | null; frenteAberta: boolean }): EstadoLinhaTarefa | null {

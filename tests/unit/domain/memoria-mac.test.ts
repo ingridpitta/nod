@@ -127,6 +127,7 @@ describe("segurar trabalho novo (uso do Mac)", () => {
     const base = { origem: "rotina" as const, iniciadoEm: null, criadoEm: agora - 60_000, pessoaEsperando: false };
     expect(seguravelPeloMac(base, agora)).toBe(true);
     expect(seguravelPeloMac({ ...base, origem: "colega" }, agora)).toBe(true);
+    expect(seguravelPeloMac({ ...base, origem: "quadro" }, agora)).toBe(true);
     expect(seguravelPeloMac({ ...base, origem: "pessoa" }, agora)).toBe(false);
     expect(seguravelPeloMac({ ...base, origem: "rede" }, agora)).toBe(false);
     expect(seguravelPeloMac({ ...base, iniciadoEm: agora - 1 }, agora)).toBe(false);

@@ -412,7 +412,7 @@ describe("ADR-142: o prompt ensina a passagem por coluna quando há gerir_quadro
     expect(secaoDaLinha(linha!)).toBe("ferramentas");
     expect(linha).toContain("cada coluna pode ter um responsável (a passagem, o handoff)");
     // a assinatura é a mesma da descrição da ferramenta: se o contrato mudar, o prompt tem de acompanhar.
-    const assinatura = "definir_passagem {coluna, agente?, instrucoes?}";
+    const assinatura = "definir_passagem {coluna, agente?, instrucoes?, proxima?, volta_para?}";
     expect(FERRAMENTAS_QUADRO.gerir_quadro.description).toContain(assinatura);
     expect(linha).toContain(`gerir_quadro ${assinatura}`);
     expect(linha).toContain("agente null tira");
@@ -420,9 +420,11 @@ describe("ADR-142: o prompt ensina a passagem por coluna quando há gerir_quadro
     expect(linha).toContain("a pedido dela, na conversa com você");
     // QA (mutante h): a frase das colunas sem passagem segue a regra do domínio (aceitaPassagem).
     expect(linha).toContain("Só a dona do quadro define");
-    expect(linha).toContain("Bloqueado, Precisa de você e as colunas de fim não têm passagem");
+    expect(linha).toContain("Bloqueado e as colunas de fim não têm passagem");
+    expect(linha).not.toContain("Precisa de você");
     const aceita = Object.fromEntries(COLUNAS_PADRAO.map((c) => [c.id, aceitaPassagem(c)]));
-    for (const id of ["bloqueado", "voce", "feito", "cancelado"]) expect(aceita[id]).toBe(false);
+    for (const id of ["bloqueado", "feito", "cancelado"]) expect(aceita[id]).toBe(false);
+    expect(aceita.voce).toBeUndefined(); // ADR-162: não é coluna
     expect(aceita.backlog && aceita.afazer).toBe(true);
     // ADR-142 decisão 2: Backlog recebe sem acionar; o prompt não pode prometer início em toda coluna.
     expect(linha).toContain("nas outras de Não iniciado (como Backlog) só recebe, sem começar");

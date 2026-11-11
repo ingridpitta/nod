@@ -46,7 +46,7 @@ export function criarRotasRaioX(d: DepsRotas): Rota[] {
       padrao: new RegExp(`^/preferencias/quadros/${ID}/exibir$`),
       async handler(ctx) {
         const corpo = corpoObjeto(await ctx.corpo());
-        ctx.json(200, await executar(ctx.escopo, exibirDoQuadro, { quadroId: ctx.params.id ?? "", recolhidas: corpo.recolhidas, compacto: corpo.compacto, visao: corpo.visao }));
+        ctx.json(200, await executar(ctx.escopo, exibirDoQuadro, { quadroId: ctx.params.id ?? "", recolhidas: corpo.recolhidas, compacto: corpo.compacto, visao: corpo.visao, vista: corpo.vista, agrupar: corpo.agrupar, ordenar: corpo.ordenar, inverter: corpo.inverter, ocultas: corpo.ocultas, propriedades: corpo.propriedades }));
       },
     },
     {

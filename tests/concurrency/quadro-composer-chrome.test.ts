@@ -37,7 +37,10 @@ const tarefa = (id, titulo, status, extra = {}) => ({ id, quadroId: "q1", titulo
 const q = { id: "q1", agenteId: "a", meta: "A pílula é o composer", prazo: null, cumpridoEm: null, resumo: null, criadoEm: agora, atualizadoEm: agora,
   agenteNome: "Ada", ultimoLote: null, feitas: 0, total: 2, colunas: colunasDto(COLUNAS_PADRAO), tarefas: [
     tarefa("t1", "Escrever o composer", "fazendo"),
-    tarefa("t2", "Escolher o workspace", "voce", { pergunta: "Qual workspace?", voltarPara: "fazendo" }),
+    // ADR-162: a pergunta do bot (a marca esperaPessoa) se responde no reply do comentário; o campo Responder
+    // (textarea.qd-resp-in, no card e na tarefa aberta) ficou só em Bloqueado com pergunta. t2 é Bloqueada para os
+    // testes do rascunho, do Enter e do envio da resposta seguirem provando esse campo.
+    tarefa("t2", "Escolher o workspace", "bloqueado", { pergunta: "Qual workspace?", voltarPara: "fazendo" }),
   ] };
 const chamadas = [];
 let mensagens = [];

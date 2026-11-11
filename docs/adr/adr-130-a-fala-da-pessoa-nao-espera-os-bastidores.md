@@ -1,5 +1,7 @@
 # ADR-130 — A fala da pessoa não espera os bastidores
 
+> Emendada pela [ADR-163](adr-163-tarefa-do-quadro-e-trabalho.md): a tarefa do quadro roda num trabalho próprio (origem `quadro`), sem teto próprio (o freio é o portão de recursos da ADR-085) e fora dos bastidores.
+
 Status: proposta · Data: 2026-10-26 · Emenda a [ADR-099](adr-099-um-dono-por-bot.md) (item 1, a rotina e o pedido de
 colega na fila do dono) e a [ADR-083](adr-083-trabalhos-paralelos-a-conversa-coordena.md) §3 (a faixa da conversa); toca
 a [ADR-100](adr-100-o-motor-se-atualiza-sozinho.md) (a drenagem).

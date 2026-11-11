@@ -33,6 +33,11 @@ tarefa. No card isso aparece vazio ("parado sem motivo"), sem dizer se o bot esp
 - Uma migração aditiva (`quadro_execucoes.saida`, `turnos.acordar_quando`/`acordar_pr_url`, `trabalhos.tarefa_id`).
 - Dependência do GitHub para a volta por CI; com ele fora, a expiração garante o retorno.
 - Turnos de conversa e o zelador de prazo não mudam.
+- Emenda de 2026-11-10 (ADA-289, PR #723): vale em toda coluna que anda (grupo iniciado fora de Bloqueado e de
+  Precisa de você), inclusive Em revisão, que aciona pela passagem desde a ADR-142; antes o varredor olhava só A fazer e
+  Fazendo e o bot que parava calado na revisão valia como "andou". O turno aberto por **comentário** continua fora da
+  cobrança (de propósito): ele roda ao lado do trabalho da tarefa, e responder o comentário com outro comentário é o fim
+  esperado dele; quem segue cobrado é o trabalho da tarefa.
 
 ## Alternativas descartadas
 

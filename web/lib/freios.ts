@@ -6,7 +6,6 @@
  */
 import type { MovimentoDto, TravaColuna } from "../../src/contracts/freios-quadro.ts";
 import type { ColunaDto, TarefaDto } from "../../src/contracts/quadro.ts";
-import { pedeConfirmacao } from "./colunas.ts";
 
 /** Quanto tempo o eco do agente ("Ada terminou · Desfazer") fica na linha 1 do card. */
 export const ECO_DO_AGENTE_MS = 10 * 60_000;
@@ -14,7 +13,8 @@ export const ECO_DO_AGENTE_MS = 10 * 60_000;
 /** Espelho de ESPERA (src/domain/freios-quadro.ts): pedir ajuda nunca fica travado. */
 const ESPERA: ReadonlySet<string> = new Set(["voce", "bloqueado"]);
 
-const nomeDe = (cs: readonly { id: string; nome: string }[], id: string): string => cs.find((c) => c.id === id)?.nome ?? id;
+// ADR-162: `voce` não é coluna; o movimento para a espera da pessoa diz "Esperando você" (espelho de NOME_DA_ESPERA).
+const nomeDe = (cs: readonly { id: string; nome: string }[], id: string): string => cs.find((c) => c.id === id)?.nome ?? (id === "voce" ? "Esperando você" : id);
 
 /** Espelho de temTrava. */
 export function temTrava(t: TravaColuna | undefined): boolean {
@@ -73,14 +73,14 @@ export function relogioDaRecusa(ms: number, expirar: () => void, ocupado: () => 
 
 /**
  * O que a tela faz quando a pessoa solta a tarefa numa coluna (o arrasto ou o "Mover para…"): a trava recusa no próprio
- * card, com o "Mandar para…"; a coluna com responsável pede a confirmação discreta da 417; as outras movem direto.
+ * card, com o "Mandar para…"; o resto move direto (2026-11-10: entrar na coluna com responsável já é a passagem).
  */
-export type Soltura = { tipo: "recusa"; texto: string; destino: ColunaDto } | { tipo: "confirmar" } | { tipo: "mover" };
+export type Soltura = { tipo: "recusa"; texto: string; destino: ColunaDto } | { tipo: "mover" };
 
 export function decidirSoltura(cs: readonly ColunaDto[], t: Pick<TarefaDto, "status" | "voltarPara"> | undefined, para: ColunaDto): Soltura {
   const r = t ? recusaDaTrava(cs, t.status, para.id, t.voltarPara) : null;
   if (r) return { tipo: "recusa", ...r };
-  return pedeConfirmacao(para) ? { tipo: "confirmar" } : { tipo: "mover" };
+  return { tipo: "mover" };
 }
 
 /** Espelho de mudouATarefa. */

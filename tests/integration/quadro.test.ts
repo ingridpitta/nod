@@ -53,7 +53,10 @@ describeIntegracao("quadro-agente (NOD-442)", () => {
       const turno = await m.repos.turnos.buscar(r.data.comecaram[0]!.turnoId);
       expect(turno).toMatchObject({ agenteId: m.beto.agenteId, conversaId: m.beto.conversaId, origem: "delegacao", estado: "pendente", entradaConfianca: "confiavel", sobProcuracaoDe: PESSOA_MARLON });
       expect(turno?.entradaTexto).toContain(`tarefa: ${q.tarefas[0]!.id}`);
-      expect(r.events?.map((e) => e.kind)).toEqual(["quadro_mudou", "turno_criado"]);
+      // ADA-16 (ADR-163): o turno entra no trabalho próprio da tarefa (criado agora: o trabalho_mudou dele sai junto).
+      expect(r.events?.map((e) => e.kind)).toEqual(["quadro_mudou", "trabalho_mudou", "turno_criado"]);
+      const trabalho = await m.repos.trabalhos.buscar(turno!.trabalhoId!);
+      expect(trabalho).toMatchObject({ agenteId: m.beto.agenteId, conversaId: m.beto.conversaId, origem: "quadro", tarefaId: q.tarefas[0]!.id, titulo: "Tela de login", forma: "task" });
       expect(r.data.lote?.resumo).toBe("Criou o quadro, criou 2 tarefas");
       expect(q.ultimoLote?.id).toBe(r.data.lote?.id);
     });
@@ -710,7 +713,7 @@ describeIntegracao("quadro-agente (NOD-442)", () => {
       const turnoId = r.data.comecaram[0]!.turnoId;
       const d = await m.lote({ autor: { tipo: "pessoa" }, anfitriaoId: m.ana.agenteId, ops: [{ tipo: "desfazer", lote: r.data.lote!.id }] });
       if (!d.data.ok) throw new Error(d.data.detalhe);
-      expect(d.data.quadro?.tarefas[0]).toMatchObject({ status: "voce", pergunta: "Azul ou verde?", resposta: null });
+      expect(d.data.quadro?.tarefas[0]).toMatchObject({ status: "fazendo", esperaPessoa: true, pergunta: "Azul ou verde?", resposta: null });
       expect((await m.repos.turnos.buscar(turnoId))?.estado).toBe("interrompido");
     });
   });

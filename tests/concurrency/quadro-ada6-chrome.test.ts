@@ -29,7 +29,7 @@ const tarefa = (id, titulo, status, extra = {}) => ({ id, quadroId: "q1", titulo
   execucao: null, agenteNome: "Ada", codigo: "ADA-" + id.slice(1), numero: Number(id.slice(1)), branch: "", ...extra });
 const inicial = () => ({ id: "q1", agenteId: "a", prefixo: "ADA", modoConversa: "individual", meta: "Lançar o quadro", prazo: null, cumpridoEm: null, resumo: null,
   criadoEm: agora, atualizadoEm: agora, metaDesde: agora, agenteNome: "Ada", ultimoLote: null, feitas: 0, total: 14, colunas: colunasDto(COLUNAS_PADRAO), tarefas: [
-    tarefa("t1", "Trocar o token do Linear", "voce", { pergunta: "Qual workspace?", voltarPara: "revisao" }),
+    tarefa("t1", "Trocar o token do Linear", "revisao", { pergunta: "Qual workspace?", voltarPara: "revisao", esperaPessoa: true }),
     tarefa("t2", "Destravar o deploy", "bloqueado", { pergunta: "Falta a chave" }),
     ...Array.from({ length: 12 }, (_, i) => tarefa("t" + (i + 3), "Tarefa número " + (i + 3) + " com um título razoável", i % 2 ? "fazendo" : "backlog")),
   ] });
@@ -40,6 +40,7 @@ const fala = (id, autor, texto) => ({ id, conversaId: "c1", turnoId: null, kind:
 let mensagens = [];
 const lote = (id, tarefaIds, autor) => ({ id, quadroId: "q1", autor, resumo: "", tarefaIds, desfeitoEm: null, criadoEm: Date.now() });
 let antesDoLote = null;
+let respondida = null;
 window.__mudancas = [];
 const api = {
   quadro: async () => ({ quadro: structuredClone(q) }),
@@ -53,9 +54,9 @@ const api = {
     return { ok: true, quadro: structuredClone(q), lote: q.ultimoLote, comecaram: [], desfeito: false }; },
   mudarTarefa: async (a, id, campos) => { window.__mudancas.push([id, campos]); q = { ...q, tarefas: q.tarefas.map((t) => t.id === id ? { ...t, ...(campos.status ? { status: campos.status } : {}) } : t), ultimoLote: lote("LM", [id], { tipo: "pessoa" }) };
     return { ok: true, quadro: structuredClone(q), lote: q.ultimoLote, comecaram: [], desfeito: false }; },
-  responderTarefa: async (a, id, resposta) => { antesDoLote = structuredClone(q); q = { ...q, tarefas: q.tarefas.map((t) => t.id === id ? { ...t, status: "revisao", pergunta: null, resposta } : t), ultimoLote: lote("LR", [id], { tipo: "pessoa" }) };
+  responderTarefa: async (a, id, resposta) => { antesDoLote = structuredClone(q); respondida = id; q = { ...q, tarefas: q.tarefas.map((t) => t.id === id ? { ...t, status: "revisao", pergunta: null, resposta } : t), ultimoLote: lote("LR", [id], { tipo: "pessoa" }) };
     return { ok: true, quadro: structuredClone(q), lote: q.ultimoLote, desfeito: false }; },
-  desfazerLoteQuadro: async (a, loteId) => { if (loteId === "LR" && antesDoLote) { q = { ...antesDoLote, ultimoLote: { ...lote("LR", ["t1"], { tipo: "pessoa" }), desfeitoEm: Date.now() } }; antesDoLote = null; }
+  desfazerLoteQuadro: async (a, loteId) => { if (loteId === "LR" && antesDoLote) { q = { ...antesDoLote, ultimoLote: { ...lote("LR", [respondida], { tipo: "pessoa" }), desfeitoEm: Date.now() } }; antesDoLote = null; }
     return { ok: true, quadro: structuredClone(q), lote: q.ultimoLote, desfeito: true }; },
 };
 window.__botResponde = () => {
@@ -234,16 +235,18 @@ descrever("ADA-6: resposta legível, sugestões e recibos (Chrome real, 390×844
 
   it("critério 3: o recibo do Responder tem Desfazer, e desfazer volta a tarefa e devolve o texto ao campo", async () => {
     await montar();
-    await avaliar(cdp, `[...document.querySelectorAll("#quadro [data-act='abrir-tarefa'][data-id='t1']")].find((e) => e.offsetParent).click()`);
-    await ate(`document.querySelector("#quadro form[data-id='t1'] textarea")`);
-    await avaliar(cdp, `(() => { const t = document.querySelector("#quadro form[data-id='t1'] textarea"); t.value = "O workspace é o Gamefik"; t.form.requestSubmit(); })()`);
+    // ADR-162: a pergunta do bot (t1, a marca esperaPessoa) se responde no reply do comentário; o Responder
+    // (form responder-tarefa) ficou só em Bloqueado com pergunta: t2.
+    await avaliar(cdp, `[...document.querySelectorAll("#quadro [data-act='abrir-tarefa'][data-id='t2']")].find((e) => e.offsetParent).click()`);
+    await ate(`document.querySelector("#quadro form[data-form='responder-tarefa'][data-id='t2'] textarea")`);
+    await avaliar(cdp, `(() => { const t = document.querySelector("#quadro form[data-form='responder-tarefa'][data-id='t2'] textarea"); t.value = "A chave está no cofre"; t.form.requestSubmit(); })()`);
     await ate(`document.querySelector('#qc-faixa [data-act="qc-desfazer"][data-id="LR"]')`);
     await avaliar(cdp, `document.querySelector('#qc-faixa [data-act="qc-desfazer"]').click()`);
     await ate(`document.getElementById("qc-faixa").textContent.includes("Desfeito")`);
     expect(await avaliar<string>(cdp, `document.getElementById("qc-faixa").textContent`)).toContain("A resposta voltou ao campo");
-    expect(await avaliar<string>(cdp, `document.querySelector("#quadro form[data-form='responder-tarefa'][data-id='t1'] textarea")?.value ?? ""`)).toBe("O workspace é o Gamefik");
+    expect(await avaliar<string>(cdp, `document.querySelector("#quadro form[data-form='responder-tarefa'][data-id='t2'] textarea")?.value ?? ""`)).toBe("A chave está no cofre");
     // Revisão 4 (A1): o Comentar e o Recado ao agente usam o mesmo data-id e não recebem a resposta (um Enter a publicaria).
-    const outros = await json<string[]>(`[...document.querySelectorAll("#quadro form[data-id='t1']:not([data-form='responder-tarefa']) textarea")].map((t) => t.value)`);
+    const outros = await json<string[]>(`[...document.querySelectorAll("#quadro form[data-id='t2']:not([data-form='responder-tarefa']) textarea")].map((t) => t.value)`);
     expect(outros.length, "a tarefa aberta tem outros campos").toBeGreaterThan(0);
     expect(outros.every((v) => v === "")).toBe(true);
   }, 60_000);

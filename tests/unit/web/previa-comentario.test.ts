@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { mencionados, quemAcionar } from "../../../src/domain/comentarios-quadro.ts";
+import { mencionados } from "../../../src/domain/comentarios-quadro.ts";
 import { colunasDe } from "../../../src/domain/colunas.ts";
-import { andando } from "../../../src/domain/quadro.ts";
+import { mencionaTodos, rotaDoComentario } from "../../../src/domain/rota-comentario.ts";
 import { previaDoComentario, textoDaPrevia } from "../../../web/lib/previa-comentario.ts";
 
 /**
  * ADA-28 (escopo D): a prévia da tela diz o mesmo que o servidor fará. A web espelha a regra (não importa o domínio,
- * ADR-018); este teste confere o espelho contra `andando` + `mencionados` + `quemAcionar` num leque de casos.
+ * ADR-018); este teste confere o espelho contra `mencionados` + `mencionaTodos` + `rotaDoComentario` num leque de casos.
  */
 const colunas = colunasDe({ colunas: null });
 const agentes = [
@@ -22,13 +22,14 @@ const nomes = new Map(agentes.map((a) => [a.id, a.nome]));
 
 function doServidor(status: string, agenteId: string | null, texto: string): string[] {
   const mencoes = mencionados(texto, agentes).map((a) => a.id);
-  const ids = quemAcionar({ autor: { tipo: "pessoa" }, responsavelId: andando(colunas, status) ? agenteId : null, mencionados: mencoes, nods: new Set(["n"]) });
+  void status; // 2026-11-10: a coluna não decide mais (o responsável é acionado em qualquer uma)
+  const ids = rotaDoComentario({ autor: { tipo: "pessoa" }, responsavelId: agenteId, mencionados: mencoes, todos: mencionaTodos(texto), nods: new Set(["n"]) }).map((r) => r.agenteId);
   return ids.map((id) => nomes.get(id)!);
 }
 
 describe("ADA-28: a prévia do comentário", () => {
   const status = colunas.map((c) => c.id);
-  const textos = ["oi", "@Gil olha", "@gilberto e @Gil", "@Dev 1 e @Dev", "@Nod faz", "@Faustino de novo", "email a@Gil.com", "@Gilbertos chegou", "@Dev 1 só"];
+  const textos = ["oi", "@todos aviso", "@todos e @Gil", "@Gil olha", "@gilberto e @Gil", "@Dev 1 e @Dev", "@Nod faz", "@Faustino de novo", "email a@Gil.com", "@Gilbertos chegou", "@Dev 1 só"];
   for (const s of status)
     for (const resp of ["x", null])
       for (const texto of textos)
@@ -37,15 +38,9 @@ describe("ADA-28: a prévia do comentário", () => {
         });
 
   it("os textos da linha", () => {
-    const col = (id: string) => colunas.find((c) => c.id === id)!.nome;
-    const andandoId = colunas.find((c) => andando(colunas, c.id))!.id;
-    expect(textoDaPrevia(previaDoComentario({ tarefa: { agenteId: "x", status: andandoId }, colunas, texto: "oi", agentes }), col(andandoId))).toBe("Faustino vai ver agora");
-    expect(textoDaPrevia(previaDoComentario({ tarefa: { agenteId: "x", status: andandoId }, colunas, texto: "@Gil", agentes }), col(andandoId))).toBe("Faustino e Gil vão ver agora");
-    const p = previaDoComentario({ tarefa: { agenteId: "x", status: "afazer" }, colunas, texto: "oi", agentes });
-    expect(p.motivo).toBe("fora_do_andamento");
-    // QA do PR #702: a @menção fora do andamento aciona o mencionado, e o motivo diz isso.
-    expect(previaDoComentario({ tarefa: { agenteId: "x", status: "afazer" }, colunas, texto: "@Gil olha", agentes }).motivo).toBe("mencao");
-    expect(textoDaPrevia(p, col("afazer"))).toBe(`fica só registrado (${col("afazer")} não aciona ninguém; @nome chama um bot)`);
-    expect(textoDaPrevia(previaDoComentario({ tarefa: { agenteId: null, status: andandoId }, colunas, texto: "oi", agentes }), null)).toMatch(/não tem responsável/);
-  });
+    expect(textoDaPrevia(previaDoComentario({ tarefa: { agenteId: "x", status: "afazer" }, colunas, texto: "oi", agentes }))).toBe("Faustino vai ver agora");
+    expect(textoDaPrevia(previaDoComentario({ tarefa: { agenteId: "x", status: "feito" }, colunas, texto: "@Gil", agentes }))).toBe("Faustino e Gil vão ver agora");
+    expect(textoDaPrevia(previaDoComentario({ tarefa: { agenteId: "x", status: "feito" }, colunas, texto: "@todos amanhã", agentes }))).toMatch(/@todos é anúncio/);
+    expect(textoDaPrevia(previaDoComentario({ tarefa: { agenteId: null, status: "afazer" }, colunas, texto: "oi", agentes }))).toMatch(/não tem responsável/);
+});
 });

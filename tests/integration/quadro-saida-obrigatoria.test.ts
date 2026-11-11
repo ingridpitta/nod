@@ -91,10 +91,35 @@ describeIntegracao("ADA-232: saída obrigatória do trabalho da tarefa", () => {
     });
   });
 
+  // ADA-289 (P1 do Dante): o varredor tinha um "andando" só de A fazer e Fazendo; o bot acionado em Em revisão (pela
+  // passagem da coluna, ADR-142) que parava calado era gravado como "andou" e nunca era cobrado (ADR-155 §1/§3).
+  it("Em revisão também cobra a saída: o bot acionado lá que para sem saída grava nenhuma e é reacionado", async () => {
+    await withRollback(MARLON, async (trx) => {
+      const m = await montar(trx);
+      const nome = (await m.repos.agentes.buscar(m.beto.agenteId))!.nome;
+      await m.lote([{ tipo: "definir_passagem", coluna: "revisao", agente: nome }, { tipo: "criar_tarefa", titulo: "R", status: "revisao", agente: nome }]);
+      const q = await m.repos.quadros.doAgente(m.ana.agenteId);
+      const r = (await m.repos.quadros.tarefas(q!.id)).find((t) => t.titulo === "R")!;
+      expect(r.status).toBe("revisao");
+      expect(r.turnoId).not.toBeNull();
+      // Descarta o turno da tarefa "T" (criada no montar) para pegar o da "R".
+      let turno = await m.pegar();
+      if (turno.id !== r.turnoId) { await m.assentar(turno.id, ["Bash"]); turno = await m.pegar(); }
+      expect(turno.id).toBe(r.turnoId);
+      await m.assentar(turno.id, ["Bash"]);
+      expect((await m.repos.quadroExecucoes.daTarefa(r.id))[0]).toMatchObject({ saida: "nenhuma" });
+      await m.varrer();
+      expect((await m.turnosDoBeto()).some((t) => t.origem === "retomada" && t.retomaTurnoId === turno.id)).toBe(true);
+    });
+  });
+
   it("pôr o PR na tarefa é saída (andou): nada é reacionado", async () => {
     await withRollback(MARLON, async (trx) => {
       const m = await montar(trx);
       const raiz = await m.pegar();
+      // ADA-289: Em revisão agora é "andando" (P1); o andou vem do PR e do status mudados depois do despacho, não mais de
+      // a tarefa ter saído do andamento. O despacho volta ao agora real, como no teste abaixo.
+      await trx`update turnos set despachado_em = clock_timestamp() where id = ${raiz.id}`;
       await m.lote([{ tipo: "mudar_tarefa", tarefa: "T", pr_url: "https://github.com/gamefik/nod/pull/677" }]);
       await m.assentar(raiz.id, ["mcp__nod__gerir_quadro"]);
       expect((await m.execs())[0]!.saida).toBe("andou");

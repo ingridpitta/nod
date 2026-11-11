@@ -1,0 +1,256 @@
+/*
+ * Quadro minimalista (definido em 2026-11-10, pedido do Marlon; referência: o board do Multica). O par de
+ * web/telas/opcoes-quadro.ts (classes `qm-`) e os ajustes do quadro de verdade (só quando a barra nova está à vista,
+ * `.qd-vista:has(.qm-barra)`): colunas quase do tom da página, card branco de borda fina sem sombra, cabeçalho com o
+ * responsável da coluna em chip, popovers discretos e o modal de Nova tarefa. Design system do nod: tinta em 4 níveis,
+ * raio generoso, traço 1.6, cor só com significado, sem gradiente, sem botão cheio pesado.
+ */
+
+/* ---------- O tom: página clara, colunas um passo abaixo, card branco ---------- */
+.qd-vista:has(.qm-barra) { --qd-fundo: var(--surface); --qd-col-fundo: color-mix(in srgb, var(--surface-side) 85%, var(--surface)); --qd-card: var(--surface); }
+:root[data-theme="dark"] .qd-vista:has(.qm-barra) { --qd-fundo: var(--surface); --qd-col-fundo: color-mix(in srgb, var(--surface-side) 70%, var(--surface)); --qd-card: var(--surface-raised); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .qd-vista:has(.qm-barra) { --qd-fundo: var(--surface); --qd-col-fundo: color-mix(in srgb, var(--surface-side) 70%, var(--surface)); --qd-card: var(--surface-raised); }
+}
+.qd-vista:has(.qm-barra) .qd-col { padding: 8px 8px 10px; border-radius: 14px; gap: 8px; }
+.qd-vista:has(.qm-barra) .qd-col-cab { min-height: 30px; font-size: 13px; }
+.qd-vista:has(.qm-barra) .qd-col-cab .qd-n { color: var(--ink-3); font-weight: 400; }
+.qd-vista:has(.qm-barra) .qd-col-lista { gap: 8px; }
+.qd-vista:has(.qm-barra) .qd-col-vazio { padding: 18px 6px; font-size: 12.5px; color: var(--ink-3); }
+
+/* O card: branco, borda fina, sem sombra; meta pequena em cima, título em até 2 linhas, rodapé com quem e quando. */
+.qd-vista:has(.qm-barra) .qd-card { gap: 6px; padding: 10px 12px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--qd-card); box-shadow: none; }
+.qd-vista:has(.qm-barra) .qd-card:hover { border-color: color-mix(in srgb, var(--line-strong) 45%, var(--line)); }
+.qd-vista:has(.qm-barra) .qd-card-l1 { column-gap: 6px; flex-wrap: nowrap; }
+.qd-vista:has(.qm-barra) .qd-card-l1 > .qd-estado, .qd-vista:has(.qm-barra) .qd-card-l1 > .qd-selo { margin-left: auto; min-width: 0; }
+.qd-vista:has(.qm-barra) .qd-card-l1 .qd-aviso { flex: 1 1 auto; }
+.qd-vista:has(.qm-barra) .qd-card-tit { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; font-size: 13.5px; line-height: 1.4; }
+.qd-vista:has(.qm-barra) .qd-card-pe { gap: 8px; margin-top: 2px; }
+.qd-vista:has(.qm-barra) .qd-card-pe .qd-quando { margin-left: auto; }
+.qm-desc { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; margin: -2px 0 0; font-size: 12px; line-height: 1.4; color: var(--ink-3); overflow-wrap: anywhere; }
+.qm-coms { display: inline-flex; align-items: center; gap: 3px; margin-left: auto; font-size: 11.5px; color: var(--ink-3); }
+.qm-coms + .qd-quando { margin-left: 8px !important; }
+.qm-atualizado { color: var(--ink-3); }
+
+/* A prioridade: barrinhas em tinta; urgente é a única com cor (perigo). */
+.qm-pri { display: inline-grid; place-items: center; flex: none; width: 14px; height: 14px; color: var(--ink-2); }
+.qm-pri-sem { color: var(--ink-3); opacity: .7; }
+.qm-pri-urgente { color: var(--danger); }
+
+/* O selo "Trabalhando" com o avatar pequeno de quem roda (no lugar da bolinha). */
+.qm-selo { gap: 5px; }
+.qm-selo-av { display: inline-grid; place-items: center; flex: none; }
+.qm-selo-av .icon.mascote, .qm-selo-av nod-mascote { width: 14px !important; height: 14px !important; min-width: 14px; border-radius: 4px; }
+.qm-selo-av .icon.mascote svg { width: 12px; height: 12px; }
+.qm-selo-av .qd-anel { width: 14px; height: 14px; font-size: 7px; border-width: 1px; }
+
+/* Avatares pequenos (bots e pessoas) nos menus, chips e cabeçalhos. */
+.qm-av { display: inline-grid; place-items: center; flex: none; }
+.qm-av .icon.mascote, .qm-av nod-mascote { width: 18px !important; height: 18px !important; min-width: 18px; border-radius: 6px; }
+.qm-av .icon.mascote svg { width: 15px; height: 15px; }
+.qm-av .qd-anel { width: 18px; height: 18px; font-size: 8.5px; border-width: 1.5px; }
+
+/* O responsável da coluna (passagem, ADR-142) como chip com o avatar. */
+.qd-col-passa.qm-col-resp { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px 0 3px; border: 1px solid var(--line); border-radius: 999px; background: var(--qd-card); color: var(--ink-2); font-size: 12px; font-weight: 500; opacity: 1; }
+.qd-col-passa.qm-col-resp:hover, .qd-col-passa.qm-col-resp[aria-expanded="true"] { border-color: color-mix(in srgb, var(--line-strong) 50%, var(--line)); color: var(--ink); }
+.qm-col-resp-nome { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qm-col-av .icon.mascote, .qm-col-av nod-mascote { width: 16px !important; height: 16px !important; min-width: 16px; border-radius: 5px; }
+.qm-col-av .icon.mascote svg { width: 13px; height: 13px; }
+.qm-col-av .qd-anel { width: 16px; height: 16px; font-size: 8px; border-width: 1.5px; }
+
+/* ---------- A barra ---------- */
+.qm-barra { gap: 8px; }
+.qm-esq { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.qm-barra .qd-barra-dir { gap: 4px; }
+.qm-fil-l, .qm-op-l, .qm-ativos-l { position: relative; display: inline-flex; }
+.qm-icbt { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-width: 32px; height: 32px; padding: 0 7px; border: 0; border-radius: 9px;
+  background: transparent; color: var(--ink-2); font: inherit; font-size: 12px; cursor: pointer; }
+.qm-icbt:hover, .qm-icbt[aria-expanded="true"] { background: var(--surface-raised); color: var(--ink); }
+.qm-icbt:focus-visible, .qm-ativos:focus-visible, .qm-it:focus-visible, .qm-tog:focus-visible, .qm-seg-bt:focus-visible, .qm-inv:focus-visible, .qm-chip-x:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.qm-icbt.qm-ligado { color: var(--ink); }
+.qm-icbt-n { min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--surface-selected); color: var(--ink); font-size: 11px; font-weight: 600; line-height: 16px; font-variant-numeric: tabular-nums; }
+.qm-icbt .qd-ponto { position: absolute; top: 6px; right: 6px; }
+.qm-barra .qd-busca-l { min-width: 0; }
+
+/* O cabeçalho de uma linha (2026-11-10): o nome do quadro com o chevron (abre o menu), a meta e o prazo em cinza. */
+.qm-cab-l { position: relative; display: inline-flex; align-items: center; gap: 2px; min-width: 0; margin-right: 6px; }
+.qm-cab-bt { flex: none; display: inline-flex; align-items: center; gap: 4px; min-width: 0; height: 32px; margin-left: -6px; padding: 0 6px; border: 0; border-radius: 9px; background: transparent; color: var(--ink); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.qm-cab-bt:hover, .qm-cab-bt[aria-expanded="true"] { background: var(--surface-raised); }
+.qm-cab-nome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; }
+.qm-cab-chev { flex: none; color: var(--ink-3); }
+.qm-cab-meta { flex: 0 1 auto; min-width: 0; max-width: 280px; height: 28px; padding: 0 6px; border: 0; border-radius: 8px; background: transparent; color: var(--ink-3); font: inherit; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.qm-cab-meta:hover { color: var(--ink-2); background: var(--surface-raised); }
+.qm-cab-imp { margin-left: 4px; font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+/* O seletor de quadro (ADA-14) mora aqui sem o botão: quem o abre é o "Trocar de quadro…" do menu. */
+.qm-cab-l .qd-qs { position: absolute; top: 100%; left: 0; margin: 0; }
+.qm-cab-l .qd-qs-bt { display: none; }
+/* O menu do quadro: o popover leve das Opções, itens de texto, separador fino e o Remover em vermelho discreto. */
+.qm-pop-quadro { left: -6px; width: 260px; }
+.qm-qm-it { justify-content: space-between; }
+.qm-qm-sub { flex: 0 1 auto; min-width: 0; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-3); font-size: 12px; }
+.qm-qm-sep { height: 1px; margin: 4px 6px; background: var(--line); }
+.qm-it.qm-qm-perigo { color: var(--danger); }
+.qm-qm-campo { display: flex; align-items: center; min-height: 36px; padding: 0 4px; }
+.qm-qm-campo .qd-meta-in { flex: 1; min-width: 0; height: 30px; border-radius: 8px; }
+.qm-qm-campo .qd-prazo { flex: 1; flex-wrap: wrap; }
+.qm-qm-campo .qd-prazo-sel { flex: 1; height: 30px; padding: 0 6px; border: 1px solid var(--line); border-radius: 8px; }
+.qm-pop-quadro .qm-qm-prog { margin: 4px 8px 4px; }
+.qm-pop-quadro .qm-qm-teste { margin: 6px 8px 2px; }
+/* Pessoas e Atividade (abertos pelo menu): o título e o Fechar no lugar da linha de links. */
+.qd-pessoas-cab { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.qd-pessoas-tit { margin: 0; font-size: 13px; font-weight: 600; }
+
+/* A pílula de quem trabalha agora. */
+.qm-ativos { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 9px 0 7px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink-2); font: inherit; font-size: 12.5px; cursor: pointer; }
+.qm-ativos:hover, .qm-ativos[aria-expanded="true"] { border-color: color-mix(in srgb, var(--line-strong) 50%, var(--line)); color: var(--ink); }
+.qm-ativos.qm-ligado { background: var(--surface-raised); color: var(--ink); }
+.qm-pilha { display: inline-flex; align-items: center; }
+.qm-pilha .qm-av + .qm-av { margin-left: -6px; }
+.qm-pilha .qm-av { border-radius: 7px; box-shadow: 0 0 0 2px var(--surface); }
+.qm-pilha-quieta { opacity: .55; }
+.qm-ativos-n { font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+.qm-rodando { display: inline-flex; align-items: center; }
+.qm-rodando i { width: 6px; height: 6px; border-radius: 50%; background: var(--ok, #1f9d55); }
+
+/* ---------- Popovers ---------- */
+.qm-pop { position: absolute; z-index: 30; top: calc(100% + 6px); width: 280px; max-width: calc(100vw - 24px); padding: 6px; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--surface); box-shadow: 0 10px 30px color-mix(in srgb, var(--ink) 9%, transparent); font-size: 13px; color: var(--ink); text-align: left; }
+.qm-pop-fil { left: 0; }
+.qm-pop-op, .qm-pop-ativos { right: 0; }
+.qm-pop-op { width: 340px; padding: 10px; }
+.qm-lista { display: flex; flex-direction: column; gap: 1px; }
+.qm-it { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.qm-it:hover, .qm-it.qm-aberto { background: var(--surface-raised); }
+.qm-it-txt { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qm-it-campo { color: var(--ink-3); }
+.qm-it-sep { margin: 0 5px; color: var(--ink-3); }
+.qm-n { flex: none; color: var(--ink-3); font-size: 12px; font-variant-numeric: tabular-nums; }
+.qm-it .qm-ic-chev { flex: none; color: var(--ink-3); }
+.qm-caixa { display: inline-grid; place-items: center; flex: none; width: 15px; height: 15px; border: 1.5px solid var(--line-strong); border-radius: 4px; color: var(--ink); }
+.qm-it[aria-checked="true"] .qm-caixa { border-color: var(--ink); }
+.qm-campo-l { position: relative; }
+.qm-sub { position: absolute; z-index: 31; top: -6px; left: calc(100% + 8px); width: 240px; max-height: 340px; overflow: auto; padding: 6px; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--surface); box-shadow: 0 10px 30px color-mix(in srgb, var(--ink) 9%, transparent); }
+.qm-fil-busca { display: flex; align-items: center; gap: 7px; height: 34px; margin: 0 0 4px; padding: 0 8px; border-bottom: 1px solid var(--line); color: var(--ink-3); }
+/* foco-ok: o campo é o próprio popover do funil (abre já focado); no forced-colors ganha o contorno (fim do arquivo). */
+.qm-fil-in { flex: 1; min-width: 0; height: 100%; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 13px; outline: 0; }
+.qm-vazio { margin: 0; padding: 10px 8px; color: var(--ink-3); font-size: 12.5px; }
+.qm-rodape { margin-top: 4px; padding: 6px 8px 2px; border-top: 1px solid var(--line); }
+.qm-sec { margin: 12px 0 6px; font-size: 11.5px; font-weight: 600; color: var(--ink-3); }
+.qm-pop-ativos .qm-sec { margin: 4px 8px 4px; }
+.qm-nota { margin: 12px 0 0; font-size: 11.5px; color: var(--ink-3); }
+
+/* As Opções: visão em segmento, linhas com select, chips liga/desliga. */
+.qm-seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 3px; border-radius: 10px; background: var(--surface-side); }
+.qm-seg-bt { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 30px; border: 0; border-radius: 8px; background: transparent; color: var(--ink-3); font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer; }
+.qm-seg-bt[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--line); }
+.qm-linha { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; color: var(--ink-2); font-size: 12.5px; }
+.qm-linha-dir { display: inline-flex; align-items: center; gap: 6px; }
+.qm-sel { height: 30px; min-width: 150px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; font-size: 12.5px; cursor: pointer; }
+.qm-inv { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink-2); cursor: pointer; }
+.qm-inv[aria-pressed="true"] { background: var(--surface-raised); color: var(--ink); }
+.qm-inv:disabled { opacity: .4; cursor: default; }
+.qm-togs { display: flex; flex-wrap: wrap; gap: 5px; }
+.qm-togs-ex { margin-top: 8px; }
+.qm-tog { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 9px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--ink-3); font: inherit; font-size: 12px; cursor: pointer; }
+.qm-tog[aria-pressed="true"] { background: var(--surface-raised); border-color: transparent; color: var(--ink); font-weight: 500; }
+.qm-tog .qd-st { width: 12px; height: 12px; }
+
+/* Os filtros ligados: chips discretos com o ×. */
+.qm-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: -4px; }
+.qm-chip { display: inline-flex; align-items: center; gap: 2px; height: 24px; padding: 0 2px 0 9px; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; color: var(--ink-2); max-width: 100%; }
+.qm-chip-x { display: grid; place-items: center; width: 20px; height: 20px; border: 0; border-radius: 50%; background: transparent; color: var(--ink-3); cursor: pointer; }
+.qm-chip-x:hover { background: var(--surface-raised); color: var(--ink); }
+.qm-chips-limpar { font-size: 12px; color: var(--ink-3); }
+
+/* ---------- O modal de Nova tarefa ---------- */
+.qm-modal-fundo { position: fixed; inset: 0; z-index: 60; background: color-mix(in srgb, var(--ink) 18%, transparent); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: qm-aparece .16s ease-out both; }
+.qm-modal { position: fixed; z-index: 61; top: 50%; left: 50%; width: min(680px, calc(100% - 24px)); max-height: calc(100% - 24px); overflow: auto; transform: translate(-50%, -50%);
+  border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: 0 24px 64px color-mix(in srgb, var(--ink) 16%, transparent); animation: qm-sobe .18s cubic-bezier(.2, .8, .2, 1) both; }
+.qm-nt { display: flex; flex-direction: column; margin: 0; padding: 14px 18px 12px; }
+.qm-nt-cab { display: flex; align-items: center; gap: 6px; min-height: 28px; font-size: 12.5px; color: var(--ink-3); }
+.qm-nt-quadro { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 50%; }
+.qm-nt-onde { color: var(--ink); font-weight: 500; }
+.qm-nt-x { margin-left: auto; min-width: 28px; height: 28px; }
+/* foco-ok: o título é o campo do modal (abre focado), sem caixa como no Multica; no forced-colors ganha o contorno. */
+.qm-nt-tit { margin-top: 10px; padding: 0; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 19px; font-weight: 600; outline: 0; }
+.qm-nt-tit::placeholder, .qm-nt-desc::placeholder { color: var(--ink-3); opacity: .8; }
+/* foco-ok: a descrição do modal, sem caixa; no forced-colors ganha o contorno. */
+.qm-nt-desc { min-height: 110px; margin-top: 8px; padding: 0; border: 0; background: transparent; color: var(--ink-2); font: inherit; font-size: 14px; line-height: 1.5; resize: vertical; outline: 0; }
+.qm-nt-dica { display: flex; align-items: center; gap: 6px; margin: 8px 0 0; font-size: 12px; color: var(--ink-3); }
+.qm-nt-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.qm-nt-chip { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px 0 8px; border: 1px solid var(--line); border-radius: 999px; font-size: 12.5px; color: var(--ink-2); cursor: pointer; }
+.qm-nt-chip:hover, .qm-nt-chip:focus-within { border-color: color-mix(in srgb, var(--line-strong) 50%, var(--line)); color: var(--ink); }
+.qm-nt-chip:focus-within { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.qm-nt-chip-txt { white-space: nowrap; }
+.qm-nt-sel { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 16px; }
+.qm-nt-erro { margin: 8px 0 0; font-size: 12px; color: var(--danger); }
+.qm-nt-pe { display: flex; align-items: center; justify-content: flex-end; gap: 14px; margin: 12px -18px 0; padding: 10px 18px 0; border-top: 1px solid var(--line); }
+.qm-nt-outra { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-2); cursor: pointer; }
+.qm-nt-outra input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.qm-switch { position: relative; width: 26px; height: 15px; border-radius: 999px; background: var(--line); transition: background .15s; }
+.qm-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; border-radius: 50%; background: var(--surface); box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 20%, transparent); transition: transform .15s; }
+.qm-nt-outra input:checked + .qm-switch { background: var(--ink-2); }
+.qm-nt-outra input:checked + .qm-switch::after { transform: translateX(11px); }
+.qm-nt-outra input:focus-visible + .qm-switch { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.qm-nt-criar { display: inline-flex; align-items: center; gap: 5px; height: 32px; padding: 0 8px 0 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-raised); color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.qm-nt-criar:hover { border-color: color-mix(in srgb, var(--line-strong) 50%, var(--line)); }
+.qm-nt-criar:disabled { opacity: .6; cursor: default; }
+.qm-nt-criar:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.qm-nt-criar kbd { min-width: 18px; height: 18px; padding: 0 4px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); font: inherit; font-size: 11px; font-weight: 500; line-height: 16px; color: var(--ink-3); text-align: center; }
+.qm-nt-criar kbd:first-of-type { margin-left: 4px; }
+@keyframes qm-aparece { from { opacity: 0; } }
+@keyframes qm-sobe { from { opacity: 0; transform: translate(-50%, calc(-50% + 8px)); } }
+@media (prefers-reduced-motion: reduce) { .qm-modal-fundo, .qm-modal { animation: none; } }
+
+/* ---------- Estreito (celular e janela pequena): ícones, popovers na largura, submenu embaixo ---------- */
+@container (max-width: 640px) {
+  .qm-barra .qd-busca-in { width: 96px; }
+  /* Janela estreita (não o celular, que tem o próprio topo): o nome do quadro na 1ª linha, o funil e a busca embaixo. */
+  .qm-barra:has(.qm-cab-l) { align-items: flex-end; }
+  .qm-esq:has(.qm-cab-l) { flex-wrap: wrap; row-gap: 2px; }
+  .qm-cab-l { flex: 1 0 100%; }
+  .qm-pop-op, .qm-pop-fil, .qm-pop-ativos { position: fixed; top: auto; left: 12px; right: 12px; bottom: calc(env(safe-area-inset-bottom) + 84px); width: auto; max-height: 70vh; overflow: auto; }
+  .qm-sub { position: static; width: auto; margin: 2px 0 4px 16px; box-shadow: none; border: 0; border-left: 1px solid var(--line); border-radius: 0; padding: 0 0 0 6px; }
+  .qm-nt-chip { height: 36px; }
+  .qm-icbt, .qm-ativos { min-height: 40px; }
+}
+
+/* O "Mover para…" do card não ocupa linha: aparece no canto ao passar o mouse ou com o foco (ADR-142). */
+.qd-vista:has(.qm-barra) .qd-card-mover { position: absolute; top: 6px; right: 8px; padding: 0 6px; border-radius: 6px; background: var(--qd-card); font-size: 11.5px; }
+
+/* O mascote desenha o bicho em ~63% da caixa (viewBox com folga para a animação): nos avatares pequenos do quadro
+   ele cresce até a borda da caixa, para ler como avatar e não como um ponto. */
+.qd-vista:has(.qm-barra) .qd-quem nod-mascote, .qm-av nod-mascote { overflow: visible; display: inline-grid; place-items: center; }
+.qd-vista:has(.qm-barra) .qd-quem nod-mascote svg, .qm-av nod-mascote svg { width: 158% !important; height: 158% !important; margin: -29% !important; flex: none; }
+
+/* NOD-463: a prioridade nas Propriedades da tarefa aberta e na linha da lista. */
+.qm-t-pri { display: inline-flex; align-items: center; gap: 6px; }
+.qd-l-bt > .qm-pri { margin-right: 2px; }
+/* O Responder do card (NOD-420) mais leve no quadro minimalista: uma linha, o Enviar como texto. */
+.qd-vista:has(.qm-barra) .qd-card-resp-in { min-height: 30px; height: 30px; padding: 5px 8px; border-radius: 8px; resize: none; }
+.qd-vista:has(.qm-barra) .qd-card-resp-in:focus { height: 64px; }
+
+/* A barra numa linha só, também no celular: a busca encolhe; os ícones e a pílula ficam à direita. */
+.qd-barra-q.qm-barra { flex-wrap: nowrap; }
+.qm-barra .qm-esq { flex: 1 1 auto; }
+.qm-barra .qd-busca-l { flex: 0 1 auto; }
+.qm-barra .qd-busca { width: 168px; max-width: 100%; }
+@container (max-width: 640px) {
+  .qm-barra .qd-busca, .qm-barra .qd-busca:focus-within, .qm-barra .qd-busca:has(.qd-busca-in:not(:placeholder-shown)) { width: 100%; min-width: 72px; }
+  .qm-barra .qd-busca-l { flex: 1 1 auto; }
+  .qm-barra .qd-kbd { display: none; }
+}
+/* No estreito a tarefa já aparece em lista (e o celular tem a visão no título, ADA-18): o Quadro | Lista sai das Opções. */
+@container (max-width: 640px) { .qm-pop-op .qm-seg { display: none; } .qm-pop-op .qm-linha:first-of-type { margin-top: 0; } }
+/* Alto contraste: os campos sem borda (a busca do funil, o título e a descrição do modal) ganham o contorno de volta. */
+@media (forced-colors: active) { .qm-fil-in:focus-visible, .qm-nt-tit:focus-visible, .qm-nt-desc:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; } }
+
+/* Labels e Prazo no card (quando a tarefa os traz): a label com o pontinho da cor dela; o prazo vencido em perigo. */
+.qm-label { gap: 5px; }
+.qm-label i { width: 7px; height: 7px; border-radius: 50%; background: var(--qm-cor, var(--ink-3)); }
+.qm-prazo.qm-vencida { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 35%, var(--line)); }
+/* O "é / não é" no topo do submenu do funil. */
+.qm-seg-modo { margin: 0 0 6px; }
+.qm-seg-modo .qm-seg-bt { height: 26px; font-size: 12px; }
+@media (forced-colors: active) { .qm-label i { forced-color-adjust: none; } }

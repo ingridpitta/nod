@@ -204,7 +204,8 @@ export function folhaDoTopo(o: { passo?: "prazo"; meta: string | null; prazo: { 
     o.trazer ? it("trazer-linear", "<span>Trazer do Linear…</span>") : "",
     it("remover-quadro", "<span>Remover quadro</span>", ' title="O bot volta a ser um agente comum; a conversa e a memória ficam"', " qd-cel-sep qd-cel-perigo"),
   ].join("");
-  return confiar(folha("Opções do quadro", `<div class="qd-cel-menu" role="menu" aria-label="Opções do quadro">${itens}</div>`));
+  // Quadro mínimo (2026-11-10): o selo "Em teste" saiu do topo e mora no rodapé do menu, numa linha discreta.
+  return confiar(folha("Opções do quadro", `<div class="qd-cel-menu" role="menu" aria-label="Opções do quadro">${itens}</div><p class="qd-cel-teste">Em teste · só você vê</p>`));
 }
 
 /** As visões do título (o mesmo enum de src/contracts/raio-x.ts; a web não importa valor de lá, ADR-018). */

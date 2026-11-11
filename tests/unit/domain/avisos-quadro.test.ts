@@ -66,7 +66,7 @@ describe("avisos do quadro: coluna 'só a pessoa tira daqui' (revisão 4 do PR #
 
   it("misturada com Precisa de você: as duas instruções, cada uma para as suas", () => {
     const mista = textoDasDecisoes([tarefa({ id: "t1", status: "voce", pergunta: "Azul?" }), tarefa({ id: "t2", status: "revisao" })], SO, nomes);
-    expect(mista).toContain("Responda na tarefa ou aqui mesmo");
+    expect(mista).toContain("Responda na tarefa (um comentário) ou aqui mesmo");
     expect(mista).toContain("As que estão numa coluna só sua não têm resposta: mova-as quando decidir.");
   });
 
@@ -99,7 +99,7 @@ describe("avisos do quadro: decisões juntas, uma vez, depois da janela", () => 
 
   it("uma tarefa numa frase com a pergunta; a pergunta longa sai cortada", () => {
     const uma = textoDasDecisoes([tarefa({ id: "t1", status: "voce", titulo: "T1", pergunta: "Azul ou verde?" })], COLUNAS_PADRAO, nomes);
-    expect(uma).toBe(`Preciso de você no quadro, em "T1", Beto: Azul ou verde?\n\nResponda na tarefa ou aqui mesmo: ela volta para onde estava e o responsável segue.`);
+    expect(uma).toBe(`Preciso de você no quadro, em "T1", Beto: Azul ou verde?\n\nResponda na tarefa (um comentário) ou aqui mesmo: o responsável segue.`);
     // Na conversa de outro bot, diz de qual quadro é (revisão do PR #624, achado 3).
     expect(textoDasDecisoes([tarefa({ id: "t1", status: "voce", titulo: "T1", pergunta: "Azul ou verde?" })], COLUNAS_PADRAO, nomes, "Ana")).toMatch(/^Preciso de você no quadro de Ana, em "T1"/);
     const longa = textoDasDecisoes([tarefa({ id: "t1", status: "bloqueado", pergunta: "x".repeat(900) })], COLUNAS_PADRAO, nomes);

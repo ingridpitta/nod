@@ -14,7 +14,7 @@ const TID = "10000000-0000-4000-8000-000000000001";
 
 const tarefa = (o: Partial<TarefaQuadro> = {}): TarefaQuadro => ({
   id: TID, quadroId: "q", titulo: "Login", descricao: "", status: "fazendo", voltarPara: null, agenteId: ZE.id, ordem: 1,
-  linearId: null, linearUrl: null, prUrl: null, pergunta: null, resposta: null, deFora: false, turnoId: null, criadoEm: AGORA, mudadoEm: AGORA, terminadaEm: null, numero: null, ...o,
+  linearId: null, linearUrl: null, prUrl: null, pergunta: null, resposta: null, deFora: false, turnoId: null, criadoEm: AGORA, mudadoEm: AGORA, terminadaEm: null, numero: null, prioridade: "sem", ...o,
 });
 
 const comPassagem = (id: string, responsavel: string | null, instrucoes?: string): ColunaQuadro[] =>
@@ -34,10 +34,10 @@ const ok = (r: ReturnType<typeof planejar>) => {
 };
 
 describe("as colunas com passagem", () => {
-  it("só as de espera e andamento aceitam responsável (nunca Precisa de você, Bloqueado, Cancelado, Feito)", () => {
+  it("só as de espera e andamento aceitam responsável (nunca Bloqueado, Cancelado, Feito; Precisa de você não é coluna, ADR-162)", () => {
     expect(COLUNAS_PADRAO.filter(aceitaPassagem).map((c) => c.id)).toEqual(["backlog", "afazer", "fazendo", "revisao"]);
     expect(validarColunas(comPassagem("revisao", ZE.id))).toBeNull();
-    for (const id of ["voce", "bloqueado", "feito", "cancelado"]) expect(validarColunas(comPassagem(id, ZE.id))).toMatchObject({ erro: expect.stringContaining("não tem responsável") });
+    for (const id of ["bloqueado", "feito", "cancelado"]) expect(validarColunas(comPassagem(id, ZE.id))).toMatchObject({ erro: expect.stringContaining("não tem responsável") });
     expect(validarColunas(comPassagem("revisao", null, "x".repeat(501)))).toMatchObject({ erro: expect.stringContaining("500") });
   });
 
@@ -190,12 +190,12 @@ describe("o turno da etapa", () => {
   it("conta a etapa, o que ela faz e o terminei só quando a coluna tem passagem ou instruções", () => {
     const colunas = comPassagem("revisao", ADA.id, "Revise o PR e rode os testes");
     const etapa = etapaDaTarefa(colunas, "revisao");
-    expect(etapa).toEqual({ nome: "Em revisão", instrucoes: "Revise o PR e rode os testes", proxima: "Feito" });
+    expect(etapa).toEqual({ nome: "Em revisão", instrucoes: "Revise o PR e rode os testes", proxima: { nome: "Feito", quem: null, feito: true }, volta: null, bloqueado: true, pessoaFecha: false });
     expect(etapaDaTarefa(colunas, "fazendo")).toBeNull();
     const base = { quadroId: "q", meta: null, prazo: null, tarefa: tarefa(), pessoaNome: "Marlon", deQuem: null };
     const texto = entradaDaTarefa({ ...base, etapa });
     expect(texto).toContain("Etapa: Em revisão. O que essa etapa faz: Revise o PR e rode os testes");
-    expect(texto).toContain("terminei (a tarefa vai para Feito");
+    expect(texto).toContain("Etapa concluída → terminei (ou mudar_tarefa status Feito): a tarefa vai para Feito");
     expect(entradaDaTarefa(base)).not.toContain("terminei");
   });
 });

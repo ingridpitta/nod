@@ -1,0 +1,191 @@
+/* A tarefa aberta como a issue do Multica (definido em 2026-11-10): duas colunas no computador (conteúdo à esquerda,
+   propriedades à direita), uma coluna estreita com as propriedades no topo. Tinta em 4 níveis, raio generoso, traço 1.6,
+   cor só com significado (vermelho só na falha e no "no lugar"), sem gradiente e sem botão cheio. */
+
+.ta.qd-tarefa { max-width: 1120px; gap: 10px; }
+.ta .qd-t-corpo, .ta.qd-com-lado .qd-t-corpo { grid-template-columns: minmax(0, 1fr) 260px; gap: 36px; }
+.ta .qd-t-principal { padding: 6px 2px 0; border: 0; background: none; gap: 10px; }
+.ta-cab-dir { margin-left: auto; display: inline-flex; align-items: center; }
+
+/* Título e descrição editáveis: parecem texto; o hover e o foco mostram que se edita. */
+.ta-tit { margin: 0; padding: 2px 6px; margin-inline: -6px; font-size: 24px; line-height: 1.25; font-weight: 600; letter-spacing: -.01em; color: var(--ink); border-radius: 8px; overflow-wrap: anywhere; }
+.ta-desc { min-height: 24px; padding: 4px 6px; margin-inline: -6px; font-size: 14.5px; line-height: 1.6; color: var(--ink-2); border-radius: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ta-tit:hover, .ta-desc:hover { background: var(--surface-raised); }
+.ta-tit:focus, .ta-desc:focus { background: var(--surface-raised); box-shadow: 0 0 0 1.6px var(--line-strong); }
+.ta-desc:empty::before { content: attr(data-vazio); color: var(--ink-3); }
+.ta-pergunta { margin-top: 6px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; }
+
+/* O chip "está trabalhando" do cabeçalho. */
+.ta-trabalhando { display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 10px 0 4px; border: 1px solid var(--line); border-radius: 999px; background: none; color: var(--ink-2); font: 500 12.5px var(--font-sans); cursor: pointer; }
+.ta-trabalhando:hover { color: var(--ink); border-color: var(--line-strong); }
+.ta-pilha { display: inline-flex; }
+.ta-pilha-av { display: inline-grid; line-height: 0; border-radius: 7px; box-shadow: 0 0 0 2px var(--qd-fundo, var(--surface)); }
+.ta-pilha-av + .ta-pilha-av { margin-left: -6px; }
+.ta-pilha-av .icon.mascote, .ta-pilha-av .qd-anel { width: 20px !important; height: 20px !important; min-width: 20px; font-size: 8px; }
+.ta-pulso { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-3); animation: ta-pulso 1.6s ease-in-out infinite; }
+@keyframes ta-pulso { 50% { opacity: .25; } }
+
+/* A linha do tempo. */
+.ta-tempo { margin-top: 18px; display: flex; flex-direction: column; gap: 10px; }
+.ta-sec { margin: 0; font-size: 13px; font-weight: 600; color: var(--ink); }
+.ta-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.ta-ev { display: flex; align-items: baseline; gap: 8px; padding: 0 2px 0 12px; font-size: 12.5px; color: var(--ink-3); min-width: 0; }
+.ta-ev b { font-weight: 500; color: var(--ink-2); }
+.ta-ev > span:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }
+.ta-ev-ponto { flex: none; width: 5px; height: 5px; border-radius: 50%; background: var(--line-strong); transform: translateY(-1px); }
+.ta-ev-hora { flex: none; margin-left: auto; font-size: 12px; color: var(--ink-3); }
+.ta-ev-desfeito > span:nth-child(2) { text-decoration: line-through; }
+.ta-ev-acao { font-size: 12px; }
+
+/* Um comentário: card leve com avatar, nome, tempo relativo e ações no hover. A thread fica dentro do mesmo card. */
+.ta-th { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--qd-card, var(--surface)); }
+.ta-com { display: flex; gap: 10px; min-width: 0; scroll-margin-top: 80px; }
+.ta-com:target { animation: ta-alvo 1.8s ease-out; border-radius: 10px; }
+@keyframes ta-alvo { from { box-shadow: 0 0 0 4px var(--surface-selected, var(--surface-raised)); background: var(--surface-selected, var(--surface-raised)); } }
+.ta-com-av { flex: none; line-height: 0; padding-top: 1px; }
+.ta-com-av .qd-anel, .ta-com-av .icon.mascote, .ta-run-av .qd-anel, .ta-run-av .icon.mascote { width: 24px !important; height: 24px !important; min-width: 24px; font-size: 9.5px; border-radius: 8px; }
+.ta-com-corpo { flex: 1; min-width: 0; }
+.ta-com-cab { position: relative; margin: 0 0 3px; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; font-size: 12.5px; color: var(--ink-3); }
+.ta-com-nome { font-weight: 600; color: var(--ink); }
+.ta-com-editado { font-size: 11.5px; }
+.ta-com-txt { margin: 0; font-size: 14px; line-height: 1.55; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+.ta-com-apagado .ta-com-txt { color: var(--ink-3); font-style: italic; font-size: 13px; }
+.ta-com-acao { margin: 4px 0 0; font-size: 12px; color: var(--ink-3); }
+.ta-men { color: var(--ink); font-weight: 500; background: var(--surface-raised); border-radius: 5px; padding: 0 3px; }
+.ta-com-acoes { margin-left: auto; display: inline-flex; gap: 2px; opacity: 0; transition: opacity .12s; }
+.ta-com:hover .ta-com-acoes, .ta-com:focus-within .ta-com-acoes { opacity: 1; }
+@media (hover: none) { .ta-com-acoes { opacity: 1; } }
+.ta-com-ac { border: 0; background: none; padding: 2px 6px; border-radius: 6px; font: 500 12px var(--font-sans); color: var(--ink-3); cursor: pointer; }
+.ta-com-ac:hover, .ta-com-ac:focus-visible { background: var(--surface-raised); color: var(--ink); }
+.ta-com-ac-perigo { color: var(--danger); }
+.ta-resps { list-style: none; margin: 12px 0 0 12px; padding: 0 0 0 22px; border-left: 1.6px solid var(--line); display: flex; flex-direction: column; gap: 12px; }
+.ta-resps:empty { display: none; }
+.ta-th-responder { margin: 10px 0 0 34px; font-size: 12.5px; }
+.ta-editar { display: flex; flex-direction: column; gap: 6px; }
+.ta-editar-in { min-height: 60px; border: 1px solid var(--line-strong); border-radius: 10px; padding: 8px 10px; }
+.ta-editar-pe { display: flex; justify-content: flex-end; gap: 12px; align-items: center; }
+
+/* O run na linha do tempo: o agente, o estado e o último passo, ao vivo; ao responder, compacta no cabeçalho. */
+.ta-run { display: flex; gap: 10px; padding: 9px 12px; border: 1px dashed var(--line-strong); border-radius: 12px; min-width: 0; list-style: none; }
+.ta-lista > .ta-run { margin-left: 0; }
+.ta-run-av { flex: none; line-height: 0; position: relative; }
+.ta-run[data-estado="rodando"] .ta-run-av::after { content: ""; position: absolute; inset: -3px; border-radius: 10px; border: 1.6px solid var(--ink-3); border-right-color: transparent; animation: ta-gira 1.1s linear infinite; }
+@keyframes ta-gira { to { transform: rotate(360deg); } }
+.ta-run-corpo { flex: 1; min-width: 0; }
+.ta-run-cab { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: baseline; font-size: 12.5px; color: var(--ink-3); }
+.ta-run-cab b { font-weight: 600; color: var(--ink); }
+.ta-run-cab .ta-ev-hora { margin-left: auto; }
+.ta-run[data-estado="falhou"] .ta-run-est { color: var(--danger); text-decoration: underline dotted; text-underline-offset: 3px; cursor: help; }
+.ta-run[data-estado="concluido"], .ta-run[data-estado="cancelado"] { border-style: solid; border-color: var(--line); }
+.ta-run-passo { margin: 3px 0 0; font-size: 12.5px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ta-run-passo:empty { display: none; }
+.ta-run-tg { margin-top: 2px; font-size: 12px; }
+.ta-run-passos { margin: 6px 0 0; padding: 0 0 0 16px; font-size: 12px; color: var(--ink-2); display: flex; flex-direction: column; gap: 2px; }
+.ta-run-passos li[data-estado="falhou"] { color: var(--danger); }
+.ta-run-mini { border: 0; background: none; padding: 0 4px; border-radius: 6px; font: 12px var(--font-sans); color: var(--ink-3); cursor: pointer; }
+.ta-run-mini:hover, .ta-run-mini[aria-expanded="true"] { color: var(--ink); background: var(--surface-raised); }
+.ta-run-det { margin: 2px 0 6px; padding: 6px 10px; border-left: 1.6px solid var(--line); font-size: 12px; color: var(--ink-3); }
+.ta-run-det p { margin: 0; }
+
+/* O campo de comentário: card com o texto, os chips de quem será acionado e o Enviar leve. */
+.ta-pe { padding: 6px 0 8px; }
+.ta-campo.qd-com-form { display: block; padding: 10px 12px 8px; border: 1px solid var(--line); border-radius: 14px; background: var(--qd-card, var(--surface)); }
+.ta-campo.qd-com-form:focus-within { border-color: var(--line-strong); }
+.ta-campo .qd-com-in { width: 100%; min-height: 24px; padding: 2px 0 6px; }
+.ta-campo-resp.qd-com-form { margin-top: 12px; margin-left: 34px; }
+.ta-campo-pe { display: flex; align-items: center; gap: 8px; min-height: 28px; }
+.ta-chips { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ta-enviar { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); }
+.ta-enviar kbd { font: 11px var(--font-sans); color: var(--ink-3); border: 1px solid var(--line); border-radius: 5px; padding: 0 4px; }
+.ta-campo-fechar { font-size: 12.5px; }
+
+.ta-chip-g { position: relative; display: inline-flex; }
+.ta-chip { display: inline-flex; align-items: center; gap: 6px; height: 26px; max-width: 100%; padding: 0 8px 0 3px; border: 1px solid var(--line); border-radius: 999px; background: none; font: 12px var(--font-sans); color: var(--ink-2); cursor: pointer; }
+.ta-chip:hover, .ta-chip[aria-expanded="true"] { border-color: var(--line-strong); color: var(--ink); }
+.ta-chip-av { display: inline-grid; line-height: 0; }
+.ta-chip-av .icon.mascote, .ta-chip-av .qd-anel { width: 20px !important; height: 20px !important; min-width: 20px; font-size: 8px; border-radius: 999px; }
+.ta-chip-nome { font-weight: 500; color: var(--ink); max-width: 14ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ta-chip-modo { color: var(--ink-3); }
+.ta-chip[data-modo="agora"] { border-color: var(--line-strong); }
+.ta-chip[data-modo="agora"] .ta-chip-modo { color: var(--ink); }
+.ta-chip[data-modo="no_lugar"] .ta-chip-modo { color: var(--danger); }
+.ta-chip[data-modo="nao"] { opacity: .6; }
+.ta-chip[data-modo="nao"] .ta-chip-nome { text-decoration: line-through; }
+.ta-chip svg { color: var(--ink-3); }
+.ta-chip-aviso { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px 0 3px; border: 1px dashed var(--line-strong); border-radius: 999px; font-size: 12px; color: var(--ink-3); cursor: help; }
+.ta-chip-nota { font-size: 12px; color: var(--ink-3); }
+.ta-chip-menu { position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 8; width: 280px; padding: 6px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-raised); box-shadow: var(--shadow-pop); display: flex; flex-direction: column; }
+.ta-chip-menu-cab { margin: 2px 8px 6px; font-size: 12px; color: var(--ink-3); }
+.ta-chip-op { display: flex; flex-direction: column; gap: 1px; padding: 7px 10px 7px 28px; position: relative; border: 0; border-radius: 9px; background: none; text-align: left; font: 13px var(--font-sans); color: var(--ink); cursor: pointer; }
+.ta-chip-op:hover { background: var(--surface); }
+.ta-chip-op[aria-checked="true"]::before { content: "✓"; position: absolute; left: 10px; top: 7px; font-size: 12px; color: var(--ink-2); }
+.ta-chip-op[data-modo="nao"] { margin-top: 4px; border-top: 1px solid var(--line); border-radius: 0 0 9px 9px; }
+.ta-chip-op-desc { font-size: 11.5px; color: var(--ink-3); }
+
+/* A pílula do bot embaixo segue a coluna do conteúdo (as contas de quadro.css, com as larguras desta tela). */
+@container (min-width: 701px) {
+  .qd-vista:has(.qd-tarefa.ta) > .qc-wrap { padding-inline: max(0px, calc((min(100%, 1240px) - 1120px) / 2)); }
+  .qd-vista:has(.qd-tarefa.ta) > .qc-wrap > .qc-caixa { max-width: none; margin: 0 calc(260px + 36px) 0 0; }
+}
+
+/* A lateral: propriedades e seções recolhíveis. */
+.ta .qd-lado { gap: 0; }
+.ta-sec-tg { display: inline-flex; align-items: center; gap: 6px; padding: 0; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; }
+.ta-sec-tg:hover { color: var(--ink); }
+.ta-sec-seta { width: 10px; font-size: 9px; color: var(--ink-3); }
+.ta-resp-campo { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.ta-resp-av { line-height: 0; }
+.ta-resp-av .icon.mascote, .ta-resp-av .qd-anel { width: 18px !important; height: 18px !important; min-width: 18px; font-size: 7.5px; }
+.ta-regs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ta-reg { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.ta-reg-av { line-height: 0; flex: none; }
+.ta-reg-av .icon.mascote, .ta-reg-av .qd-anel { width: 20px !important; height: 20px !important; min-width: 20px; font-size: 8px; }
+.ta-reg-txt { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.ta-reg-nome { font-weight: 500; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ta-reg-meta { font-size: 11.5px; color: var(--ink-3); }
+.ta-reg[data-estado="falhou"] .ta-reg-meta { color: var(--danger); cursor: help; }
+.ta-reg[data-estado="rodando"] .ta-reg-meta::before { content: "● "; color: var(--ink-3); animation: ta-pulso 1.6s ease-in-out infinite; }
+.ta-reg-hora { font-size: 11.5px; color: var(--ink-3); flex: none; }
+.ta-lado-nota { margin: 8px 0 0; font-size: 11.5px; color: var(--ink-3); }
+.ta-lado-mais { margin-top: 8px; font-size: 12px; }
+.ta-reg-trab { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.ta-reg-trab .qd-t-sec { font-size: 12px; }
+.ta-ents li { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ta-ent-de { color: var(--ink-3); }
+
+/* O diálogo "Runs no tempo". */
+.ta-dialogo { width: min(680px, 92vw); max-height: 80vh; padding: 18px 20px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface-raised); color: var(--ink); box-shadow: var(--shadow-pop); }
+.ta-dialogo::backdrop { background: rgb(0 0 0 / .25); }
+.ta-dialogo-cab { display: flex; align-items: baseline; justify-content: space-between; }
+.ta-dialogo-cab h2 { margin: 0; font-size: 15px; }
+.ta-barras { list-style: none; margin: 14px 0 18px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ta-bar-l { display: grid; grid-template-columns: 120px 1fr; gap: 10px; align-items: center; font-size: 12px; }
+.ta-bar-nome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
+.ta-bar-trilho { position: relative; height: 10px; border-radius: 999px; background: var(--surface); }
+.ta-bar, .ta-bar-fila { position: absolute; top: 0; bottom: 0; border-radius: 999px; }
+.ta-bar { background: var(--ink-3); }
+.ta-bar-fila { background: var(--line); }
+.ta-bar-l[data-estado="rodando"] .ta-bar { background: var(--ink-2); }
+.ta-bar-l[data-estado="falhou"] .ta-bar { background: var(--danger); }
+.ta-bar-l[data-estado="cancelado"] .ta-bar { background: var(--line-strong); }
+
+.ta-tit:focus-visible, .ta-desc:focus-visible, .ta-chip:focus-visible, .ta-chip-op:focus-visible, .ta-com-ac:focus-visible, .ta-run-mini:focus-visible, .ta-trabalhando:focus-visible, .ta-sec-tg:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+/* Estreito (a vista de 700px ou menos, como o resto do quadro): uma coluna, o painel desce (o celular tem a árvore própria,
+   tarefa-celular.ts, com as propriedades no topo). */
+@container (max-width: 700px) {
+  .ta .qd-t-corpo, .ta.qd-com-lado .qd-t-corpo { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .ta .qd-lado { position: static; }
+}
+@media (prefers-reduced-motion: reduce) { .ta-pulso, .ta-run-av::after, .ta-reg-meta::before { animation: none !important; } }
+@media (forced-colors: active) { .ta-bar { background: CanvasText; } .ta-chip, .ta-th, .ta-run { border-color: CanvasText; } }
+
+/* 2026-11-10 (pedido do Marlon): a pergunta do bot é um comentário comum; só um "aguardando sua resposta" pequeno no
+   cabeçalho dele, o reply já aberto e, no topo da tarefa, o chip que leva até ela. Tinta normal, sem azul. */
+.ta-aguarda { font-size: 11.5px; color: var(--ink-2); padding: 0 6px; border: 1px solid var(--line); border-radius: 999px; line-height: 18px; }
+.ta-th-pergunta { border-color: var(--line-strong); }
+.ta-espera { display: inline-flex; align-items: center; gap: 6px; height: 28px; margin-right: 8px; padding: 0 10px; border: 1px solid var(--line); border-radius: 999px; background: none; color: var(--ink-2); font: 500 12.5px var(--font-sans); cursor: pointer; }
+.ta-espera:hover { color: var(--ink); border-color: var(--line-strong); }
+.ta-espera:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.ta-espera span { font-size: 12px; filter: grayscale(1); }
+.ta .qd-t-principal .qd-voce-frase { color: var(--ink); font-weight: 400; } /* Bloqueado: tinta normal, sem azul */

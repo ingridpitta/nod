@@ -13,8 +13,9 @@ export type EstadoExecucao = (typeof ESTADOS_EXECUCAO)[number];
 
 /**
  * ADA-232 (ADR-155): a saída com que o último turno da cadeia terminou. andou = moveu a tarefa, pôs PR ou terminou a
- * etapa; voce = Precisa de você com a pergunta; bloqueado = Bloqueado com o motivo; volta = marcou a volta (me_chame_as,
- * esperar_comando); nenhuma = parou sem dizer o porquê (o varredor reaciona uma vez e, na 2ª, Precisa de você).
+ * etapa; voce = perguntou à pessoa (ADR-162: um comentário, a tarefa fica na coluna); bloqueado = Bloqueado com o motivo;
+ * volta = marcou a volta (me_chame_as, esperar_comando); nenhuma = parou sem dizer o porquê (o varredor reaciona uma vez
+ * e, na 2ª, deixa a tarefa esperando a pessoa).
  */
 export const SAIDAS_TRABALHO = ["andou", "voce", "bloqueado", "volta", "nenhuma"] as const;
 export type SaidaTrabalho = (typeof SAIDAS_TRABALHO)[number];
@@ -110,11 +111,11 @@ export type ExecucoesDaTarefa = {
   semAgente: boolean;
 };
 
-/** ADA-232: quantos reacionamentos sem saída antes de a tarefa ir para Precisa de você (S6: 1). */
+/** ADA-232: quantos reacionamentos sem saída antes de a tarefa ficar esperando a pessoa (S6: 1; ADR-162). */
 export const SEM_SAIDA_MAX = 1;
 /** ADA-232: o aviso que abre o reacionamento, na mesma sessão. */
-export const AVISO_SEM_SAIDA = "Você parou sem dizer o porquê, escolha uma saída: terminei (ou mude a tarefa de coluna/ponha o PR), status voce com a pergunta, status bloqueado com o motivo, ou volte depois com me_chame_as (quando: \"ci\" para esperar a CI do PR) ou esperar_comando.";
-/** ADA-232: o motivo de Precisa de você na 2ª parada seguida sem saída. */
+export const AVISO_SEM_SAIDA = "Você parou sem dizer o porquê, escolha uma saída: terminei (ou mude a tarefa de coluna/ponha o PR), pergunte à pessoa (mudar_tarefa só com a pergunta: a tarefa fica na coluna), status bloqueado com o motivo, ou volte depois com me_chame_as (quando: \"ci\" para esperar a CI do PR) ou esperar_comando.";
+/** ADA-232: o motivo da espera da pessoa na 2ª parada seguida sem saída (ADR-162: vira o comentário do sistema). */
 export const MOTIVO_SEM_SAIDA = "o bot parou 2x sem saída";
 /** ADA-232 (S7): a volta por CI acorda sozinha depois deste prazo, com o motivo abaixo. */
 export const VOLTA_CI_MAX_MS = 24 * 60 * 60_000;

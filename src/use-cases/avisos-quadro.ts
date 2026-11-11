@@ -152,7 +152,7 @@ export async function avisarDoQuadro(deps: Deps, q: Quadro, opcoes: { executor?:
       // anterior da tarefa; "local" só quando nenhum dos dois existe (revisão 3 do PR #624).
       const executor = opcoes.executor ?? (a.tarefa.turnoId ? (await deps.repos.turnos.buscar(a.tarefa.turnoId))?.executor : undefined) ?? "local";
       const colunaNome = colunas.find((c) => c.id === a.tarefa.status)?.nome ?? a.tarefa.status;
-      const aberto = await abrirTurno(deps, { autor: { tipo: "agente", agenteId: q.agenteId }, ops: [], executor }, agente, entradaDaCobranca({ quadroId: q.id, tarefa: a.tarefa, colunaNome, prazoMin: a.prazoMin }), a.tarefa.deFora);
+      const aberto = await abrirTurno(deps, { autor: { tipo: "agente", agenteId: q.agenteId }, ops: [], executor }, agente, entradaDaCobranca({ quadroId: q.id, tarefa: a.tarefa, colunaNome, prazoMin: a.prazoMin }), a.tarefa.deFora, a.tarefa);
       if (!aberto) {
         log("aviso", "cobranca_quadro_sem_conversa", { quadroId: q.id, tarefaId: a.tarefa.id });
         return;

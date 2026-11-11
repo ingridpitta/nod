@@ -20,7 +20,7 @@ const comDoces = (): ColunaQuadro[] => [
   { id: "c-entregue", nome: "Entregue", grupo: "feito" },
 ];
 const t = (id: string, extra: Partial<TarefaDto> = {}): TarefaDto => ({
-  id, quadroId: "q1", titulo: `Tarefa ${id}`, descricao: "", status: "afazer", voltarPara: null, terminadaEm: null, agenteId: "a", ordem: 1, linearId: null, linearUrl: null, prUrl: null,
+  id, quadroId: "q1", titulo: `Tarefa ${id}`, descricao: "", status: "afazer", voltarPara: null, terminadaEm: null, agenteId: "a", ordem: 1, prioridade: "sem", linearId: null, linearUrl: null, prUrl: null,
   pergunta: null, resposta: null, deFora: false, turnoId: null, criadoEm: 1, mudadoEm: 1, execucao: null, agenteNome: "Ada", numero: null, codigo: `#${id}`, branch: "", ...extra,
 });
 const q = (tarefas: TarefaDto[], colunas: ColunaQuadro[] = [...COLUNAS_PADRAO]): QuadroDto => ({
@@ -38,8 +38,9 @@ describe("web/lib/colunas", () => {
 
   it("as padrão espelhadas na web são as do servidor; o quadro sem colunas (servidor antigo) ganha as padrão", () => {
     expect(COLUNAS_PADRAO_DA_WEB).toEqual(padrao);
-    // O STATUS da web na mesma ordem das padrão do servidor (Precisa de você por último no andamento, decisão 2 do Gil).
-    expect([...STATUS]).toEqual(padrao.map((c) => c.id));
+    // O STATUS da web na mesma ordem das padrão do servidor (ADR-162: `voce` fica no tipo, mas não é coluna).
+    expect(STATUS.filter((s) => s !== "voce")).toEqual(padrao.map((c) => c.id));
+    expect(padrao.some((c) => c.id === "voce")).toBe(false);
     expect(comColunas<{ id: string; colunas?: ColunaDto[] | null }>({ id: "q" }).colunas).toEqual(padrao);
     const proprias = colunasDto(comDoces());
     expect(comColunas({ colunas: proprias }).colunas).toBe(proprias);
@@ -62,8 +63,8 @@ describe("web/lib/colunas", () => {
     expect(fraseDaColuna({ id: "bloqueado", grupo: "iniciado" })).toBe("Não aciona ninguém");
   });
 
-  it("não remove Precisa de você, Cancelado nem a última de Feito; o resto sai", () => {
-    expect(porqueNaoRemove(padrao, "voce", "Ada")).toBe("É onde Ada te chama. Dá para renomear.");
+  it("não remove Cancelado nem a última de Feito; o resto sai (ADR-162: Precisa de você não é mais coluna)", () => {
+    expect(porqueNaoRemove(padrao, "voce", "Ada")).toMatch(/não existe/);
     expect(porqueNaoRemove(padrao, "cancelado")).toMatch(/fica no quadro/);
     expect(porqueNaoRemove(padrao, "feito")).toBe("Precisa haver uma coluna de feito.");
     expect(porqueNaoRemove(colunasDto(comDoces()), "feito")).toBeNull();
@@ -78,8 +79,8 @@ describe("web/lib/colunas", () => {
     expect(passoDeMover(padrao, "backlog", "direita")).toEqual({ ok: true, depois_de: "afazer" });
     expect(passoDeMover(padrao, "backlog", "esquerda")).toEqual({ ok: false, porque: "Só entre colunas de Não iniciado" });
     expect(passoDeMover(padrao, "afazer", "direita")).toEqual({ ok: false, porque: "Só entre colunas de Não iniciado" });
-    expect(passoDeMover(padrao, "bloqueado", "direita")).toEqual({ ok: false, porque: "Precisa de você fica por último no andamento" });
-    expect(passoDeMover(padrao, "voce", "esquerda")).toEqual({ ok: false, porque: "Precisa de você fica por último no andamento" });
+    expect(passoDeMover(padrao, "bloqueado", "direita")).toEqual({ ok: false, porque: "Só entre colunas de Andamento" });
+    expect(passoDeMover(padrao, "bloqueado", "esquerda")).toEqual({ ok: true, antes_de: "revisao" });
     expect(passoDeMover(padrao, "cancelado", "esquerda")).toEqual({ ok: false, porque: "Esta coluna fica no lugar" });
   });
 
@@ -128,19 +129,19 @@ describe("web/lib/colunas", () => {
   });
 
   it("o fim preso: as tiras recolhidas de Feito e Fechado no fim", () => {
-    expect(inicioDoFimPreso(padrao)).toBe(6);
-    expect(inicioDoFimPreso(colunasDto(comDoces()))).toBe(7);
-    expect(inicioDoFimPreso(padrao.map((c) => ({ ...c, recolhida: false })))).toBe(8);
+    expect(inicioDoFimPreso(padrao)).toBe(5);
+    expect(inicioDoFimPreso(colunasDto(comDoces()))).toBe(6);
+    expect(inicioDoFimPreso(padrao.map((c) => ({ ...c, recolhida: false })))).toBe(7);
   });
 });
 
 describe("web/telas/colunas-quadro", () => {
-  it("o menu: grupo no topo, desabilitados com o porquê, remover desabilitado em Precisa de você", () => {
-    const h = menuDaColuna(padrao, padrao.find((c) => c.id === "voce")!, "Ada");
+  it("o menu: grupo no topo, desabilitados com o porquê, remover desabilitado em Cancelado", () => {
+    const h = menuDaColuna(padrao, padrao.find((c) => c.id === "cancelado")!, "Ada");
     expect(h).toContain(`role="menu"`);
-    expect(h).toContain("Andamento");
+    expect(h).toContain("Fechado");
     expect(h).toMatch(/data-act="col-remover"[^>]*aria-disabled="true"/);
-    expect(h).toContain("É onde Ada te chama");
+    expect(h).toContain("Esta coluna fica no quadro");
     const livre = menuDaColuna(padrao, padrao.find((c) => c.id === "revisao")!, "Ada");
     expect(livre).not.toMatch(/data-act="col-remover"[^>]*aria-disabled="true"/);
   });
@@ -167,7 +168,7 @@ describe("web/telas/colunas-quadro", () => {
     expect(naFolha({ tipo: "renomear", coluna: "x", naFolha: true })).toBe(true);
     const h = folhaDasColunas(padrao, { tipo: "ordem" }, { fazendo: 2 }, "Ada");
     expect(h).toContain("Ordem das colunas");
-    expect((h.match(/<li class="qd-fo-l\b/g) ?? []).length).toBe(8);
+    expect((h.match(/<li class="qd-fo-l\b/g) ?? []).length).toBe(7);
     expect(h).toContain("qd-alca");
   });
 
@@ -192,10 +193,10 @@ describe("quadroDaMeta com colunas da pessoa", () => {
     expect(tela(q([]))).not.toContain("qd-st-pessoa");
   });
 
-  it("quadro com as padrão fica igual: as 8 colunas, as tiras de Feito e Cancelado presas e o +", () => {
+  it("quadro com as padrão fica igual: as 7 colunas, as tiras de Feito e Cancelado presas e o +", () => {
     const h = tela(q([t("1")]));
-    expect((h.match(/<section class="qd-col [^"]*"[^>]*data-coluna="/g) ?? []).length).toBe(8);
-    expect((h.match(/qd-fixa/g) ?? []).length).toBeGreaterThanOrEqual(3);
+    expect((h.match(/<section class="qd-col [^"]*"[^>]*data-coluna="/g) ?? []).length).toBe(7);
+    expect((h.match(/qd-fixa/g) ?? []).length).toBeGreaterThanOrEqual(2);
     expect(h).toContain(`data-act="col-nova"`);
   });
 

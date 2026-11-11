@@ -14,6 +14,8 @@ import type { JsonSchema } from "../../contracts/json-schema.ts";
 
 const objeto = (properties: Record<string, JsonSchema>, required: readonly string[]): JsonSchema => ({ type: "object", properties, required, additionalProperties: false });
 const VIA = { ferramenta: "gerir_quadro" } as const;
+/** A escolha de cada chip do comentário (id do agente → modo), como a tela manda. */
+const ACIONAR: JsonSchema = { type: "array", maxItems: 20, description: "A escolha de cada chip, pela tela: [{agente, modo}].", items: objeto({ agente: { type: "string", minLength: 1, maxLength: 100 }, modo: { type: "string", enum: ["acionar", "agora", "depois", "no_lugar", "nao"] } }, ["agente", "modo"]) };
 const CONTRATO = "tests/integration/paridade-quadro.test.ts";
 const vivo = { estado: "vivo", via: VIA, contrato: CONTRATO } as const;
 /** ADA-14: o contrato dos N quadros e dos projetos (cada lado num banco idêntico: os projetos são da pessoa toda). */
@@ -41,7 +43,7 @@ export const ACOES_QUADRO = [
   {
     id: "quadro.criar_tarefa",
     titulo: "Criar uma tarefa no quadro",
-    schema: objeto({ titulo: P.titulo, descricao: P.descricao, status: P.status, agente: P.agente }, ["titulo"]),
+    schema: objeto({ titulo: P.titulo, descricao: P.descricao, status: P.status, agente: P.agente, prioridade: P.prioridade, labels: P.labels, prazo_em: P.prazo_em }, ["titulo"]),
     risco: "muda",
     cartaoNoChat: false,
     chat: vivo,
@@ -81,8 +83,8 @@ export const ACOES_QUADRO = [
   },
   {
     id: "quadro.mudar_tarefa",
-    titulo: "Mudar uma tarefa (status, responsável, PR, pergunta) ou tirá-la do quadro",
-    schema: objeto({ tarefa: P.tarefa, titulo: P.titulo, descricao: P.descricao, status: P.status, agente: P.agente, pr_url: P.pr_url, pergunta: P.pergunta, excluir: P.excluir, sem_iniciar: P.sem_iniciar, motivo: P.motivo, pela_fala: P.pela_fala, mensagem_id: P.mensagem_id }, ["tarefa"]),
+    titulo: "Mudar uma tarefa (status, responsável, PR, pergunta, labels, prazo) ou tirá-la do quadro",
+    schema: objeto({ tarefa: P.tarefa, titulo: P.titulo, descricao: P.descricao, status: P.status, agente: P.agente, pr_url: P.pr_url, prioridade: P.prioridade, pergunta: P.pergunta, excluir: P.excluir, sem_iniciar: P.sem_iniciar, motivo: P.motivo, pela_fala: P.pela_fala, mensagem_id: P.mensagem_id, labels: P.labels, por_labels: P.por_labels, tirar_labels: P.tirar_labels, prazo_em: P.prazo_em }, ["tarefa"]),
     risco: "muda",
     cartaoNoChat: false,
     chat: vivo,
@@ -99,8 +101,9 @@ export const ACOES_QUADRO = [
   },
   {
     id: "quadro.comentar",
-    titulo: "Comentar uma tarefa (aciona o responsável ou o bot @mencionado; no quadro de outra pessoa, fica para a dona)",
-    schema: objeto({ tarefa: P.tarefa, texto: P.texto }, ["texto"]),
+    titulo: "Comentar uma tarefa (aciona o responsável, o agente da thread ou o bot @mencionado; no quadro de outra pessoa, fica para a dona)",
+    // 2026-11-10: responder_a (a thread) e acionar (a escolha de cada chip, só pela tela: o bot não decide pelo chip).
+    schema: objeto({ tarefa: P.tarefa, texto: P.texto, responder_a: P.responder_a, acionar: ACIONAR }, ["texto"]),
     risco: "muda",
     cartaoNoChat: false,
     chat: vivo,
@@ -190,7 +193,7 @@ export const ACOES_QUADRO = [
   {
     id: "quadro.definir_passagem",
     titulo: "Definir quem pega a tarefa ao entrar numa coluna",
-    schema: objeto({ coluna: P.coluna, agente: P.agente, instrucoes: P.instrucoes }, ["coluna"]),
+    schema: objeto({ coluna: P.coluna, agente: P.agente, instrucoes: P.instrucoes, proxima: P.proxima, volta_para: P.volta_para }, ["coluna"]),
     risco: "muda",
     cartaoNoChat: false,
     chat: vivo,
@@ -304,5 +307,29 @@ export const ACOES_QUADRO = [
     cartaoNoChat: false,
     chat: vivo,
     casoDeUso: "quadro.acordar_trabalho",
+  },
+  // 0159: o catálogo de labels do quadro (sem Desfazer de lote: o inverso é a op contrária). Pôr e tirar label na tarefa
+  // é o mudar_tarefa (labels, por_labels, tirar_labels), com Desfazer.
+  { id: "quadro.criar_label", titulo: "Criar uma label no quadro (nome e cor)", schema: objeto({ nome: P.nome, cor: P.cor }, ["nome"]), risco: "muda", cartaoNoChat: false, chat: vivo, casoDeUso: "quadro.criar_label" },
+  { id: "quadro.editar_label", titulo: "Renomear ou recolorir uma label do quadro", schema: objeto({ label: P.label, nome: P.nome, cor: P.cor }, ["label"]), risco: "muda", cartaoNoChat: false, chat: vivo, casoDeUso: "quadro.editar_label" },
+  { id: "quadro.remover_label", titulo: "Remover uma label do quadro (sai de todas as tarefas)", schema: objeto({ label: P.label }, ["label"]), risco: "muda", cartaoNoChat: false, chat: vivo, casoDeUso: "quadro.remover_label" },
+  // 2026-11-10: editar e apagar o próprio comentário (no fim do registro: a ordem das outras não muda o sorteio do fuzz).
+  {
+    id: "quadro.editar_comentario",
+    titulo: "Editar o próprio comentário numa tarefa (não reaciona ninguém)",
+    schema: objeto({ tarefa: P.tarefa, comentario: P.comentario, texto: P.texto }, ["tarefa", "comentario", "texto"]),
+    risco: "muda",
+    cartaoNoChat: false,
+    chat: vivo,
+    casoDeUso: "quadro.editar_comentario",
+  },
+  {
+    id: "quadro.apagar_comentario",
+    titulo: "Apagar o próprio comentário numa tarefa (as respostas da thread ficam)",
+    schema: objeto({ tarefa: P.tarefa, comentario: P.comentario }, ["tarefa", "comentario"]),
+    risco: "muda",
+    cartaoNoChat: false,
+    chat: vivo,
+    casoDeUso: "quadro.apagar_comentario",
   },
 ] as const satisfies readonly DefinicaoAcao[];

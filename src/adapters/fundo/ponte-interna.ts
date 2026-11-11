@@ -504,6 +504,7 @@ export function criarPonteInterna(db: Db, deps: DepsPonte): PonteInternaNod {
             const w = uso !== "livre" && r.data.turno.trabalhoId ? await d.repos.trabalhos.buscar(r.data.turno.trabalhoId) : null;
             // ADR-086: a volta marcada também conta (processo novo no Mac sem ninguém esperando).
             const volta = r.data.turno.acordarEm != null;
+            // ADA-16 (ADR-163): a tarefa do quadro não abre o espaço (serializaria o paralelo); o freio dela é o portão e o pool de laços.
             if (w && (volta || ((w.origem === "rotina" || w.origem === "colega") && w.pessoaEsperando !== true && (w.iniciadoEm === null || w.iniciadoEm >= antes)))) {
               ultimoFundo.set(maquina.machineId, agora());
               log("info", "fundo_comecou", { pessoa_id: pessoaId, machine_id: maquina.machineId, plataforma, trabalho_id: w.id, origem: w.origem, volta, espera_ms: agora() - (volta ? r.data.turno.acordarEm! : w.criadoEm), segurando: segurarFundo });

@@ -137,6 +137,7 @@ describeIntegracao("emitirPlanoTurno (ADR-024): interseção, profundidade e tok
       // A referência: o turno da dona leva tudo isto.
       const daDona = await turnoCom();
       for (const s of DA_DONA) expect(daDona.promptSistema, s).toContain(s);
+      for (const s of ["FRENTE-DA-DONA", "Trabalhos em andamento"]) expect(daDona.promptSistema, s).not.toContain(s);
       expect(daDona.catalogo.ferramentas.map((f) => f.nome)).toEqual(expect.arrayContaining(["ver_colegas", "ler_artefato", "listar_rotinas"]));
       const deOutra = await turnoCom(randomUUID());
       for (const s of [...DA_DONA, "Diretório de colegas", "Inventário de rotinas"]) expect(deOutra.promptSistema, s).not.toContain(s);
@@ -159,14 +160,17 @@ describeIntegracao("emitirPlanoTurno (ADR-024): interseção, profundidade e tok
       const agora = () => Date.now();
       const deps = depsSobre(repos, MARLON, { services: servicosDeTeste({ agora }), agora, trx });
       const agente = (await repos.agentes.buscar(agenteId))!;
-      // O caminho real: o lote do quadro abre o turno do bot responsável (origem "delegacao", sem trabalho).
+      const quadro = (await repos.quadros.criar({ agenteId, meta: null, prazo: null }))!;
+      // O caminho real: o lote do quadro abre o turno do bot responsável (origem "delegacao"). revisto em 2026-11-07
+      // (ADA-16): no trabalho próprio da tarefa, que não lista as abertas da dona (abre frentes: ADA-232, ADR-163).
       const abrir = async (pedidoPor?: string) => {
-        const aberto = await abrirTurno(deps, { autor: { tipo: "pessoa" }, ops: [], executor: "catcher", ...(pedidoPor ? { pedidoPor } : {}) }, agente, "faça a tarefa do quadro", false);
+        const tarefa = await repos.quadros.inserirTarefa({ quadroId: quadro.id, titulo: "Tarefa do quadro", descricao: "", status: "fazendo", agenteId });
+        const aberto = await abrirTurno(deps, { autor: { tipo: "pessoa" }, ops: [], executor: "catcher", ...(pedidoPor ? { pedidoPor } : {}) }, agente, "faça a tarefa do quadro", false, tarefa);
         const turno = await repos.turnos.buscar(aberto!.turnoId);
-        expect(turno).toMatchObject({ origem: "delegacao", trabalhoId: null, sobProcuracaoDe: pedidoPor ?? PESSOA_MARLON });
+        expect(turno).toMatchObject({ origem: "delegacao", trabalhoId: aberto!.trabalhoId, sobProcuracaoDe: pedidoPor ?? PESSOA_MARLON });
         return (await emitirPlanoTurno(deps, { turnoId: aberto!.turnoId, machineId: randomUUID(), executor: "catcher" })).data;
       };
-      const DA_DONA = ["FRENTE-DA-DONA", "Trabalhos em andamento", "SOBRE-MIM-DA-DONA", "ColegaDaDona", "DESCRICAO-DO-COLEGA"];
+      const DA_DONA = ["SOBRE-MIM-DA-DONA", "ColegaDaDona", "DESCRICAO-DO-COLEGA"];
       // A referência: o turno que a própria dona abre pelo quadro leva as frentes dela, o Sobre mim e os colegas (o
       // inventário de rotinas não entra na delegação; a ausência dele no turno da participante é conferida abaixo).
       const daDona = await abrir();
@@ -175,7 +179,7 @@ describeIntegracao("emitirPlanoTurno (ADR-024): interseção, profundidade e tok
       const deOutra = await abrir(PARTICIPANTE.id);
       expect(deOutra.modoTurno).toBe("delegacao");
       expect(deOutra.autoria).toMatchObject({ sob_procuracao_de: PARTICIPANTE.id });
-      for (const s of [...DA_DONA, "ROTINA-DA-DONA", "Diretório de colegas", "Inventário de rotinas"]) expect(deOutra.promptSistema, s).not.toContain(s);
+      for (const s of [...DA_DONA, "FRENTE-DA-DONA", "Trabalhos em andamento", "ROTINA-DA-DONA", "Diretório de colegas", "Inventário de rotinas"]) expect(deOutra.promptSistema, s).not.toContain(s);
     });
   });
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { EntradaHistoricoDto, QuadroDto, TarefaDto } from "../../../src/contracts/quadro.ts";
 import { lerCodigo } from "../../../src/domain/codigo-tarefa.ts";
-import { FORMATO_CODIGO, RESP_VOCE, botDoLink, fraseDoErroDoMover, reciboDaNovaTarefa, acesos, atalhosDePrazo, codigoDaTarefa, codigoNaUrl, destinosDaTarefa, responsaveisDaTarefa, faltaParaOPrazo, linhaDoHistorico, opcoesDeStatus, fraseDoPrazo, historicoDaFaixa, linhaUnica, respostaDoBot, tarefaNoQuadro, tarefasPorStatus, type Faixa } from "../../../web/lib/quadro-dados.ts";
+import { FORMATO_CODIGO, botDoLink, fraseDoErroDoMover, reciboDaNovaTarefa, acesos, atalhosDePrazo, codigoDaTarefa, codigoNaUrl, destinosDaTarefa, responsaveisDaTarefa, faltaParaOPrazo, linhaDoHistorico, opcoesDeStatus, fraseDoPrazo, historicoDaFaixa, linhaUnica, respostaDoBot, tarefaNoQuadro, tarefasPorStatus, type Faixa } from "../../../web/lib/quadro-dados.ts";
 import { avisoDoGithub, cardDaTarefa, esperandoOutro, faixaDoQuadro, formNovaTarefa, menuDePrazo, pessoasDoQuadro, pilulaDoQuadro, prMaisProblematico, quadroDaMeta, rotuloDoModo, semQuadro, tarefaAberta, tempoDoTurno, tomDoPr, topoDoQuadro } from "../../../web/telas/quadro-real.ts";
 import { card, confiar } from "../../../web/telas/quadro.ts";
 import { COLUNAS_PADRAO, colunasDto } from "../../../src/domain/colunas.ts";
@@ -12,7 +12,7 @@ import { RECUSAS_DO_MOVER } from "../../../src/use-cases/quadro.ts";
 const MAL = `<img src=x onerror="alert(1)">"'&`;
 const t = (id: string, extra: Partial<TarefaDto> = {}): TarefaDto => ({
   id, quadroId: "q1", titulo: `Tarefa ${id}`, descricao: "", status: "afazer", voltarPara: null, agenteId: "a", ordem: 1, linearId: null, linearUrl: null, prUrl: null,
-  pergunta: null, resposta: null, deFora: false, turnoId: null, criadoEm: 1, mudadoEm: 1, terminadaEm: null, execucao: null, agenteNome: "Ada", numero: null, codigo: `#${id}`, branch: "", ...extra,
+  pergunta: null, resposta: null, deFora: false, turnoId: null, criadoEm: 1, mudadoEm: 1, terminadaEm: null, execucao: null, agenteNome: "Ada", numero: null, prioridade: "sem", codigo: `#${id}`, branch: "", ...extra,
 });
 const q = (tarefas: TarefaDto[], extra: Partial<QuadroDto> = {}): QuadroDto => ({
   id: "q1", agenteId: "a", nome: null, projetoId: null, prefixo: null, modoConversa: "individual", meta: "Meta", prazo: null, cumpridoEm: null, resumo: null, criadoEm: 1, atualizadoEm: 1, metaDesde: 1, agenteNome: "Ada",
@@ -152,10 +152,19 @@ describe("quadro-dados", () => {
 });
 
 describe("quadro-real (o html)", () => {
-  it("o card: Você é o responsável quando a tarefa espera a pessoa, com a pergunta; bloqueado mostra o motivo; PR e Linear viram etiquetas", () => {
-    const voce = cardDaTarefa(t("1", { status: "voce", pergunta: "Qual workspace?" }), agente);
-    expect(voce.voce).toBeTruthy();
-    expect(JSON.stringify(voce)).toContain("Qual workspace?");
+  it("o card: a tarefa que espera a pessoa segue com o bot e diz \"te perguntou\" (ADR-162); bloqueado mostra o motivo; PR e Linear viram etiquetas", () => {
+    const espera = cardDaTarefa(t("1", { status: "fazendo", voltarPara: "fazendo", esperaPessoa: true, pergunta: "Qual workspace?" }), agente);
+    expect(espera.perguntou).toBe("Qual workspace?");
+    expect(espera.responsavel?.nome).not.toBe("Você");
+    expect(espera.responder).toBeUndefined();
+    const h = String(card(espera));
+    // 2026-11-10: o chip com sino na linha de cima do card substitui o "te perguntou".
+    expect(h).toContain('<div class="qd-card-l1">');
+    expect(h.slice(h.indexOf('<div class="qd-card-l1">'), h.indexOf("</div>"))).toContain('<span class="qd-espera qd-espera-voce" title="Esperando você responder">');
+    expect(h).not.toContain("qd-perguntou");
+    expect(h).not.toContain("qd-voce-frase");
+    expect(h).not.toContain("qd-precisa");
+    expect(h).toContain("Esperando você responder: Qual workspace?");
     const bloq = cardDaTarefa(t("2", { status: "bloqueado", pergunta: "Falta o token" }), agente);
     expect(JSON.stringify(bloq)).toContain("Falta o token");
     const pr = cardDaTarefa(t("3", { prUrl: "https://github.com/o/r/pull/9", linearId: "NOD-9" }), agente);
@@ -165,7 +174,7 @@ describe("quadro-real (o html)", () => {
   });
 
   it("texto hostil (título, meta, descrição, pergunta, nome do bot) sai escapado em todo html", () => {
-    const tm = t("1", { titulo: MAL, descricao: MAL, pergunta: MAL, status: "voce", agenteNome: MAL });
+    const tm = t("1", { titulo: MAL, descricao: MAL, pergunta: MAL, status: "fazendo", voltarPara: "fazendo", esperaPessoa: true, agenteNome: MAL });
     const qm = q([tm], { meta: MAL, agenteNome: MAL });
     const htmls = [
       quadroDaMeta({ q: qm, nome: MAL, agente, filtro: "todos", alternadas: new Set(), acesas: new Set() }),
@@ -198,7 +207,8 @@ describe("quadro-real (o html)", () => {
     expect(h).toContain(`href="https://github.com/gamefik/nod/pull/612"`);
     expect(h).toContain("gamefik/nod #612</a><span class=\"qd-pr-estado\"> · CI falhou · conflito · aberto</span>");
     expect(h).not.toContain("javascript:");
-    expect(h).toContain(`Entregáveis <span class="qd-n">1</span>`);
+    // 2026-11-10: os PRs têm a seção própria na lateral (as Entregas são os links dos comentários do agente).
+    expect(h).toContain(`Pull requests <span class="qd-n">1</span>`);
     expect(h).toContain("Atividade");
     expect(h).toContain("GitHub · CI falhou no #612");
     expect(h).not.toMatch(/onerror="/);
@@ -209,7 +219,7 @@ describe("quadro-real (o html)", () => {
     expect(String(card(c))).toContain(`<i class="qd-pr-ponto qd-pr-falhou" aria-hidden="true"></i>PR #612 +1<span class="qd-sr"> (CI falhou · conflito · aberto)</span></span>`);
     // Sem PR ligado nem linha: como antes (o pr_url do agente, sem Atividade).
     const antes = String(tarefaAberta({ t: t("1", { prUrl: "https://github.com/o/r/pull/3" }), q: q([]), agente }));
-    expect(antes).toContain(`Entregáveis <span class="qd-n">1</span>`);
+    expect(antes).toContain(`Pull requests <span class="qd-n">1</span>`);
     expect(antes).not.toContain("Atividade");
   });
 
@@ -443,13 +453,15 @@ describe("NOD-416 (ADR-144): criar, Status e Responsável na tela, histórico e 
     expect(String(tarefaAberta({ t: tm, q: q([tm]), agente, historico: [] }))).toContain("Sem histórico antes desta versão");
   });
 
-  it("revisão do PR #623: Status sem \"Precisa de você\" (pede pergunta) e Mover só com o botão; Responsável sem o Nod", () => {
+  it("revisão do PR #623: Status sem \"Precisa de você\" (ADR-162: não é coluna) e Mover só com o botão; Responsável sem o Nod", () => {
     const tm = t("1", { status: "backlog" });
     const html = String(tarefaAberta({ t: tm, q: q([tm]), agente, responsaveis: [{ id: "a", nome: "Ada" }], destinos: [{ id: "q2", nome: "Caio (CA)" }], historico: [] }));
     expect(html).not.toContain(`<option value="voce"`);
-    // A tarefa que já está em Precisa de você mostra o status dela (sem sair dali pelo select).
-    const nv = t("2", { status: "voce", pergunta: "Qual?" });
-    expect(String(tarefaAberta({ t: nv, q: q([nv]), agente, historico: [] }))).toContain(`<option value="voce" selected>`);
+    // A tarefa que espera a pessoa mostra a coluna em que está (ADR-162), sem opção "voce".
+    const nv = t("2", { status: "fazendo", voltarPara: "fazendo", esperaPessoa: true, pergunta: "Qual?" });
+    const aberta = String(tarefaAberta({ t: nv, q: q([nv]), agente, historico: [] }));
+    expect(aberta).toContain(`<option value="fazendo" selected>`);
+    expect(aberta).not.toContain(`<option value="voce"`);
     // "Mover para": escolher não move; o botão Mover confirma (WCAG 3.2.2), desligado até haver escolha.
     expect(html).toMatch(/<button type="button" class="[^"]*" data-act="mover-quadro" data-id="1" disabled>Mover<\/button>/);
     // QA do PR #623: o nome do quadro pode não caber no select; a opção e o select levam o title.
@@ -468,19 +480,20 @@ describe("NOD-416 (ADR-144): criar, Status e Responsável na tela, histórico e 
     ], "p")).toEqual([{ id: "a", nome: "Ada" }]);
   });
 
-  it("revisão 2 do PR #623: o label do Responsável só aponta para o select, e em Precisa de você o select mostra Você", () => {
+  it("revisão 2 do PR #623: o label do Responsável só aponta para o select; a tarefa que espera a pessoa segue com o bot (ADR-162)", () => {
     const tm = t("1", { status: "backlog", agenteId: "a" });
     // Sem a lista, o Responsável é texto: nada de label for= apontando para um <span>.
     const so = String(tarefaAberta({ t: tm, q: q([tm]), agente, historico: [] }));
     expect(so).not.toContain(`for="qd-t-resp"`);
     expect(so).toContain(`<dt>Responsável</dt>`);
     expect(String(tarefaAberta({ t: tm, q: q([tm]), agente, responsaveis: [{ id: "a", nome: "Ada" }], historico: [] }))).toContain(`<label for="qd-t-resp">Responsável</label>`);
-    // Em Precisa de você o responsável efetivo é a pessoa: o select mostra Você (e não o bot, que segue como opção).
-    const nv = t("2", { status: "voce", agenteId: "a", pergunta: "Qual?" });
+    // ADR-162: sem "Você" no select; o bot segue marcado, e a folha diz "<bot> te perguntou".
+    const nv = t("2", { status: "fazendo", voltarPara: "fazendo", esperaPessoa: true, agenteId: "a", pergunta: "Qual?" });
     const html = String(tarefaAberta({ t: nv, q: q([nv]), agente, responsaveis: [{ id: "a", nome: "Ada" }], historico: [] }));
     const sel = html.match(/<select id="qd-t-resp"[\s\S]*?<\/select>/)?.[0] ?? "";
-    expect(sel).toContain(`<option value="${RESP_VOCE}" selected disabled>Você</option>`);
-    expect(sel).toContain(`<option value="a">Ada</option>`);
+    expect(sel).not.toContain(">Você<");
+    expect(sel).toContain(`<option value="a" selected>Ada</option>`);
+    expect(html).toContain("te perguntou</h2>");
     expect(sel.match(/ selected/g)).toHaveLength(1);
   });
 
@@ -508,7 +521,7 @@ describe("NOD-416 (ADR-144): criar, Status e Responsável na tela, histórico e 
 
 describe("NOD-460: a barra do quadro em tela cheia", () => {
   const base = { nome: "Ada", agente, alternadas: new Set<string>(), acesas: new Set<string>() };
-  const ts = [t("1", { titulo: "Login no Safari", status: "voce" }), t("2", { titulo: "Ação de onboarding", agenteId: "b", agenteNome: "Bia", execucao: "rodando", status: "fazendo", naColunaDesde: 1, trabalhandoDesde: 1 }), t("3", { titulo: "Outra" })];
+  const ts = [t("1", { titulo: "Login no Safari", status: "fazendo", voltarPara: "fazendo", esperaPessoa: true }), t("2", { titulo: "Ação de onboarding", agenteId: "b", agenteNome: "Bia", execucao: "rodando", status: "fazendo", naColunaDesde: 1, trabalhandoDesde: 1 }), t("3", { titulo: "Outra" })];
 
   it("os chips (Todas, Comigo com a contagem, um por agente) e o Comigo fica à vista com 0 quando ninguém espera você", () => {
     const html = String(quadroDaMeta({ ...base, q: q(ts), filtro: "todos" }));
@@ -595,18 +608,18 @@ describe("NOD-460: a barra do quadro em tela cheia", () => {
 
 describe("NOD-443: o quadro com várias pessoas na tela", () => {
   const ANA = { pessoaId: "ana", nome: "Ana", adicionadoEm: 1 };
-  const pend = (voce: boolean, saiu: string | null = null) => t("p", { status: "voce", pergunta: "Qual plano?", decide: { pessoaId: voce ? "eu" : "ana", nome: voce ? "Dora" : "Ana", voce, saiu } });
+  const pend = (voce: boolean, saiu: string | null = null) => t("p", { status: "fazendo", voltarPara: "fazendo", esperaPessoa: true, pergunta: "Qual plano?", decide: { pessoaId: voce ? "eu" : "ana", nome: voce ? "Dora" : "Ana", voce, saiu } });
   const hora = () => "10:00";
 
-  it("D6: a pendência de outra pessoa não é azul para quem lê; o card diz quem decide", () => {
+  it("D6: a pendência de outra pessoa não tem o \"te perguntou\" para quem lê; o card diz quem decide", () => {
     const c = cardDaTarefa(pend(false), agente);
-    expect(c.voce).toBeUndefined();
-    expect(c.responsavel).toBeUndefined();
-    expect(c.tags).toContain("Esperando Ana");
+    expect(c.perguntou).toBeUndefined();
+    expect(c.espera).toEqual({ texto: "Esperando Ana responder", voce: false });
+    expect(c.tags ?? []).not.toContain("Esperando Ana");
     expect(esperandoOutro(pend(false))).toBe("Ana");
-    // Quem decide vê o azul de sempre; o quadro de uma pessoa só (sem decide) também.
-    expect(cardDaTarefa(pend(true), agente).voce).toBe("Qual plano?");
-    expect(cardDaTarefa(t("x", { status: "voce", pergunta: "?" }), agente).voce).toBe("?");
+    // Quem decide vê o "te perguntou"; o quadro de uma pessoa só (sem decide) também.
+    expect(cardDaTarefa(pend(true), agente).perguntou).toBe("Qual plano?");
+    expect(cardDaTarefa(t("x", { status: "fazendo", voltarPara: "fazendo", esperaPessoa: true, pergunta: "?" }), agente).perguntou).toBe("?");
   });
 
   it("D5: só quem decide tem o campo de resposta; a pendência que voltou diz de quem era", () => {
@@ -649,14 +662,58 @@ describe("NOD-443: o quadro com várias pessoas na tela", () => {
     expect(String(pessoasDoQuadro(q([]), { painel: "atividade", hora, mural: [] }))).toContain("Nada ainda.");
   });
 
-  it("D2: o rótulo da pílula diz quem vê a conversa; a coluna padrão vira Precisa de alguém", () => {
+  it("D2: o rótulo da pílula diz quem vê a conversa; ADR-162: não há coluna Precisa de alguém", () => {
     expect(rotuloDoModo(q([]))).toBeNull();
     expect(rotuloDoModo(q([], { membros: [ANA] }))).toBe("Só você vê esta conversa");
     expect(rotuloDoModo(q([], { membros: [ANA], modoConversa: "so_dono" }))).toBe("Só você conversa · quem participa comenta");
     expect(rotuloDoModo(q([], { modoConversa: "so_dono", dona: { pessoaId: "eu", nome: "Dora" }, voce: { pessoaId: "ana", papel: "membro", podeDesfazer: false } }))).toBe("Só Dora conversa · você comenta");
     const base = { nome: "Ada", agente, filtro: "todos" as const, alternadas: new Set<string>(), acesas: new Set<string>() };
-    expect(String(quadroDaMeta({ ...base, q: q([], { membros: [ANA] }) }))).toContain("Precisa de alguém");
+    expect(String(quadroDaMeta({ ...base, q: q([], { membros: [ANA] }) }))).not.toContain("Precisa de alguém");
     expect(String(quadroDaMeta({ ...base, q: q([]) }))).not.toContain("Precisa de alguém");
+  });
+});
+
+describe("ADA-16 (ADR-163): o card diz rodando, na fila há X min ou esperando", () => {
+  const base = { nome: "Ada", agente, alternadas: new Set<string>(), acesas: new Set<string>() };
+  const agora = 1 + 12 * 60_000;
+  const html = (x: Partial<TarefaDto>) => String(quadroDaMeta({ ...base, q: q([t("2", { titulo: "Tela", agenteId: "b", agenteNome: "Bia", status: "fazendo", ...x })]), filtro: "todos", agora }));
+
+  it("na fila com motivo real: \"na fila há 12 min\" e diz qual (a mesma tarefa em série ou o portão da máquina)", () => {
+    expect(html({ execucao: "fila", naFilaDesde: 1, motivoFila: "mesma_tarefa" })).toContain("na fila há 12 min · termina a etapa anterior desta tarefa");
+    expect(html({ execucao: "fila", naFilaDesde: 1, motivoFila: "memoria" })).toContain("na fila há 12 min · a máquina está sem memória livre");
+    expect(html({ execucao: "fila", naFilaDesde: 1, motivoFila: "processador" })).toContain("o processador da máquina está ocupado");
+    expect(html({ execucao: "fila", naFilaDesde: 1, motivoFila: "disco" })).toContain("o disco da máquina está cheio");
+  });
+
+  // Regression: pedido do Marlon (2026-11-10, "não quero limites"): sem teto próprio, o card não fala de vaga nem de limite.
+  it("na fila sem motivo: só \"na fila\", sem a hora e sem falar de vaga ou limite", () => {
+    const h = html({ execucao: "fila", naFilaDesde: 1, motivoFila: null });
+    expect(h).toContain("na fila");
+    expect(h).not.toContain("na fila há");
+    expect(h).not.toMatch(/limite|vaga/);
+  });
+
+  it("2026-11-10: na fila há menos de um minuto, ou sem a hora (o card otimista do mover): \"começando\"", () => {
+    const novo = html({ execucao: "fila", naFilaDesde: agora - 30_000, motivoFila: "mesma_tarefa" });
+    expect(novo).not.toContain("na fila há");
+    expect(novo).toContain("começando");
+    const sem = html({ execucao: "fila", naFilaDesde: null, motivoFila: "memoria" });
+    expect(sem).toContain("começando");
+    expect(sem).not.toContain("na fila há");
+  });
+
+  it("esperando: o selo de pausa e a frase de quem espera a CI; nunca \"Trabalhando\"", () => {
+    const h = html({ execucao: "esperando", agenteId: "a", agenteNome: "Ada" });
+    expect(h).toContain("qd-e-esperando");
+    expect(h).toContain("esperando a CI, um colega ou um comando");
+    expect(h).toContain("qd-av-esperando");
+    expect(h).not.toContain("Trabalhando");
+  });
+
+  it("o \"na fila há\" não vaza para o card rodando", () => {
+    const h = html({ execucao: "rodando", trabalhandoDesde: 1, naFilaDesde: 1, motivoFila: "mesma_tarefa" });
+    expect(h).toContain("Trabalhando · há 12 min");
+    expect(h).not.toContain("na fila");
   });
 });
 
@@ -666,8 +723,10 @@ describe("ADA-232: o card numa linha", () => {
   it("esperando mostra o motivo (escapado) e vence o selo Trabalhando", () => {
     const c = cardDaTarefa(t("1", { status: "fazendo", execucao: "rodando", estadoLinha: { tipo: "esperando", motivo: MAL, volta } }), agente);
     expect(c.esperando).toEqual({ motivo: MAL });
+    // 2026-11-10: a volta pela CI vira o chip com sino "Esperando a CI" (wait.pr_checks do Multica).
+    expect(c.espera).toEqual({ texto: "Esperando a CI", voce: false });
     const h = String(card(c));
-    expect(h).toContain("qd-e-esperando");
+    expect(h).toContain(`<span class="qd-espera" title="Esperando a CI">`);
     expect(h).not.toContain(MAL);
     expect(h).not.toContain("qd-selo");
   });

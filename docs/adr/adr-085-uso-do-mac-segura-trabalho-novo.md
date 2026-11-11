@@ -1,5 +1,7 @@
 # ADR-085 — Uso do Mac: o Mac apertado segura trabalho novo em segundo plano
 
+> Emendada pela [ADR-163](adr-163-tarefa-do-quadro-e-trabalho.md): a tarefa do quadro roda num trabalho próprio (origem `quadro`), sem teto próprio (o freio é o portão de recursos desta ADR-085) e fora dos bastidores.
+
 Status: aceito · Data: 2026-10-08 · emenda 2026-10-09 (memória crítica e disco, #219) · emenda 2026-10-09 (a tela fala por máquina, abaixo) · emenda 2026-10-12 (o motivo "cota", ADR-099 §7, abaixo) · o processador do item 1 foi
 emendado pela [ADR-091](adr-091-regua-do-processador-cpu-e-fila.md) (uso da CPU e fila, 2026-10-09) · Emenda a [ADR-083](adr-083-trabalhos-paralelos-a-conversa-coordena.md) §4 ("sem teto:
 o limite é a máquina"). Decisão do Marlon em 2026-10-08: o caminho "sem teto, sem desperdício", aprovado no protótipo

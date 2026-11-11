@@ -38,6 +38,7 @@ interface Linha {
   lote_id: string | null;
   resumo: ResumoFrente | null;
   repo: string | null;
+  tarefa_id: string | null;
   criado_em: Date;
   iniciado_em: Date | null;
   terminado_em: Date | null;
@@ -50,7 +51,7 @@ interface Linha {
 const TETO_COM_CODIGOS = 10_000;
 
 const COLUNAS =
-  "tenant_id, id, agente_id, conversa_id, titulo, origem, pedido_por_agente_id, rotina_id, trabalho_mae_id, depois_de_trabalho_id, estado, sessao_cli, sessao_harness, sessao_executor, pasta, memoria_mb, custo_usd, custo_parcial, pessoa_esperando, forma, lote_id, resumo, repo, criado_em, iniciado_em, terminado_em";
+  "tenant_id, id, agente_id, conversa_id, titulo, origem, pedido_por_agente_id, rotina_id, trabalho_mae_id, depois_de_trabalho_id, estado, sessao_cli, sessao_harness, sessao_executor, pasta, memoria_mb, custo_usd, custo_parcial, pessoa_esperando, forma, lote_id, resumo, repo, tarefa_id, criado_em, iniciado_em, terminado_em";
 
 const paraTrabalho = (l: Linha): Trabalho => ({
   tenantId: l.tenant_id,
@@ -76,6 +77,7 @@ const paraTrabalho = (l: Linha): Trabalho => ({
   loteId: l.lote_id,
   resumo: l.resumo,
   ...(l.repo ? { repo: l.repo } : {}),
+  ...(l.tarefa_id ? { tarefaId: l.tarefa_id } : {}),
   criadoEm: ms(l.criado_em),
   iniciadoEm: msOuNull(l.iniciado_em),
   terminadoEm: msOuNull(l.terminado_em),
@@ -105,7 +107,7 @@ export type NovoTrabalho = {
   loteId?: string | null;
   /** NOD-315 (0102): o `dono/nome` do GitHub da frente, já validado (`repoDoGithub`). */
   repo?: string | null;
-  /** ADA-232 (0157): a tarefa do quadro de onde a frente nasceu — o card conta a frente aberta como trabalhando. ADA-28 (ADR-159): o `terminei` e o `pr_url` da frente valem para a tarefa. */
+  /** ADA-232 (0153); ADA-289 (0164): também a tarefa do trabalho da própria tarefa (origem `quadro`, forma `task`, um por bot e tarefa). ADA-232 (0157): a tarefa do quadro de onde a frente nasceu — o card conta a frente aberta como trabalhando. ADA-28 (ADR-159): o `terminei` e o `pr_url` da frente valem para a tarefa. */
   tarefaId?: string | null;
 };
 
@@ -165,7 +167,19 @@ export function trabalhosRepo(conn: Conn, escopo: Escopo) {
           ${n.pedidoPorAgenteId ?? null}, ${n.rotinaId ?? null}, ${n.trabalhoMaeId ?? null}, ${n.depoisDeTrabalhoId ?? null}, ${n.estado ?? "na_fila"},
           ${n.sessaoCli ?? null}, ${n.sessaoHarness ?? null}, ${n.sessaoCli ? (n.sessaoExecutor ?? null) : null}, ${n.pasta ?? null}, ${n.iniciadoEm === undefined || n.iniciadoEm === null ? null : data(n.iniciadoEm)}, ${n.pessoaEsperando === true},
           ${n.forma ?? "task"}, ${n.loteId ?? null}, ${n.repo ?? null}, ${n.tarefaId ?? null})
+        ${n.tarefaId && n.origem === "quadro" && (n.forma ?? "task") === "task" ? conn`on conflict (tenant_id, agente_id, tarefa_id) where tarefa_id is not null and origem = 'quadro' and forma = 'task' do nothing` : conn``}
         returning ${conn.unsafe(COLUNAS)}`;
+      return l ? paraTrabalho(l) : null;
+    },
+
+    /**
+     * ADA-16 (ADR-163): o trabalho do bot na tarefa do quadro (um só por par, índice `trabalhos_da_tarefa`), em qualquer
+     * estado. Com `travar`, FOR NO KEY UPDATE: duas etapas da mesma tarefa abrindo turno ao mesmo tempo se enfileiram.
+     */
+    async daTarefa(agenteId: string, tarefaId: string, o: { travar?: boolean } = {}): Promise<Trabalho | null> {
+      const [l] = await conn<Linha[]>`select ${conn.unsafe(COLUNAS)} from trabalhos
+        where tenant_id = ${escopo.tenantId} and owner_id = ${escopo.pessoaId} and agente_id = ${agenteId} and tarefa_id = ${tarefaId} and origem = 'quadro' and forma = 'task'
+        ${o.travar ? conn`for no key update` : conn``}`;
       return l ? paraTrabalho(l) : null;
     },
 

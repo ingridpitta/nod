@@ -12,7 +12,7 @@ import { ROLAVEIS_INTERNOS } from "../../../web/lib/rolagem-guardada.ts";
 const AGORA = 1_800_000_000_000;
 const MAL = `<img src=x onerror="alert(1)">"'&`;
 const t = (id: string, extra: Partial<TarefaDto> = {}): TarefaDto => ({
-  id, quadroId: "q1", titulo: `Tarefa ${id}`, descricao: "", status: "afazer", voltarPara: null, terminadaEm: null, agenteId: "a", ordem: 1, linearId: null, linearUrl: null, prUrl: null,
+  id, quadroId: "q1", titulo: `Tarefa ${id}`, descricao: "", status: "afazer", voltarPara: null, terminadaEm: null, agenteId: "a", ordem: 1, prioridade: "sem", linearId: null, linearUrl: null, prUrl: null,
   pergunta: null, resposta: null, deFora: false, turnoId: null, criadoEm: 1, mudadoEm: 1, execucao: null, agenteNome: "Ada", numero: null, codigo: `VER-${id}`, branch: "", ...extra,
 });
 const q = (tarefas: TarefaDto[]): QuadroDto => ({
@@ -111,7 +111,7 @@ describe("ADA-18: visão no título (passo 3)", () => {
   });
 
   it("Minhas tarefas: só o que está com a pessoa, só os grupos com alguma; sem nada, o vazio dela", () => {
-    const comigo = t("2", { status: "voce", pergunta: "Aprova?" });
+    const comigo = t("2", { status: "fazendo", voltarPara: "fazendo", esperaPessoa: true, pergunta: "Aprova?" });
     const h = celular([t("1"), comigo], { celular: { visao: "minhas" } });
     expect(h).toContain('data-visao="minhas"');
     expect(h).toContain('data-tarefa="2"');
@@ -211,8 +211,9 @@ describe("ADA-18: toque longo na linha (passo 6)", () => {
     expect(h).toContain('aria-label="Mover Revisar para"');
     expect(h).toMatch(/<button type="button" role="menuitemradio" class="qd-cel-it" data-act="cel-fechar" aria-checked="true">.*?<span>A fazer<\/span><span class="qd-cel-ok"/);
     expect(h).toContain('data-act="tarefa-mover-para" data-coluna="fazendo" data-tarefa="1" aria-checked="false"');
-    // Precisa de você não recebe card solto: fica desligada com o porquê.
-    expect(h).toMatch(/data-coluna="voce" data-tarefa="1" aria-checked="false" aria-disabled="true" title="[^"]+"/);
+    // ADR-162: não há coluna Precisa de você; nenhuma fica desligada.
+    expect(h).not.toContain('data-coluna="voce"');
+    expect(h).not.toContain('aria-disabled="true"');
     expect(h).not.toContain("qd-menu-mover");
   });
 

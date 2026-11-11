@@ -10,8 +10,9 @@ import { abrirChrome, avaliar, type Cdp } from "../../scripts/carga-tela/cdp.ts"
 /**
  * NOD-415 (ADR-141) no Chrome de verdade, com o CSS e o JS do app e uma API falsa na página (sem servidor):
  *  - sem quadro: o form "criar quadro" com a meta opcional; Criar sem meta nasce no fluxo contínuo (sem fração);
- *  - "+ Meta" abre o campo; Enter grava a meta e a barra aparece; Esc desiste; vazio tira a meta;
- *  - o menu de prazo grava na hora;
+ *  - quadro mínimo (2026-11-10): uma linha só, o nome com o chevron abre o menu do quadro (setas, Esc, foco volta);
+ *  - "Meta…" abre o campo no menu; Enter grava e a meta aparece em cinza ao lado do nome; Esc desiste; vazio tira;
+ *  - "Prazo…" abre o select no menu e grava na hora;
  *  - "Remover quadro" confirma e volta ao "criar quadro"; recusar a confirmação não chama a API.
  * Sem Chrome na máquina, o teste é pulado; no CI (NOD_QA_EXIGE_CHROME=1) a falta é erro.
  */
@@ -110,17 +111,35 @@ descrever("NOD-415 no Chrome real: criar, meta, prazo e remover pela tela", () =
     await ate(`document.querySelector('#quadro [data-form="criar-quadro"]')`);
     expect(await texto("#quadro .qd-sem-quadro")).toContain("Ada ainda não tem quadro");
 
-    // Criar sem meta: o fluxo contínuo, sem fração nem barra.
+    // Criar sem meta: o fluxo contínuo. Quadro mínimo (2026-11-10): uma linha só, o nome com o chevron e nada mais.
     await enviarForm('#quadro [data-form="criar-quadro"]');
-    await ate(`document.querySelector("#quadro .qd-meta-fluxo")`);
+    await ate(`document.querySelector("#quadro .qm-cab-bt")`);
     expect((await chamadas())[0]).toEqual(["criar", { meta: null, prazo: null }]);
-    expect(await avaliar<boolean>(cdp, `!document.querySelector("#quadro .qd-barra") && !/feitas/.test(document.querySelector("#quadro .qd-meta").textContent)`)).toBe(true);
+    expect(await avaliar<boolean>(cdp, `!document.querySelector("#quadro .qd-barra, #quadro .qd-meta, #quadro .qm-cab-meta, #quadro .qd-flag, #quadro .qd-pessoas-links")`)).toBe(true);
+    // O nome e o funil na mesma linha da barra.
+    expect(await avaliar<boolean>(cdp, `document.querySelector("#quadro .qm-cab-bt").closest(".qm-barra") === document.querySelector('#quadro [data-act="fil-abrir"]').closest(".qm-barra")`)).toBe(true);
+    const abrirMenu = async () => {
+      if (!(await avaliar<boolean>(cdp, `!!document.querySelector("#qm-pop-quadro")`))) await avaliar(cdp, `document.querySelector("#quadro .qm-cab-bt").click()`);
+      await ate(`document.querySelector("#qm-pop-quadro")`);
+    };
 
-    // + Meta → campo; Esc desiste sem chamar a API.
+    // O menu com teclado: abre no 1º item, a seta para cima dá a volta, Esc fecha e o foco volta ao nome.
+    await abrirMenu();
+    await ate(`document.activeElement?.dataset.act === "editar-meta"`);
+    expect(await texto("#qm-pop-quadro")).toContain("Em teste · só você vê");
+    await tecla("#qm-pop-quadro [data-act='editar-meta']", "ArrowUp");
+    await ate(`document.activeElement?.dataset.act === "remover-quadro"`);
+    await tecla("#qm-pop-quadro [data-act='remover-quadro']", "ArrowDown");
+    await ate(`document.activeElement?.dataset.act === "editar-meta"`);
+    await tecla("#qm-pop-quadro [data-act='editar-meta']", "Escape");
+    await ate(`!document.querySelector("#qm-pop-quadro") && document.activeElement?.classList.contains("qm-cab-bt")`);
+
+    // Meta… → campo no próprio menu; Esc desiste sem chamar a API e o foco volta ao item.
+    await abrirMenu();
     await avaliar(cdp, `document.querySelector('#quadro [data-act="editar-meta"]').click()`);
     await ate(`document.activeElement?.id === "qd-meta-in"`);
     await tecla("#qd-meta-in", "Escape");
-    await ate(`!document.querySelector("#qd-meta-in")`);
+    await ate(`!document.querySelector("#qd-meta-in") && document.activeElement?.dataset.act === "editar-meta"`);
     expect((await chamadas()).filter((c) => c[0] === "editar")).toHaveLength(0);
     // Sair do campo sem Enter nem Esc também desiste (QA do PR #617).
     await avaliar(cdp, `document.querySelector('#quadro [data-act="editar-meta"]').click()`);
@@ -129,37 +148,45 @@ descrever("NOD-415 no Chrome real: criar, meta, prazo e remover pela tela", () =
     await ate(`!document.querySelector("#qd-meta-in")`);
     expect((await chamadas()).filter((c) => c[0] === "editar")).toHaveLength(0);
 
-    // Enter grava a meta: a barra aparece.
+    // Enter grava a meta: ela aparece em cinza ao lado do nome; o progresso fica no topo do menu.
+    await abrirMenu();
     await avaliar(cdp, `document.querySelector('#quadro [data-act="editar-meta"]').click()`);
     await ate(`document.querySelector("#qd-meta-in")`);
     await avaliar(cdp, `document.querySelector("#qd-meta-in").value = "Lançar o quadro"`);
     await enviarForm('#quadro [data-form="editar-meta"]');
-    await ate(`document.querySelector("#quadro .qd-barra")`);
-    expect(await texto("#quadro .qd-meta-obj")).toBe("Lançar o quadro");
-    expect(await texto("#quadro .qd-meta")).toContain("nenhuma tarefa ainda");
+    await ate(`document.querySelector("#quadro .qm-cab-meta")`);
+    expect(await texto("#quadro .qm-cab-meta")).toBe("Lançar o quadro");
+    await abrirMenu();
+    expect(await texto("#qm-pop-quadro")).toContain("nenhuma tarefa ainda");
     expect(await texto("#qc-faixa")).toContain("Meta trocada.");
 
-    // O menu de prazo grava na hora.
+    // Prazo… abre o select no menu; a troca grava na hora e o prazo aparece ao lado da meta.
+    await avaliar(cdp, `document.querySelector('#quadro [data-act="qmenu-prazo"]').click()`);
+    await ate(`document.activeElement?.id === "qd-prazo"`);
     const amanha = await avaliar<string>(cdp, `document.querySelector("#qd-prazo").options[2].value`);
     await avaliar(cdp, `(() => { const s = document.querySelector("#qd-prazo"); s.value = ${JSON.stringify(amanha)}; s.dispatchEvent(new Event("change", { bubbles: true })); })()`);
     await ate(`document.querySelector("#qd-prazo")?.value === ${JSON.stringify(amanha)} && window.__chamadas.some((c) => c[0] === "editar" && c[1].prazo)`);
     expect((await chamadas()).at(-1)).toEqual(["editar", { prazo: amanha }]);
+    await ate(`/Lançar o quadro · até/.test(document.querySelector("#quadro .qm-cab-meta")?.textContent ?? "")`);
 
-    // Vazio tira a meta: volta ao fluxo contínuo.
+    // Vazio tira a meta: volta ao fluxo contínuo (só o prazo fica ao lado do nome).
+    await abrirMenu();
     await avaliar(cdp, `document.querySelector('#quadro [data-act="editar-meta"]').click()`);
     await ate(`document.querySelector("#qd-meta-in")`);
     await avaliar(cdp, `document.querySelector("#qd-meta-in").value = ""`);
     await enviarForm('#quadro [data-form="editar-meta"]');
-    await ate(`document.querySelector("#quadro .qd-meta-fluxo")`);
+    await ate(`/^até/.test(document.querySelector("#quadro .qm-cab-meta")?.textContent ?? "")`);
     expect(await texto("#qc-faixa")).toContain("Meta tirada");
 
-    // Remover: recusar a confirmação não chama a API; aceitar volta ao "criar quadro".
+    // Remover (no menu): recusar a confirmação não chama a API; aceitar volta ao "criar quadro".
     await avaliar(cdp, "window.__confirma = false");
+    await abrirMenu();
     await avaliar(cdp, `document.querySelector('#quadro [data-act="remover-quadro"]').click()`);
     await esperar(100);
     expect((await chamadas()).some((c) => c[0] === "remover")).toBe(false);
     expect(String((await chamadas()).at(-1)?.[1])).toContain("não dá para desfazer");
     await avaliar(cdp, "window.__confirma = true");
+    await abrirMenu();
     await avaliar(cdp, `document.querySelector('#quadro [data-act="remover-quadro"]').click()`);
     await ate(`document.querySelector('#quadro [data-form="criar-quadro"]')`);
     expect((await chamadas()).at(-1)).toEqual(["remover"]);

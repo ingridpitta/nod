@@ -17,6 +17,8 @@ function autorDe(c: ComentarioDto, agente: AgenteDoQuadro): { avatar: string; no
   // NOD-422: o comentário trazido do Linear é de quem escreveu lá, nunca "Você".
   if (c.autor.tipo === "linear") return { avatar: anel((c.autorNome ?? "L").slice(0, 1), c.autorNome ?? "Linear", false), nome: `${c.autorNome ?? "Linear"} · no Linear` };
   if (c.autor.tipo === "pessoa") return { avatar: anel("V", "Você", true), nome: "Você" };
+  // ADR-162: a explicação do próprio quadro (a espera que ele deixou com você).
+  if (c.autor.tipo === "sistema") return { avatar: anel("Q", "Quadro", false), nome: "Quadro" };
   const a = agente(c.autor.agenteId) ?? { avatar: anel((c.autorNome ?? "?").slice(0, 1), c.autorNome ?? "Bot", false), nome: c.autorNome ?? "Bot" };
   // NOD-430 (decisão da Ada): o bot que comentou a pedido da pessoa, na conversa, assina "Você, pela Ada".
   return c.pedidoPor ? { avatar: a.avatar, nome: `Você, pela ${a.nome}` } : a;

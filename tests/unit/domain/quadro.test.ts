@@ -11,7 +11,7 @@ const NOD = { id: "00000000-0000-4000-8000-000000000003", nome: "Nod", nod: true
 const AGENTES = [ZE, ADA, NOD];
 
 const tarefa = (o: Partial<TarefaQuadro> = {}): TarefaQuadro => ({
-  id: "10000000-0000-4000-8000-000000000001", quadroId: "q", titulo: "Login", descricao: "", status: "afazer", voltarPara: null, agenteId: null, ordem: 1, numero: null,
+  id: "10000000-0000-4000-8000-000000000001", quadroId: "q", titulo: "Login", descricao: "", status: "afazer", voltarPara: null, agenteId: null, ordem: 1, prioridade: "sem", numero: null,
   linearId: null, linearUrl: null, prUrl: null, pergunta: null, resposta: null, deFora: false, turnoId: null, criadoEm: AGORA, mudadoEm: AGORA, terminadaEm: null, ...o,
 });
 
@@ -239,6 +239,20 @@ describe("planejarLote: tudo ou nada", () => {
     }
   });
 
+  // ADA-289 (P2 do Dante, ADR-162 "o card fica onde está"): responder a uma pergunta feita no Backlog não joga a tarefa em
+  // Fazendo nem aciona o bot; a resposta fica guardada no card para quando ela começar. Em A fazer segue acionando (vai ao
+  // andamento ao começar, ADR-140).
+  it("responder a pergunta feita no Backlog deixa a tarefa no Backlog, sem turno; em A fazer aciona", () => {
+    const noBacklog = tarefa({ status: "voce", voltarPara: "backlog", agenteId: ZE.id, pergunta: "Qual cor?" });
+    expect(planejar([{ tipo: "responder", tarefa: "Login", resposta: "Azul" }], { tarefas: [noBacklog] })).toMatchObject({
+      tarefas: [{ status: "backlog", resposta: "Azul", voltarPara: null }], respondidas: [], comecam: [],
+    });
+    const emAfazer = tarefa({ status: "voce", voltarPara: "afazer", agenteId: ZE.id, pergunta: "Qual cor?" });
+    const r = planejar([{ tipo: "responder", tarefa: "Login", resposta: "Azul" }], { tarefas: [emAfazer] });
+    expect(r).toMatchObject({ respondidas: [{ id: emAfazer.id, resposta: "Azul" }] });
+    expect(r).toMatchObject({ tarefas: [{ status: "fazendo" }] });
+  });
+
   it("toda tarefa que acaba em voce precisa da pergunta: criar e importar também (revisão do PR #612)", () => {
     expect(planejar([{ tipo: "criar_tarefa", titulo: "a", status: "voce" }])).toMatchObject({ erro: expect.stringContaining("pergunta") });
     expect(planejar([{ tipo: "criar_tarefa", titulo: "a", status: "voce" }, { tipo: "mudar_tarefa", tarefa: "a", pergunta: "Pode?" }])).toMatchObject({ tarefas: [{ status: "voce", pergunta: "Pode?" }] });
@@ -383,7 +397,10 @@ describe("meta, resumo e textos", () => {
     const e = entradaDaTarefa({ quadroId: "q", meta: null, prazo: null, tarefa: { id: "t", titulo: "T", descricao: "", linearId: null, linearUrl: null }, pessoaNome: "M", deQuem: null });
     const fora = e.slice(e.indexOf("</tarefa>"));
     expect(fora).toContain(COMO_TERMINAR);
-    for (const s of ["pr_url", "status voce", "status bloqueado", "esperar_comando", "me_chame_as", "quando: \"ci\"", "na 2ª vez"]) expect(COMO_TERMINAR).toContain(s);
+    for (const s of ["pr_url", "2. perguntar", "só com a pergunta", "fica na coluna", "status bloqueado", "esperar_comando", "me_chame_as", "quando: \"ci\"", "na 2ª vez"]) expect(COMO_TERMINAR).toContain(s);
+    // ADR-162: sem a coluna Precisa de você.
+    expect(COMO_TERMINAR).not.toContain("status voce");
+    expect(COMO_TERMINAR).not.toContain("Precisa de você");
   });
 });
 
@@ -488,7 +505,7 @@ describe("NOD-430, revisão 2: o Backlog com passagem no limite normal", () => {
 describe("NOD-430, revisão 1: na própria tarefa, o bot sozinho só mexe em status, PR, pergunta e terminei", () => {
   const n = { autor: ADA.id, limite: "normal" as const };
   const minha = tarefa({ agenteId: ADA.id, titulo: "Minha", status: "fazendo", linearId: "NOD-1" });
-  const CAMPOS = recusaDoLimite("mudar título, descrição ou \"não iniciar\" (na sua tarefa, só status, PR, pergunta e terminei)");
+  const CAMPOS = recusaDoLimite("mudar título, descrição, labels, prazo ou \"não iniciar\" (na sua tarefa, só status, PR, pergunta e terminei)");
   it("recusa titulo, descricao, sem_iniciar e a reimportação do Linear (que troca o título)", () => {
     expect(planejar([{ tipo: "mudar_tarefa", tarefa: "Minha", titulo: "Outro" }], { ...n, tarefas: [minha] })).toMatchObject({ erro: CAMPOS, indice: 0 });
     expect(planejar([{ tipo: "mudar_tarefa", tarefa: "Minha", descricao: "x" }], { ...n, tarefas: [minha] })).toMatchObject({ erro: CAMPOS });
@@ -508,10 +525,17 @@ describe("NOD-430, revisão 3: no limite normal, a passagem a outro agente é at
   const n = { autor: ADA.id, limite: "normal" as const };
   const minha = tarefa({ agenteId: ADA.id, titulo: "Minha", status: "fazendo" });
   const colunas = COLUNAS_PADRAO.map((c) => (c.id === "revisao" ? { ...c, responsavel: ZE.id } : c));
-  const PASSAR = recusaDoLimite("mover a tarefa para uma coluna que a passa a outro agente (isso é atribuir; para fechar a sua etapa, use terminei)");
-  it("mudar_tarefa com status (ou o PR que leva à Revisão) para a coluna de outro bot: recusa", () => {
-    expect(planejar([{ tipo: "mudar_tarefa", tarefa: "Minha", status: "revisao" }], { ...n, colunas, tarefas: [minha] })).toMatchObject({ erro: PASSAR, indice: 0 });
-    expect(planejar([{ tipo: "mudar_tarefa", tarefa: "Minha", pr_url: "https://github.com/a/b/pull/1" }], { ...n, colunas, tarefas: [minha] })).toMatchObject({ erro: PASSAR });
+  const PASSAR = recusaDoLimite("mover a tarefa para uma coluna que a passa a outro agente fora das saídas da sua etapa (isso é atribuir; para fechar a etapa, use terminei; para pedir ajustes, devolver)");
+  it("mudar_tarefa com status (ou o PR que leva à Revisão) para a coluna de outro bot fora das saídas da etapa: recusa", () => {
+    const noBacklog = { ...minha, status: "backlog" };
+    expect(planejar([{ tipo: "mudar_tarefa", tarefa: "Minha", status: "revisao" }], { ...n, colunas, tarefas: [noBacklog] })).toMatchObject({ erro: PASSAR, indice: 0 });
+    expect(planejar([{ tipo: "mudar_tarefa", tarefa: "Minha", pr_url: "https://github.com/a/b/pull/1" }], { ...n, colunas, tarefas: [noBacklog] })).toMatchObject({ erro: PASSAR });
+  });
+  it("2026-11-10 (Multica): a próxima da etapa vale também pelo status direto e pelo PR", () => {
+    const r = planejar([{ tipo: "mudar_tarefa", tarefa: "Minha", status: "revisao" }], { ...n, colunas, tarefas: [minha] });
+    if ("erro" in r) throw new Error(r.erro);
+    expect(r.tarefas.map((x) => [x.status, x.agenteId])).toEqual([["revisao", ZE.id]]);
+    expect("erro" in planejar([{ tipo: "mudar_tarefa", tarefa: "Minha", pr_url: "https://github.com/a/b/pull/1" }], { ...n, colunas, tarefas: [minha] })).toBe(false);
   });
   it("a coluna do próprio bot passa; o terminei (a etapa seguinte) passa adiante; no total, o status passa", () => {
     const dela = COLUNAS_PADRAO.map((c) => (c.id === "revisao" ? { ...c, responsavel: ADA.id } : c));

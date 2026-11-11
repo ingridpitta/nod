@@ -38,7 +38,7 @@ let desvio = 0;
 Date.now = () => relogio() + desvio;
 window.__inicioDoMinuto = () => { desvio += 60_000 - (Date.now() % 60_000) + 200; };
 window.__virarMinuto = () => { desvio += 60_000; };
-const STS = ["backlog", "afazer", "fazendo", "revisao", "voce", "feito"];
+const STS = ["backlog", "afazer", "fazendo", "revisao", "bloqueado", "feito"];
 const tarefa = (i) => ({ id: "t" + i, quadroId: "q1", titulo: "Tarefa número " + i + " com um título razoável", descricao: "linha\\n".repeat(window.__linhas ?? 80),
   status: window.__estreita ? STS[i % 3] : STS[i % STS.length], agenteId: "a", ordem: i, linearId: null, linearUrl: null, prUrl: null, pergunta: null, resposta: null, deFora: false,
   turnoId: "tu1", criadoEm: agora, mudadoEm: agora, terminadaEm: null, execucao: "rodando", agenteNome: "Ada",
@@ -51,7 +51,7 @@ let versao = 0;
 // coluna de 264 sem o teto de 1240) e com o recolhidaPorPadrao (coluna com tarefa abre sozinha), a releitura estreita também
 // tira as tarefas das recolhidas: senão elas abriam e a grade não estreitava.
 const colunasEstreitas = () => STS.map((id, i) => ({ id, nome: id, grupo: id === "feito" ? "feito" : id === "backlog" || id === "afazer" ? "nao_iniciado" : "iniciado",
-  fixa: id === "voce", daPessoa: false, recolhida: i > 2 }));
+  fixa: false, daPessoa: false, recolhida: i > 2 }));
 const q = () => ({ id: "q1", agenteId: "a", meta: window.__meta ?? "Meta", prazo: null, cumpridoEm: null, resumo: null, criadoEm: agora, atualizadoEm: agora + versao,
   agenteNome: "Ada", ultimoLote: null, feitas: 0, total: 90, ...(window.__estreita ? { colunas: colunasEstreitas() } : {}), tarefas: Array.from({ length: 90 }, (_, i) => ({ ...tarefa(i), mudadoEm: agora + (i === 3 ? versao : 0) })) });
 window.__lidas = 0;
@@ -973,7 +973,10 @@ descrever("ADA-7: a atualização do quadro preserva a rolagem (Chrome real)", (
     await esperar(120);
     const antes = await avaliar<number>(cdp, `document.querySelector("#quadro > .qd-conteudo").getBoundingClientRect().height`);
     expect((await medir()).max, "o quadro precisa rolar para o teste valer").toBeGreaterThan(200);
-    await avaliar(cdp, `document.querySelector('#quadro [data-act="filtro-do-quadro"][data-filtro="comigo"]').click()`);
+    // Quadro minimalista (PR #723): o "Comigo" saiu dos chips da barra e virou o "Você" da pílula de quem está no quadro.
+    await avaliar(cdp, `document.querySelector('#quadro [data-act="ativos-abrir"]').click()`);
+    await ate(`document.querySelector('#quadro #qm-pop-ativos [data-act="filtro-do-quadro"][data-filtro="comigo"]')`);
+    await avaliar(cdp, `document.querySelector('#quadro #qm-pop-ativos [data-act="filtro-do-quadro"][data-filtro="comigo"]').click()`);
     await esperar(250);
     expect(await avaliar<number>(cdp, `document.querySelector("#quadro > .qd-conteudo").scrollHeight`), "o filtro encolheu a lista na hora (a reserva deixaria o espaço em branco)").toBeLessThan(antes - 100);
     expect(await avaliar<string>(cdp, `document.querySelector("#quadro > .qd-conteudo").style.minHeight`), "sem reserva na regravação da pessoa").toBe("");
@@ -1184,10 +1187,12 @@ descrever("ADA-7: a atualização do quadro preserva a rolagem (Chrome real)", (
   it("1440×900: ADA-12 revisão 7 — a tarefa curta recém-aberta não desce sozinha quando o trabalho chega depois dos comentários", async () => {
     await montar(1440, 900, false);
     await semAncora();
-    await avaliar(cdp, "window.__linhas = 8; window.__trabVivo = true; window.__latTrab = 800");
+    // 2026-11-10: o trabalho mora na lateral e não estica a coluna da tarefa; a descrição mais longa faz a tarefa rolar.
+    await avaliar(cdp, "window.__linhas = 30; window.__trabVivo = true; window.__latTrab = 800");
     await atualizar();
     await abrirT3(2);
     await avaliar(cdp, `document.activeElement?.blur()`);
+    // 2026-11-10: o trabalho mora na lateral (Registro de execução); a tarefa rola pela linha do tempo.
     await ate(`document.querySelector("#quadro .qd-trab, #quadro [class*='trab']") && document.getElementById("quadro").scrollHeight > document.getElementById("quadro").clientHeight + 24`);
     await esperar(250);
     const t1 = await medir();
@@ -1195,53 +1200,46 @@ descrever("ADA-7: a atualização do quadro preserva a rolagem (Chrome real)", (
     expect(t1.top, "fica no topo (o título à vista)").toBe(0);
   }, 60_000);
 
-  it("1440×900: ADA-12 revisão 4 — o histórico que a pessoa abriu continua aberto na atualização (sem branco nem pulo)", async () => {
-    // ADA-17: no celular a atividade é uma linha do tempo aberta, sem o <details> do histórico; ele segue no computador.
+  it("1440×900: ADA-12 revisão 4 (2026-11-10: os movimentos na linha do tempo) — a atualização não pula a vista no meio do histórico", async () => {
+    // A tarefa aberta como a issue do Multica: os movimentos (NOD-419) entram na linha do tempo, sem o <details> de antes.
     await montar(1440, 900, false);
     await semAncora();
     await avaliar(cdp, "window.__linhas = 4; window.__movs = 40");
     await atualizar();
     await abrirT3(0);
-    await avaliar(cdp, `(() => { document.activeElement?.blur(); document.querySelector("#quadro details.qd-hist").open = true; })()`);
-    await esperar(120);
+    await avaliar(cdp, `document.activeElement?.blur()`);
+    await ate(`document.querySelectorAll("#quadro .ta-ev").length >= 20`);
     await avaliar(cdp, `(() => { const v = document.getElementById("quadro"); v.scrollTop = Math.floor((v.scrollHeight - v.clientHeight) * 0.7); })()`);
     await esperar(120);
     const t0 = await medir();
-    expect(t0.max, "o histórico aberto faz a tarefa rolar").toBeGreaterThan(600);
+    expect(t0.max, "os movimentos fazem a tarefa rolar").toBeGreaterThan(300);
     await avaliar(cdp, `(() => { window.__coms = 1; window.__q.aoFrame({ streamId: "s", seq: 1, pessoaId: "p", tipo: "quadro.mudou", dados: { quadroId: "q1", agenteId: "a", loteId: null, tarefas: "t3" } }); })()`);
     await ate(`document.querySelector("#quadro .qd-conteudo").textContent.includes("comentário 0")`);
     await esperar(250);
-    expect(await avaliar<boolean>(cdp, `document.querySelector("#quadro details.qd-hist").open`), "o histórico segue aberto").toBe(true);
     const t1 = await medir();
     expect(Math.abs(t1.top - t0.top), "a vista fica onde estava").toBeLessThanOrEqual(2);
     expect(t1.max, "o conteúdo não encolheu").toBeGreaterThanOrEqual(t0.max);
   }, 60_000);
 
-  it("1440×900: ADA-12 revisão 5 — fechar o histórico é gesto da pessoa: o conteúdo novo não puxa a vista ao lugar de antes de fechar", async () => {
-    // ADA-17: no celular a atividade é uma linha do tempo aberta, sem o <details> do histórico; ele segue no computador.
+  it("1440×900: ADA-12 revisão 5 (2026-11-10: a seção da lateral) — recolher é gesto da pessoa: a atualização não reabre nem pula", async () => {
     await montar(1440, 900, false);
     await semAncora();
-    await avaliar(cdp, "window.__linhas = 4; window.__movs = 40");
+    await avaliar(cdp, "window.__linhas = 4; window.__movs = 40; window.__trabVivo = true");
     await atualizar();
     await abrirT3(0);
-    await avaliar(cdp, `(() => { document.activeElement?.blur(); document.querySelector("#quadro details.qd-hist").open = true; })()`);
-    await esperar(120);
-    // No fim do histórico aberto (não colada no fim da tarefa: os comentários vêm depois).
-    await avaliar(cdp, `(() => { const v = document.getElementById("quadro"); const l = v.querySelector("details.qd-hist .qd-hist-lista");
-      v.scrollTop += l.getBoundingClientRect().bottom - v.getBoundingClientRect().bottom + 10; })()`);
-    await esperar(120);
-    await avaliar(cdp, `document.querySelector("#quadro details.qd-hist > summary").click()`);
+    await ate(`document.querySelector('#quadro [data-act="lado-sec"][data-sec="reg"]')`);
+    await avaliar(cdp, `(() => { document.activeElement?.blur(); document.querySelector('#quadro [data-act="lado-sec"][data-sec="reg"]').click(); })()`);
     await esperar(250);
-    expect(await avaliar<boolean>(cdp, `document.querySelector("#quadro details.qd-hist").open`)).toBe(false);
+    expect(await avaliar<string | null>(cdp, `document.querySelector('#quadro [data-act="lado-sec"][data-sec="reg"]').getAttribute("aria-expanded")`)).toBe("false");
+    await avaliar(cdp, `(() => { const v = document.getElementById("quadro"); v.scrollTop = Math.floor((v.scrollHeight - v.clientHeight) * 0.5); })()`);
+    await esperar(120);
     const t0 = await medir();
-    await avaliar(cdp, `(() => { window.__coms = 30; window.__q.aoFrame({ streamId: "s", seq: 1, pessoaId: "p", tipo: "quadro.mudou", dados: { quadroId: "q1", agenteId: "a", loteId: null, tarefas: "t3" } }); })()`);
-    await ate(`document.querySelector("#quadro .qd-conteudo").textContent.includes("comentário 29")`);
+    await avaliar(cdp, `(() => { window.__coms = 3; window.__q.aoFrame({ streamId: "s", seq: 1, pessoaId: "p", tipo: "quadro.mudou", dados: { quadroId: "q1", agenteId: "a", loteId: null, tarefas: "t3" } }); })()`);
+    await ate(`document.querySelector("#quadro .qd-conteudo").textContent.includes("comentário 2")`);
     await esperar(250);
+    expect(await avaliar<string | null>(cdp, `document.querySelector('#quadro [data-act="lado-sec"][data-sec="reg"]').getAttribute("aria-expanded")`), "segue recolhida").toBe("false");
     const t1 = await medir();
-    // Fechado, a tarefa encolhe e ela fica no fim: segue o fim (CA3), não volta ao lugar de antes de fechar (medido em
-    // 2026-11-03 no Chrome a 390 px: sem a correção, 772 de 2016).
-    expect(t0.top, "fechado, ela fica no fim").toBeGreaterThan(t0.max - 2);
-    expect(t1.top, "segue o fim, não volta ao lugar de antes de fechar").toBeGreaterThan(t1.max - 2);
+    expect(Math.abs(t1.top - t0.top), "a vista fica onde estava").toBeLessThanOrEqual(2);
   }, 60_000);
 
   it("390×844 (toque): ADA-12 QA — a ação da pessoa (tirar o responsável) que encolhe a tarefa não reserva a altura", async () => {

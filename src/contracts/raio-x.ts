@@ -186,7 +186,7 @@ export const EXPERIMENTOS_DESLIGADOS: Experimentos = { calibracao: false, memori
  * `quadroExibir` (definido em 2026-11-04, NOD-460, 0149): o Exibir do quadro em tela cheia por quadro (a chave é o id):
  * mostrar as colunas recolhidas e a densidade compacta. Ausente = o padrão da tela (recolhidas à mostra, sem compacto).
  */
-export type ExibirDoQuadro = { recolhidas: boolean; compacto: boolean; visao?: VisaoDoQuadro };
+export type ExibirDoQuadro = { recolhidas: boolean; compacto: boolean; visao?: VisaoDoQuadro } & import("./quadro-opcoes.ts").OpcoesDoQuadro; // + as Opções do quadro (2026-11-10)
 /**
  * ADA-18 (definido em 2026-11-07): a visão do quadro no celular (o título do quadro troca): a lista agrupada por coluna, as
  * colunas com snap ou só o que está com a pessoa. Ausente = lista. Fica no mesmo `quadro_exibir` (sem migração).

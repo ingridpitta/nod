@@ -286,7 +286,8 @@ descrever("NOD-429 no Chrome real", () => {
     await acabar();
     expect(await avaliar<number>(cdp, `document.querySelector("#cabecalho .pg-pt.pg-pt-atual").getBoundingClientRect().width`)).toBeCloseTo(14, 0);
     expect(await estadoFinal()).toEqual({ atual: "quadro", quadroOculto: false, timelineVis: "hidden", timelineInert: true, selecionada: "quadro" });
-    expect(await avaliar<number>(cdp, `document.querySelectorAll("#quadro .qd-so-largo .qd-col").length`)).toBe(8);
+    // ADR-162 (PR #723): "Precisa de você" deixou de ser coluna (virou a marca `voce`); o quadro padrão tem 7 colunas.
+    expect(await avaliar<number>(cdp, `document.querySelectorAll("#quadro .qd-so-largo .qd-col").length`)).toBe(7);
     expect(await avaliar<string>(cdp, `document.getElementById("pg-anuncio").textContent`)).toBe("página 2 de 4, Tarefas");
 
     const volta = await trocar("conversa");

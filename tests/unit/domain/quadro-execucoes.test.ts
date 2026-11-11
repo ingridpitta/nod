@@ -199,7 +199,8 @@ describe("ADA-232: decidirAposTermino com a saída", () => {
   it("o aviso do reacionamento lista as 4 saídas e cerca o título", () => {
     const e = entradaDoReacionamento({ titulo: "PR <x>", tarefaId: "t1", quadroId: "q1" });
     expect(e.startsWith(AVISO_SEM_SAIDA)).toBe(true);
-    for (const s of ["terminei", "voce", "bloqueado", "me_chame_as", "esperar_comando"]) expect(e).toContain(s);
+    for (const s of ["terminei", "pergunte à pessoa", "bloqueado", "me_chame_as", "esperar_comando"]) expect(e).toContain(s);
+    expect(e).not.toContain("status voce");
   });
 });
 

@@ -1,10 +1,16 @@
 import { tarefaCasaLigada } from "../shared/tarefa-casa.ts";
 import type { AutorLote, CampoHistorico, ColunaQuadro, IdColuna, LinhaDeSistema, LoteQuadro, ModoConversa, MudancaTarefa, PrDaTarefa, Quadro, QuemFecha, TarefaQuadro, TipoLinhaTarefa } from "../contracts/quadro.ts";
 import type { MovimentoTarefa, NovoMovimento } from "../contracts/freios-quadro.ts";
+import type { CorLabel, LabelQuadro } from "../contracts/quadro-labels.ts";
 import type { EstadoTurno } from "../contracts/turno.ts";
+import type { Trabalho } from "../contracts/trabalho.ts";
 import type { MarcasAviso } from "../domain/avisos-quadro.ts";
 import type { Conn, Escopo } from "../shared/types.ts";
+import type { Prioridade } from "../contracts/quadro-opcoes.ts";
 import { jsonb, ms, msOuNull } from "./conversao.ts";
+
+/** ADA-16 (ADR-163): o trabalho de uma tarefa na fila, para o motivo do card (mesma tarefa em série ou o portão). */
+export type FilaDaTarefa = { emSerie: boolean; trabalho: Pick<Trabalho, "estado" | "origem" | "iniciadoEm" | "criadoEm" | "pessoaEsperando"> };
 
 interface LinhaQuadro {
   id: string;
@@ -48,6 +54,9 @@ interface LinhaTarefa {
   resposta_mensagem_id: string | null;
   resposta_conversa_id: string | null;
   resposta_agente_id: string | null;
+  prioridade: Prioridade;
+  label_ids?: string[];
+  prazo_em?: string | null;
 }
 
 interface LinhaLote {
@@ -81,7 +90,7 @@ const CAMPOS_Q = ["id", "agente_id", "to_char(prazo, 'YYYY-MM-DD') as prazo", "m
 const COLUNAS_Q = CAMPOS_Q.join(", ");
 /** As colunas do quadro com o apelido da tabela (o join com quadro_bots repete id, agente_id, posicao e criado_em). */
 const colunasQ = (a: string) => CAMPOS_Q.map((c) => (c.startsWith("to_char(") ? c.replace("to_char(", `to_char(${a}.`) : `${a}.${c}`)).join(", ");
-const COLUNAS_T = "id, quadro_id, titulo, descricao, status, voltar_para, agente_id, ordem, linear_id, linear_url, pr_url, pergunta, resposta, de_fora, turno_id, criado_em, mudado_em, terminada_em, numero, pedido_por, resposta_mensagem_id, resposta_conversa_id, resposta_agente_id";
+const COLUNAS_T = "id, quadro_id, titulo, descricao, status, voltar_para, agente_id, ordem, linear_id, linear_url, pr_url, pergunta, resposta, de_fora, turno_id, criado_em, mudado_em, terminada_em, numero, pedido_por, resposta_mensagem_id, resposta_conversa_id, resposta_agente_id, prioridade, label_ids, to_char(prazo_em, 'YYYY-MM-DD') as prazo_em";
 interface LinhaMovimento {
   id: string;
   tarefa_id: string;
@@ -169,6 +178,9 @@ const paraTarefa = (l: LinhaTarefa): TarefaQuadro => ({
   respostaMensagemId: l.resposta_mensagem_id ?? null,
   respostaConversaId: l.resposta_conversa_id ?? null,
   respostaAgenteId: l.resposta_agente_id ?? null,
+  prioridade: l.prioridade ?? "sem",
+  labelIds: l.label_ids ?? [],
+  prazoEm: l.prazo_em ?? null,
 });
 
 const paraLote = (l: LinhaLote): LoteQuadro & { antes: FotoLote } => ({
@@ -184,10 +196,10 @@ const paraLote = (l: LinhaLote): LoteQuadro & { antes: FotoLote } => ({
   viaNome: l.via_nome ?? null,
 });
 
-export type NovaTarefa = Pick<TarefaQuadro, "quadroId" | "titulo" | "descricao" | "status" | "agenteId"> & Partial<Pick<TarefaQuadro, "voltarPara" | "linearId" | "linearUrl" | "prUrl" | "pergunta" | "resposta" | "deFora" | "terminadaEm" | "numero" | "pedidoPor">>;
+export type NovaTarefa = Pick<TarefaQuadro, "quadroId" | "titulo" | "descricao" | "status" | "agenteId"> & Partial<Pick<TarefaQuadro, "voltarPara" | "linearId" | "linearUrl" | "prUrl" | "pergunta" | "resposta" | "deFora" | "terminadaEm" | "numero" | "pedidoPor" | "prioridade" | "labelIds" | "prazoEm">>;
 
 /** O que muda numa tarefa (tudo menos ids e datas de criação). */
-export type CamposTarefa = Pick<TarefaQuadro, "titulo" | "descricao" | "status" | "voltarPara" | "agenteId" | "ordem" | "linearId" | "linearUrl" | "prUrl" | "pergunta" | "resposta" | "deFora" | "turnoId" | "terminadaEm"> & Partial<Pick<TarefaQuadro, "pedidoPor" | "respostaMensagemId" | "respostaConversaId" | "respostaAgenteId">>;
+export type CamposTarefa = Pick<TarefaQuadro, "titulo" | "descricao" | "status" | "voltarPara" | "agenteId" | "ordem" | "linearId" | "linearUrl" | "prUrl" | "pergunta" | "resposta" | "deFora" | "turnoId" | "terminadaEm"> & Partial<Pick<TarefaQuadro, "pedidoPor" | "respostaMensagemId" | "respostaConversaId" | "respostaAgenteId" | "prioridade" | "labelIds" | "prazoEm">>;
 
 /**
  * definido em 2026-10-31 (NOD-442): o quadro-agente, as tarefas e os lotes. Só primitivas: quem aplica um lote (e trava
@@ -457,10 +469,11 @@ export function quadrosRepo(conn: Conn, escopo: Escopo) {
     },
     async inserirTarefa(t: NovaTarefa): Promise<TarefaQuadro> {
       const [l] = await conn<LinhaTarefa[]>`
-        insert into quadro_tarefas (tenant_id, owner_id, quadro_id, titulo, descricao, status, voltar_para, agente_id, ordem, linear_id, linear_url, pr_url, pergunta, resposta, de_fora, terminada_em, numero, pedido_por)
+        insert into quadro_tarefas (tenant_id, owner_id, quadro_id, titulo, descricao, status, voltar_para, agente_id, ordem, linear_id, linear_url, pr_url, pergunta, resposta, de_fora, terminada_em, numero, pedido_por, prioridade, label_ids, prazo_em)
         values (${escopo.tenantId}, ${escopo.pessoaId}, ${t.quadroId}, ${t.titulo}, ${t.descricao}, ${t.status}, ${t.voltarPara ?? null}, ${t.agenteId},
           (select coalesce(max(ordem), 0) + 1 from quadro_tarefas where ${dona()} and quadro_id = ${t.quadroId}),
-          ${t.linearId ?? null}, ${t.linearUrl ?? null}, ${t.prUrl ?? null}, ${t.pergunta ?? null}, ${t.resposta ?? null}, ${t.deFora ?? false}, ${t.terminadaEm == null ? null : new Date(t.terminadaEm)}, ${t.numero ?? null}, ${t.pedidoPor ?? null})
+          ${t.linearId ?? null}, ${t.linearUrl ?? null}, ${t.prUrl ?? null}, ${t.pergunta ?? null}, ${t.resposta ?? null}, ${t.deFora ?? false}, ${t.terminadaEm == null ? null : new Date(t.terminadaEm)}, ${t.numero ?? null}, ${t.pedidoPor ?? null}, ${t.prioridade ?? "sem"},
+          ${conn.array(t.labelIds ?? [])}::uuid[], ${t.prazoEm ?? null}::date)
         returning ${conn.unsafe(COLUNAS_T)}`;
       return paraTarefa(l!);
     },
@@ -480,7 +493,9 @@ export function quadrosRepo(conn: Conn, escopo: Escopo) {
           resposta_mensagem_id = ${proveniencia("resposta_mensagem_id", c.respostaMensagemId)}, resposta_conversa_id = ${proveniencia("resposta_conversa_id", c.respostaConversaId)},
           resposta_agente_id = ${proveniencia("resposta_agente_id", c.respostaAgenteId)}, turno_id = ${c.turnoId}, mudado_em = clock_timestamp(),
           terminada_em = ${c.terminadaEm === null ? null : new Date(c.terminadaEm)},
-          pedido_por = coalesce(${c.pedidoPor ?? null}::uuid, pedido_por)
+          pedido_por = coalesce(${c.pedidoPor ?? null}::uuid, pedido_por), prioridade = coalesce(${c.prioridade ?? null}::text, prioridade),
+          label_ids = ${c.labelIds === undefined ? conn`label_ids` : conn`${conn.array(c.labelIds)}::uuid[]`},
+          prazo_em = ${c.prazoEm === undefined ? conn`prazo_em` : conn`${c.prazoEm}::date`}
         where ${dona()} and id = ${id}
         returning ${conn.unsafe(COLUNAS_T)}`;
       return l ? paraTarefa(l) : null;
@@ -497,15 +512,20 @@ export function quadrosRepo(conn: Conn, escopo: Escopo) {
     async restaurarTarefa(t: TarefaQuadro, o: { manterMudadoEm?: boolean } = {}): Promise<TarefaQuadro> {
       const mudado = o.manterMudadoEm ? conn`${new Date(t.mudadoEm)}::timestamptz` : conn`clock_timestamp()`;
       const [l] = await conn<LinhaTarefa[]>`
-        insert into quadro_tarefas (tenant_id, owner_id, id, quadro_id, titulo, descricao, status, voltar_para, agente_id, ordem, linear_id, linear_url, pr_url, pergunta, resposta, de_fora, turno_id, criado_em, mudado_em, terminada_em, numero, pedido_por, resposta_mensagem_id, resposta_conversa_id, resposta_agente_id)
+        insert into quadro_tarefas (tenant_id, owner_id, id, quadro_id, titulo, descricao, status, voltar_para, agente_id, ordem, linear_id, linear_url, pr_url, pergunta, resposta, de_fora, turno_id, criado_em, mudado_em, terminada_em, numero, pedido_por, resposta_mensagem_id, resposta_conversa_id, resposta_agente_id, prioridade, label_ids, prazo_em)
         values (${escopo.tenantId}, ${escopo.pessoaId}, ${t.id}, ${t.quadroId}, ${t.titulo}, ${t.descricao}, ${t.status}, ${t.voltarPara ?? null}, ${t.agenteId}, ${t.ordem},
           ${t.linearId}, ${t.linearUrl}, ${t.prUrl}, ${t.pergunta}, ${t.resposta}, ${t.deFora ?? false}, ${t.turnoId}, ${new Date(t.criadoEm)}, ${mudado}, ${terminadaDaFoto(t)}, ${t.numero ?? null}, ${t.pedidoPor ?? null},
-          ${t.respostaMensagemId ?? null}, ${t.respostaConversaId ?? null}, ${t.respostaAgenteId ?? null})
+          ${t.respostaMensagemId ?? null}, ${t.respostaConversaId ?? null}, ${t.respostaAgenteId ?? null}, coalesce(${t.prioridade ?? null}::text, 'sem'),
+          ${conn.array(t.labelIds ?? [])}::uuid[], ${t.prazoEm ?? null}::date)
         on conflict (tenant_id, id) do update set titulo = excluded.titulo, descricao = excluded.descricao, status = excluded.status, voltar_para = excluded.voltar_para,
           agente_id = excluded.agente_id, ordem = excluded.ordem, linear_id = excluded.linear_id, linear_url = excluded.linear_url,
           pr_url = excluded.pr_url, pergunta = excluded.pergunta, resposta = excluded.resposta, de_fora = excluded.de_fora, turno_id = excluded.turno_id, mudado_em = excluded.mudado_em, terminada_em = excluded.terminada_em,
           numero = coalesce(quadro_tarefas.numero, excluded.numero), pedido_por = excluded.pedido_por,
-          resposta_mensagem_id = excluded.resposta_mensagem_id, resposta_conversa_id = excluded.resposta_conversa_id, resposta_agente_id = excluded.resposta_agente_id
+          resposta_mensagem_id = excluded.resposta_mensagem_id, resposta_conversa_id = excluded.resposta_conversa_id, resposta_agente_id = excluded.resposta_agente_id,
+          -- 0160: a foto de antes da prioridade não a tem: fica a atual.
+          prioridade = coalesce(${t.prioridade ?? null}::text, quadro_tarefas.prioridade),
+          -- 0159: a foto de antes da 0159 não tem labels nem prazo: mantém os de agora.
+          label_ids = ${t.labelIds === undefined ? conn`quadro_tarefas.label_ids` : conn`excluded.label_ids`}, prazo_em = ${t.prazoEm === undefined ? conn`quadro_tarefas.prazo_em` : conn`excluded.prazo_em`}
         returning ${conn.unsafe(COLUNAS_T)}`;
       return paraTarefa(l!);
     },
@@ -545,6 +565,44 @@ export function quadrosRepo(conn: Conn, escopo: Escopo) {
         where t.estado in ('pendente', 'despachando') and t.parar_solicitado_em is null
         order by d.raiz, t.criado_em desc, d.n desc`;
       return new Map(ls.map((l) => [l.raiz, new Date(l.desde).getTime()]));
+    },
+    /**
+     * ADA-16 (ADR-163): as tarefas cujo trabalho do responsável está aberto sem turno vivo, esperando a CI, um colega, um
+     * comando ou a volta marcada (o estado derivado `rodando` sem turno pendente nem despachando; ADR-099 "esperar não é
+     * trabalhar"). O card mostra "esperando".
+     */
+    async tarefasEsperando(tarefas: readonly { id: string; agenteId: string | null }[]): Promise<Set<string>> {
+      const com = tarefas.filter((t): t is { id: string; agenteId: string } => t.agenteId !== null);
+      if (com.length === 0) return new Set();
+      const ls = await conn<{ tarefa_id: string }[]>`
+        select w.tarefa_id as tarefa_id from trabalhos w
+        join unnest(${conn.array(com.map((t) => t.id))}::uuid[], ${conn.array(com.map((t) => t.agenteId))}::uuid[]) as q(tarefa_id, agente_id)
+          on q.tarefa_id = w.tarefa_id and q.agente_id = w.agente_id
+        where w.tenant_id = ${escopo.tenantId} and w.owner_id = ${escopo.pessoaId} and w.origem = 'quadro' and w.forma = 'task' and w.estado = 'rodando'
+          -- A volta marcada (pendente com acordar_em no futuro) é espera, não fila: a mesma régua do fatos().despertar.
+          and not exists (select 1 from turnos v where v.tenant_id = w.tenant_id and v.trabalho_id = w.id
+            and (v.estado = 'despachando' or (v.estado = 'pendente' and (v.acordar_em is null or v.acordar_em <= now()))))`;
+      return new Set(ls.map((l) => l.tarefa_id));
+    },
+    /**
+     * revisto em 2026-11-10 (ADA-16, ADR-163, sem teto próprio): o trabalho do responsável de cada tarefa na fila, para o
+     * card dizer o motivo real da espera. `emSerie`: outro turno do MESMO trabalho está rodando (a mesma tarefa com o
+     * mesmo bot segue em série). Os campos do trabalho alimentam o portão da máquina (esperaDoMac, ADR-085).
+     */
+    async filaDasTarefas(tarefas: readonly { id: string; agenteId: string | null }[]): Promise<Map<string, FilaDaTarefa>> {
+      const com = tarefas.filter((t): t is { id: string; agenteId: string } => t.agenteId !== null);
+      if (com.length === 0) return new Map();
+      const ls = await conn<{ tarefa_id: string; estado: Trabalho["estado"]; iniciado_em: Date | null; criado_em: Date; pessoa_esperando: boolean; em_serie: boolean }[]>`
+        select w.tarefa_id as tarefa_id, w.estado, w.iniciado_em, w.criado_em, w.pessoa_esperando,
+          exists (select 1 from turnos v where v.tenant_id = w.tenant_id and v.trabalho_id = w.id and v.estado = 'despachando') as em_serie
+        from trabalhos w
+        join unnest(${conn.array(com.map((t) => t.id))}::uuid[], ${conn.array(com.map((t) => t.agenteId))}::uuid[]) as q(tarefa_id, agente_id)
+          on q.tarefa_id = w.tarefa_id and q.agente_id = w.agente_id
+        where w.tenant_id = ${escopo.tenantId} and w.owner_id = ${escopo.pessoaId} and w.origem = 'quadro' and w.forma = 'task'`;
+      return new Map(ls.map((l) => [l.tarefa_id, {
+        emSerie: l.em_serie,
+        trabalho: { estado: l.estado, origem: "quadro" as const, iniciadoEm: msOuNull(l.iniciado_em), criadoEm: ms(l.criado_em), pessoaEsperando: l.pessoa_esperando },
+      }]));
     },
     /** A cadeia de retomadas que desce do turno de uma tarefa (ele incluso): o Parar vale para ela inteira. */
     async cadeiaDoTurno(turnoId: string): Promise<{ id: string; estado: EstadoTurno }[]> {
@@ -816,9 +874,18 @@ export function quadrosRepo(conn: Conn, escopo: Escopo) {
     },
     /** Muda a tarefa de quadro (o resto dela fica). */
     async moverTarefa(id: string, c: { quadroId: string; status: IdColuna; voltarPara: IdColuna | null; ordem: number; numero: number; terminadaEm: number | null }): Promise<TarefaQuadro | null> {
+      // 0159: as labels são por quadro. A tarefa leva as dela pelo nome: a que falta no destino nasce lá, com a mesma cor.
+      await conn`
+        insert into quadro_labels (tenant_id, owner_id, quadro_id, nome, cor)
+        select o.tenant_id, o.owner_id, ${c.quadroId}, o.nome, o.cor from quadro_labels o
+        where o.tenant_id = ${escopo.tenantId} and o.owner_id = ${escopo.pessoaId}
+          and o.id = any(select unnest(label_ids) from quadro_tarefas where ${dona()} and id = ${id})
+        on conflict (tenant_id, quadro_id, (lower(nome))) do nothing`;
       const [l] = await conn<LinhaTarefa[]>`
         update quadro_tarefas set quadro_id = ${c.quadroId}, status = ${c.status}, voltar_para = ${c.voltarPara}, ordem = ${c.ordem}, numero = ${c.numero},
-          terminada_em = ${c.terminadaEm === null ? null : new Date(c.terminadaEm)}, mudado_em = clock_timestamp()
+          terminada_em = ${c.terminadaEm === null ? null : new Date(c.terminadaEm)}, mudado_em = clock_timestamp(),
+          label_ids = array(select d.id from quadro_labels o join quadro_labels d on d.tenant_id = o.tenant_id and d.owner_id = o.owner_id and d.quadro_id = ${c.quadroId} and lower(d.nome) = lower(o.nome)
+                            where o.tenant_id = ${escopo.tenantId} and o.owner_id = ${escopo.pessoaId} and o.id = any(quadro_tarefas.label_ids))
         where ${dona()} and id = ${id}
         returning ${conn.unsafe(COLUNAS_T)}`;
       if (!l) return null;
@@ -911,6 +978,29 @@ export function quadrosRepo(conn: Conn, escopo: Escopo) {
       const ls = await conn<{ quadro_id: string; owner_id: string }[]>`
         select quadro_id, owner_id from quadro_membros where tenant_id = ${escopo.tenantId} and pessoa_id = ${escopo.pessoaId} order by adicionado_em, id`;
       return ls.map((l) => ({ quadroId: l.quadro_id, donaId: l.owner_id }));
+    },
+    // 0159: o catálogo de labels do quadro (na ordem de criação).
+    async labels(quadroId: string): Promise<LabelQuadro[]> {
+      const ls = await conn<{ id: string; quadro_id: string; nome: string; cor: CorLabel; criado_em: Date }[]>`
+        select id, quadro_id, nome, cor, criado_em from quadro_labels where ${dona()} and quadro_id = ${quadroId} order by criado_em, id`;
+      return ls.map((l) => ({ id: l.id, quadroId: l.quadro_id, nome: l.nome, cor: l.cor, criadoEm: ms(l.criado_em) }));
+    },
+    /** Grava as labels novas com o id que o domínio já deu (o lote aponta para elas antes de gravar). */
+    async inserirLabels(quadroId: string, ls: readonly { id: string; nome: string; cor: CorLabel }[]): Promise<void> {
+      for (const l of ls) {
+        await conn`insert into quadro_labels (tenant_id, owner_id, id, quadro_id, nome, cor) values (${escopo.tenantId}, ${escopo.pessoaId}, ${l.id}, ${quadroId}, ${l.nome}, ${l.cor})`;
+      }
+    },
+    async editarLabel(quadroId: string, id: string, c: { nome?: string; cor?: CorLabel }): Promise<boolean> {
+      const r = await conn`update quadro_labels set nome = coalesce(${c.nome ?? null}, nome), cor = coalesce(${c.cor ?? null}, cor)
+        where ${dona()} and quadro_id = ${quadroId} and id = ${id}`;
+      return r.count > 0;
+    },
+    /** Tira a label do catálogo e de toda tarefa do quadro que a tinha (sem mexer no mudado_em: não é trabalho na tarefa). */
+    async removerLabel(quadroId: string, id: string): Promise<boolean> {
+      await conn`update quadro_tarefas set label_ids = array_remove(label_ids, ${id}::uuid) where ${dona()} and quadro_id = ${quadroId} and ${id}::uuid = any(label_ids)`;
+      const r = await conn`delete from quadro_labels where ${dona()} and quadro_id = ${quadroId} and id = ${id}`;
+      return r.count > 0;
     },
     async comentar(c: { quadroId: string; tarefaId: string | null; texto: string; pedidoPor: string | null; viaAgenteId: string | null; viaNome: string | null; deFora: boolean }): Promise<{ id: string; criadoEm: number }> {
       const [l] = await conn<{ id: string; criado_em: Date }[]>`

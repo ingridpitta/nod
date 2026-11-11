@@ -37,14 +37,13 @@ const bloco = (css: string, inicio: string): string => {
 };
 
 describe("NOD-429 · vocabulário (web/lib/quadro.ts)", () => {
-  it("8 colunas na ordem do protótipo; Backlog, Feito e Cancelado nascem recolhidas", () => {
+  it("7 colunas na ordem do protótipo (ADR-162: sem Precisa de você); Backlog, Feito e Cancelado nascem recolhidas", () => {
     const c = colunasPadrao();
-    // NOD-448 (decisão 2 do Gil): Precisa de você passa a ser a última do andamento.
-    expect(c.map((x) => x.nome)).toEqual(["Backlog", "A fazer", "Fazendo", "Em revisão", "Bloqueado", "Precisa de você", "Feito", "Cancelado"]);
-    expect(c.map((x) => x.status)).toEqual([...STATUS]);
+    expect(c.map((x) => x.nome)).toEqual(["Backlog", "A fazer", "Fazendo", "Em revisão", "Bloqueado", "Feito", "Cancelado"]);
+    expect(c.map((x) => x.status)).toEqual(STATUS.filter((s) => s !== "voce"));
     expect(c.filter((x) => x.recolhida).map((x) => x.status)).toEqual(["backlog", "feito", "cancelado"]);
     expect(trilhaDaColuna({ recolhida: true })).toBe("var(--qd-tira)");
-    expect(trilhaDaColuna({ status: "voce" })).toContain("+ 20px");
+    expect(trilhaDaColuna({ status: "voce" })).toBe("minmax(var(--qd-col-min), 1fr)");
   });
 
   it("a direção segue o gesto: Quadro é ida, Conversa é volta, a mesma não troca", () => {
@@ -129,7 +128,7 @@ describe("NOD-429 · componentes (web/telas/quadro.ts)", () => {
     const html = card({ id: MAL, titulo: MAL, responsavel: { avatar: ava, nome: MAL }, motivo: MAL, tags: [MAL], quando: MAL, aviso: { texto: MAL, acao: MAL, act: MAL, id: MAL } });
     semTagCrua(html);
     expect(html).toContain("&lt;img");
-    semTagCrua(card({ id: "N-1", titulo: "t", voce: MAL, estado: "fila", estadoTexto: MAL }));
+    semTagCrua(card({ id: "N-1", titulo: "t", perguntou: MAL, estado: "fila", estadoTexto: MAL }));
     semTagCrua(linha({ id: MAL, titulo: MAL, motivo: MAL }));
     semTagCrua(coluna({ status: "fazendo", nome: MAL, trava: MAL, vazio: MAL }));
     semTagCrua(coluna({ status: "feito", nome: MAL, recolhida: true }));
@@ -189,18 +188,18 @@ describe("NOD-429 · componentes (web/telas/quadro.ts)", () => {
     expect(segmento({ nome: "Ada" })).toBe(html);
   });
 
-  it("o quadro vazio: barra com o selo do teste, 8 colunas na grade e 8 grupos na lista do celular", () => {
+  it("o quadro vazio: barra com o selo do teste, 7 colunas na grade e 7 grupos na lista do celular", () => {
     const html = quadroVazio({ nome: "Ada" });
     expect(html).toContain("Em teste · só você vê");
-    expect(html.match(/class="qd-col /g)).toHaveLength(8);
-    expect(html.match(/class="qd-lg[ "]/g)).toHaveLength(8);
+    expect(html.match(/class="qd-col /g)).toHaveLength(7);
+    expect(html.match(/class="qd-lg[ "]/g)).toHaveLength(7);
     expect(html).toContain('aria-label="Quadro de Ada"');
     const aberto = quadroVazio({ nome: "Ada", alternadas: new Set(["feito"]) });
     expect(aberto).not.toContain('data-act="abrir-coluna" data-status="feito" aria-expanded="false"');
     expect(barra({ filtro: "comigo", comigo: 2 })).toContain('data-filtro="comigo" aria-pressed="true"');
     // Revisão 2 do PR #645: com 0 o Comigo continua à vista, com o número.
     expect(barra({ filtro: "todos", comigo: 0 })).toContain('aria-label="Comigo, 0"');
-    expect(quadro({ colunas: [{ status: "voce", nome: "x" }] })).toContain("grid-template-columns: minmax(calc(var(--qd-col-min) + 20px), 1fr)");
+    expect(quadro({ colunas: [{ status: "fazendo", nome: "x" }] })).toContain("grid-template-columns: minmax(var(--qd-col-min), 1fr)");
   });
 
   it("revisão 3 do PR 606: as decisões do main (quadro só no bot da pessoa com a chave; no Quadro a conversa não está sendo lida)", () => {

@@ -8,7 +8,7 @@
  */
 import type { QuadroDto } from "../../src/contracts/quadro.ts";
 import type { ExecucoesDaTarefa } from "../../src/contracts/quadro-execucoes.ts";
-import { anuncioDoTrabalho, logDoTrabalho, secaoDoTrabalho, vivo, type VistaDoTrabalho } from "../telas/trabalhos-da-tarefa.ts";
+import { anuncioDoTrabalho, logDoTrabalho, passosDoTrabalho, secaoDoTrabalho, vivo, type VistaDoTrabalho } from "../telas/trabalhos-da-tarefa.ts";
 import { PRAZO_DO_ENVIO_MS, comPrazo } from "./com-prazo.ts";
 import { ErroApi, ehRecusaDoServidor } from "./erro-api.ts";
 import { GESTO_MS } from "./quadro.ts";
@@ -50,6 +50,13 @@ export function atividadeComFrame(a: AtividadeTurno | undefined, f: FrameDoTraba
   return a;
 }
 
+/** 2026-11-10: os passos de um turno como o bloco do run os mostra (o último à vista, a lista ao abrir). */
+export function passoAoVivo(a: AtividadeTurno | undefined): { ultimo: string | null; n: number; lista: { rotulo: string; estado: string }[] } | null {
+  if (!a) return null;
+  const linhas = passosDoTrabalho(a, false).map((l) => ({ rotulo: l.emUso && l.emUso !== SEM_NOME_DA_FERRAMENTA.texto ? l.emUso : l.rotulo, estado: String(l.estado) }));
+  return { ultimo: linhas.at(-1)?.rotulo ?? null, n: linhas.length, lista: linhas };
+}
+
 /** O turno que se escuta: o atual da cadeia do trabalho que roda (a retomada, depois de uma queda). */
 export const turnoEscutado = (d: ExecucoesDaTarefa | null): string | null => {
   const e = d?.execucoes[0];
@@ -79,6 +86,8 @@ export function criarTrabalhosDaTarefa(o: {
    * ela, o log regrava na hora. O delta que chega na espera só atualiza o estado: escreve uma vez, com o último.
    */
   segura?: (desde: number) => boolean;
+  /** 2026-11-10: o último passo de um run vivo mudou (a linha do tempo troca só o texto do bloco dele). */
+  aoPasso?: (turno: string, ultimo: string | null) => void;
 }) {
   let alvo: { agenteId: string; tarefaId: string } | null = null;
   let dados: ExecucoesDaTarefa | null = null;
@@ -112,6 +121,8 @@ export function criarTrabalhosDaTarefa(o: {
     if (e && atividade && lugar && lugar.dataset["trabalho"] === e.id) lugar.innerHTML = logDoTrabalho(e, atividade, passos);
   };
   const atividades = new Map<string, AtividadeTurno>();
+  /** 2026-11-10: os turnos dos runs vivos da linha do tempo que também se escutam. */
+  let escutados = new Set<string>();
 
   function falar(texto: string): void {
     const r = o.anuncio?.();
@@ -261,6 +272,10 @@ export function criarTrabalhosDaTarefa(o: {
         atividade: atual ? atividades.get(atual.turnoAtual) : undefined, passosAbertos: passos, anterioresAbertos: anteriores, aviso, ocupado, recadoPendente,
       };
     },
+    /** 2026-11-10: os passos ao vivo de um turno (o bloco do run na linha do tempo); null = ninguém escutou. */
+    passosDe(turno: string) { return passoAoVivo(atividades.get(turno)); },
+    /** 2026-11-10: os turnos dos runs vivos que a linha do tempo mostra (os frames deles também contam). */
+    escutar(ids: readonly string[]): void { escutados = new Set(ids); },
     aoFrame(f: FrameDoTrabalho): void {
       if (!alvo) return;
       const d = f.dados;
@@ -274,13 +289,17 @@ export function criarTrabalhosDaTarefa(o: {
         if (!dados || !turno || dados.execucoes.some((e) => e.turnoAtual === turno || e.turnoId === turno) || f.tipo === "turno.iniciado") relerLogo();
         return;
       }
-      if (!turno || turno !== turnoEscutado(dados)) return;
+      // 2026-11-10: também os runs vivos da linha do tempo (o agente @mencionado, a thread), não só o trabalho atual.
+      const doTrabalho = turno !== null && turno === turnoEscutado(dados);
+      if (!turno || (!doTrabalho && !escutados.has(turno))) return;
       const antes = atividades.get(turno);
       const nova = atividadeComFrame(antes, f);
       if (!nova || nova === antes) return;
       atividades.set(turno, nova);
+      // O último passo do bloco do run na linha do tempo troca sozinho (só o texto da linha).
+      o.aoPasso?.(turno, passoAoVivo(nova)?.ultimo ?? null);
       // Só o log muda: o resto da tarefa (e o recado que a pessoa digita) fica. No gesto, espera o dedo (ADA-7).
-      if (logAdiado === null) escreverLog(Date.now());
+      if (doTrabalho && logAdiado === null) escreverLog(Date.now());
     },
     /** true = o clique era do trabalho. */
     aoClicar(act: string): boolean {

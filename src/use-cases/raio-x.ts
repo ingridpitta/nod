@@ -1,5 +1,6 @@
 import { QUADROS_COM_EXIBIR_MAX, USOS_DO_MAC, VISOES_DO_QUADRO, type ExibirDoQuadro, type VisaoDoQuadro, type Experimentos, type Preferencias, type RaioXConversa, type RaioXTurno, type UsoDoMac } from "../contracts/raio-x.ts";
 import { ErroDeDominio } from "../domain/erro.ts";
+import { CAMPOS_DAS_OPCOES, lerOpcoesDoQuadro, temOpcoes } from "../domain/opcoes-do-quadro.ts";
 import { lerOrdemDaPessoa } from "../domain/inteligencia.ts";
 import { resumoDoRaioX } from "../domain/raio-x.ts";
 import { rotuloFerramenta } from "../domain/rotulo-ferramenta.ts";
@@ -70,15 +71,18 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * Estado da própria tela: não muda o quadro nem os bots, por isso não passa pelo lote nem tem Desfazer. O id não precisa
  * ser de um quadro que a pessoa vê (a chave é só dela e não revela nada); o teto de quadros guardados vem antes do banco.
  */
-export const exibirDoQuadro: CasoDeUso<{ quadroId: unknown; recolhidas?: unknown; compacto?: unknown; visao?: unknown }, Preferencias> = async (deps, input) => {
+export const exibirDoQuadro: CasoDeUso<{ quadroId: unknown; recolhidas?: unknown; compacto?: unknown; visao?: unknown } & Partial<Record<(typeof CAMPOS_DAS_OPCOES)[number], unknown>>, Preferencias> = async (deps, input) => {
   if (typeof input.quadroId !== "string" || !UUID.test(input.quadroId)) throw new ErroDeDominio("entrada_invalida", { cause: "quadro" });
   // ADA-18: cada campo é opcional (o chat troca só a visão); o que vem tem de ser do tipo certo, e algum tem de vir.
   const { recolhidas, compacto, visao } = input;
   if ((recolhidas !== undefined && typeof recolhidas !== "boolean") || (compacto !== undefined && typeof compacto !== "boolean")) throw new ErroDeDominio("entrada_invalida", { cause: "exibir" });
   if (visao !== undefined && !(VISOES_DO_QUADRO as readonly unknown[]).includes(visao)) throw new ErroDeDominio("entrada_invalida", { cause: "visao" });
-  if (recolhidas === undefined && compacto === undefined && visao === undefined) throw new ErroDeDominio("entrada_invalida", { cause: "exibir" });
+  // Quadro minimalista (2026-11-10): as Opções do quadro, com a mesma validação da op exibir do gerir_quadro.
+  const opcoes = lerOpcoesDoQuadro(input);
+  if ("erro" in opcoes) throw new ErroDeDominio("entrada_invalida", { cause: opcoes.erro });
+  if (recolhidas === undefined && compacto === undefined && visao === undefined && !temOpcoes(opcoes)) throw new ErroDeDominio("entrada_invalida", { cause: "exibir" });
   const quadroId = input.quadroId.toLowerCase();
-  const mudanca: Partial<ExibirDoQuadro> = { ...(recolhidas !== undefined ? { recolhidas } : {}), ...(compacto !== undefined ? { compacto } : {}), ...(visao !== undefined ? { visao: visao as VisaoDoQuadro } : {}) };
+  const mudanca: Partial<ExibirDoQuadro> = { ...(recolhidas !== undefined ? { recolhidas } : {}), ...(compacto !== undefined ? { compacto } : {}), ...(visao !== undefined ? { visao: visao as VisaoDoQuadro } : {}), ...opcoes };
   const p = await deps.repos.preferencias.exibirQuadro(quadroId, mudanca, QUADROS_COM_EXIBIR_MAX);
   if (!p) throw new ErroDeDominio("entrada_invalida", { cause: "quadro_exibir cheio" });
   return { data: p };

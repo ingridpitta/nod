@@ -177,6 +177,8 @@ describe("quem abre e quem repassa (#193)", () => {
     expect(podeAbrirTask(null)).toBe(true);
     expect(podeAbrirTask({ origem: "rotina", trabalhoMaeId: null })).toBe(true);
     expect(podeAbrirTask({ origem: "rotina", trabalhoMaeId: "mae" })).toBe(false);
+    // ADA-232 × ADA-16 (ADR-163): o trabalho da tarefa do quadro abre frentes, como o turno da tarefa abria antes.
+    expect(podeAbrirTask({ origem: "quadro", trabalhoMaeId: null })).toBe(true);
     for (const origem of ["pessoa", "colega", "rede"] as const) expect(podeAbrirTask({ origem, trabalhoMaeId: null })).toBe(false);
     expect(podeMandarParaTask(null)).toBe(true);
     expect(podeMandarParaTask({ origem: "rotina" })).toBe(false);

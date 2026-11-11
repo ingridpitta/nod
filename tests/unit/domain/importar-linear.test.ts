@@ -29,9 +29,8 @@ describe("importar do Linear (NOD-422)", () => {
     expect(por.get("c-prototipando")).toMatchObject({ responsavel: "a-gil" });
     // Teodora e Lançador não existem: a coluna fica sem ninguém (nasce recolhida na tela).
     expect(por.get("c-qa")?.responsavel).toBeUndefined();
-    expect(por.has("voce") && por.has("cancelado") && por.has("feito")).toBe(true);
-    const ids = r.map((c) => c.id);
-    expect(ids.indexOf("voce")).toBeGreaterThan(ids.indexOf("c-lancando"));
+    // ADR-162: sem "Precisa de você" (a precisa-humano espera a pessoa na coluna do estado).
+    expect(!por.has("voce") && por.has("cancelado") && por.has("feito")).toBe(true);
   });
 
   it("a coluna que já existe guarda o responsável e a passagem; o padrão da tabela só preenche a vazia (revisão do PR #630)", () => {
@@ -134,28 +133,29 @@ describe("importar do Linear (NOD-422)", () => {
     const p = previaDaImportacao(issues, new Map([["fazendo", "Faustino"]]));
     expect(p.total).toBe(3);
     expect(p.colunas.find((c) => c.coluna === "fazendo")).toMatchObject({ tarefas: 1, responsavel: "Faustino" });
-    // A Triagem precisa-humano vai para Precisa de você (revisão 4): só a do Backlog fica no Backlog.
-    expect(p.colunas.find((c) => c.coluna === "backlog")?.tarefas).toBe(1);
+    // ADR-162: a Triagem precisa-humano conta no Backlog (a coluna do estado, onde o card aparece esperando a pessoa).
+    expect(p.colunas.find((c) => c.coluna === "backlog")?.tarefas).toBe(2);
+    expect(p.colunas.some((c) => c.coluna === "voce")).toBe(false);
     expect(p.precisamDeVoce).toBe(1);
     expect(p.semColuna).toEqual(["Triagem"]);
     expect(issues.filter((i) => passaNoFiltro(i, "sem_backlog"))).toHaveLength(1);
     expect(LIMITE_IMPORTACAO).toBe(500);
   });
 
-  it("revisão 4 do PR #630: a prévia conta cada issue numa coluna só, a mesma da aplicação (precisa-humano em Precisa de você)", () => {
+  it("revisão 4 do PR #630: a prévia conta cada issue numa coluna só, a mesma em que o card aparece (ADR-162: precisa-humano na coluna do estado)", () => {
     const issues = [
       issue(), issue({ estado: "Implementando", etiquetas: ["precisa-humano"] }), issue({ estado: "QA", etiquetas: ["Precisa-Humano"] }),
       issue({ estado: "Backlog" }), issue({ estado: "Triagem" }),
     ];
     const p = previaDaImportacao(issues, new Map());
     expect(p.colunas.reduce((s, c) => s + c.tarefas, 0)).toBe(p.total);
-    expect(p.colunas.find((c) => c.coluna === "fazendo")?.tarefas).toBe(issues.filter((i) => i.estado === "Implementando").length - 1);
-    expect(p.colunas.find((c) => c.coluna === "c-qa")?.tarefas).toBe(0);
-    expect(p.colunas.find((c) => c.coluna === "voce")?.tarefas).toBe(2);
+    expect(p.colunas.find((c) => c.coluna === "fazendo")?.tarefas).toBe(issues.filter((i) => i.estado === "Implementando").length);
+    expect(p.colunas.find((c) => c.coluna === "c-qa")?.tarefas).toBe(1);
+    expect(p.colunas.some((c) => c.coluna === "voce")).toBe(false);
     expect(p.precisamDeVoce).toBe(2);
-    // A mesma coluna que o aplicarImportacao usa (itemDaIssue).
+    // A mesma coluna em que o card do aplicarImportacao aparece (itemDaIssue): a precisa-humano espera em `voltarPara`.
     const porColuna = new Map<string, number>();
-    for (const it of issues.map((i) => itemDaIssue(i))) porColuna.set(it.status, (porColuna.get(it.status) ?? 0) + 1);
+    for (const it of issues.map((i) => itemDaIssue(i))) { const col = it.status === "voce" ? it.voltarPara! : it.status; porColuna.set(col, (porColuna.get(col) ?? 0) + 1); }
     for (const c of p.colunas) expect(c.tarefas).toBe(porColuna.get(c.coluna) ?? 0);
   });
 

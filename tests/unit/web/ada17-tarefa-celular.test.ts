@@ -20,7 +20,7 @@ import type { VistaDoTrabalho } from "../../../web/telas/trabalhos-da-tarefa.ts"
 const MAL = `<img src=x onerror="alert(1)">"'&`;
 const t = (extra: Partial<TarefaDto> = {}): TarefaDto => ({
   id: "t1", quadroId: "q1", titulo: "Tarefa um", descricao: "", status: "fazendo", voltarPara: null, agenteId: "a", ordem: 1, linearId: null, linearUrl: null, prUrl: null,
-  pergunta: null, resposta: null, deFora: false, turnoId: null, criadoEm: 1_000, mudadoEm: 1_000, terminadaEm: null, execucao: null, agenteNome: "Vera", numero: 1, codigo: "VER-1", branch: "", ...extra,
+  pergunta: null, resposta: null, deFora: false, turnoId: null, criadoEm: 1_000, mudadoEm: 1_000, terminadaEm: null, execucao: null, agenteNome: "Vera", numero: 1, prioridade: "sem", codigo: "VER-1", branch: "", ...extra,
 });
 const q = (extra: Partial<QuadroDto> = {}): QuadroDto => ({
   id: "q1", agenteId: "a", nome: null, projetoId: null, prefixo: "VER", modoConversa: "individual", meta: "Meta", prazo: null, cumpridoEm: null, resumo: null, criadoEm: 1, atualizadoEm: 1, metaDesde: 1, agenteNome: "Vera",
@@ -69,10 +69,10 @@ describe("ADA-17: a tarefa aberta no celular", () => {
     expect(sem).toMatch(/aria-label="Responsável: Vera"/);
   });
 
-  it("critério 2: a troca otimista aparece no chip antes de voltar; em Precisa de você o responsável é Você", () => {
+  it("critério 2: a troca otimista aparece no chip antes de voltar; a tarefa que espera você segue com o bot (ADR-162)", () => {
     expect(bandejaDeChips(v({ otimista: { status: "revisao" } }))).toContain("Status: Em revisão");
     expect(bandejaDeChips(v({ otimista: { agente: null } }))).toContain("Sem responsável");
-    expect(bandejaDeChips(v({ t: t({ status: "voce" }) }))).toContain("Responsável: Você");
+    expect(bandejaDeChips(v({ t: t({ status: "fazendo", esperaPessoa: true }) }))).toContain("Responsável: Vera");
     expect(bandejaDeChips(v({ responsaveis: undefined }))).toMatch(/id="qd-t-resp"[^>]* disabled/);
   });
 
@@ -165,16 +165,16 @@ describe("ADA-17: as folhas", () => {
     expect(f).not.toContain("<img");
   });
 
-  it("responsável: Sem responsável, os bots, busca acima de 6, Você em Precisa de você", () => {
+  it("responsável: Sem responsável, os bots, busca acima de 6; sem o \"Você\" de Precisa de você (ADR-162)", () => {
     const bots = [{ id: "a", nome: "Vera" }, { id: "b", nome: "Bia" }];
     const f = folhaDoResponsavel({ status: "fazendo", agenteId: "a", agenteNome: "Vera" }, bots);
     expect(f).toMatch(/aria-checked="true" data-folha-acao="agente" data-valor="a"/);
     expect(f).not.toContain("data-folha-busca");
     const muitos = Array.from({ length: 7 }, (_, i) => ({ id: `b${i}`, nome: `Bot ${i}` }));
     expect(folhaDoResponsavel({ status: "fazendo", agenteId: null, agenteNome: null }, muitos)).toContain("data-folha-busca");
-    const voce = folhaDoResponsavel({ status: "voce", agenteId: "a", agenteNome: "Vera" }, bots);
-    expect(voce).toContain(">Você<");
-    expect(voce).not.toMatch(/aria-checked="true" data-folha-acao="agente"/);
+    const espera = folhaDoResponsavel({ status: "fazendo", agenteId: "a", agenteNome: "Vera" }, bots);
+    expect(espera).not.toContain(">Você<");
+    expect(espera).toMatch(/aria-checked="true" data-folha-acao="agente" data-valor="a"/);
     expect(casaNaBusca("Júlia", "jul")).toBe(true);
     expect(casaNaBusca("Vera", "bia")).toBe(false);
     expect(casaNaBusca("Vera", "  ")).toBe(true);
@@ -277,7 +277,7 @@ describe("ADA-17: QA do PR #699", () => {
     expect(String(tarefaAbertaCelular(v({ t: t({ status: "feito" }), naoSalvou: "status" })))).toContain("Não salvou. Voltou para Feito.");
     expect(String(tarefaAbertaCelular(v({ naoSalvou: "resp" })))).toContain("Não salvou. Continua com Vera.");
     expect(String(tarefaAbertaCelular(v({ t: t({ agenteId: null }), naoSalvou: "resp" })))).toContain("Não salvou. Continua sem responsável.");
-    expect(String(tarefaAbertaCelular(v({ t: t({ status: "voce" }), naoSalvou: "resp" })))).toContain("Não salvou. Continua com Você.");
+    expect(String(tarefaAbertaCelular(v({ t: t({ status: "fazendo", esperaPessoa: true }), naoSalvou: "resp" })))).toContain("Não salvou. Continua com Vera.");
   });
 
   it("a folha do responsável marca só o atual; sem responsável, marca \"Sem responsável\"", () => {

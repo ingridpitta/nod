@@ -1411,6 +1411,8 @@ function reposSobre(b: BancoMemoria, escopo: Escopo): Repos {
     trabalhos: {
       async tarefasComFrenteAberta() { return new Set<string>(); },
       async criar(n) {
+        // ADA-16 (0163): o índice único trabalhos_da_tarefa com ON CONFLICT DO NOTHING.
+        if (n.tarefaId && n.origem === "quadro" && (n.forma ?? "task") === "task" && doTenant(b.trabalhos).some((x) => x.agenteId === n.agenteId && x.tarefaId === n.tarefaId && x.origem === "quadro" && (x.forma ?? "task") === "task")) return null;
         const linha: Trabalho & { ownerId: string } = {
           tenantId: escopo.tenantId,
           ownerId: escopo.pessoaId,
@@ -1434,12 +1436,17 @@ function reposSobre(b: BancoMemoria, escopo: Escopo): Repos {
           forma: n.forma ?? "task",
           loteId: n.loteId ?? null,
           resumo: null,
+          ...(n.tarefaId ? { tarefaId: n.tarefaId } : {}),
           criadoEm: agora() + b.trabalhos.length / 1000,
           iniciadoEm: n.iniciadoEm ?? null,
           terminadoEm: null,
         };
         b.trabalhos.push(linha);
         return semDonoTrabalho(linha);
+      },
+      async daTarefa(agenteId, tarefaId) {
+        const t = doTenant(b.trabalhos).find((x) => x.agenteId === agenteId && x.tarefaId === tarefaId && x.origem === "quadro" && (x.forma ?? "task") === "task");
+        return t ? semDonoTrabalho(t) : null;
       },
       async buscar(id) {
         const t = doTenant(b.trabalhos).find((x) => x.id === id);
@@ -1900,7 +1907,7 @@ function reposSobre(b: BancoMemoria, escopo: Escopo): Repos {
             const dep = dono?.depoisDeTrabalhoId ? doTenant(b.trabalhos).find((x) => x.id === dono.depoisDeTrabalhoId) : null;
             if (dep && !["terminado", "parado", "falhou"].includes(dep.estado)) return false;
             // ADR-085: a mesma regra do SQL (seguravelPeloMac; o espaço segura também o que passou da espera máxima).
-            if (dono && p.espacarFundo === true && seguravelPeloMac({ ...dono, criadoEm: p.agora }, p.agora)) return false;
+            if (dono && p.espacarFundo === true && dono.origem !== "quadro" && seguravelPeloMac({ ...dono, criadoEm: p.agora }, p.agora)) return false; // ADR-163: o quadro fora do espaço
             // #219: disco crítico — nenhum trabalho novo, nem a volta marcada (que só ele segura, revisão do #224);
             // memória crítica — o segundo plano novo sem prazo.
             if (p.segurarNovo === true && (t.acordarEm || (dono && dono.iniciadoEm === null))) return false;
@@ -4004,6 +4011,8 @@ function reposSobre(b: BancoMemoria, escopo: Escopo): Repos {
       restaurarTarefa: soNoPostgres,
       estadosDosTurnos: async () => new Map(),
       desdeDosTurnos: async () => new Map(),
+      tarefasEsperando: async () => new Set<string>(),
+      filaDasTarefas: async () => new Map(),
       cadeiaDoTurno: async () => [],
       inserirLote: soNoPostgres,
       lotesDaTarefa: async () => [],
@@ -4053,6 +4062,10 @@ function reposSobre(b: BancoMemoria, escopo: Escopo): Repos {
       adicionarMembro: soNoPostgres,
       tirarMembro: soNoPostgres,
       participacoes: async () => [],
+      labels: async () => [],
+      inserirLabels: soNoPostgres,
+      editarLabel: soNoPostgres,
+      removerLabel: soNoPostgres,
       comentar: soNoPostgres,
       contarComentarios: async () => 0,
       comentarios: async () => [],
@@ -4076,6 +4089,14 @@ function reposSobre(b: BancoMemoria, escopo: Escopo): Repos {
       temDeOutroNoQuadro: async () => false,
       pedidoAbertoNaTarefa: async () => false,
       turnoNaFila: async () => null,
+      turnoNaFilaDaThread: async () => null,
+      turnosVivos: async () => [],
+      buscar: async () => null,
+      thread: async () => [],
+      threadDoTurno: async () => null,
+      editar: soNoPostgres,
+      apagar: soNoPostgres,
+      resumoDasCadeias: async () => new Map(),
     },
     // NOD-422 (0148): a importação do Linear é do Postgres (tests/integration/importar-linear.test.ts).
     quadroImportacoes: {

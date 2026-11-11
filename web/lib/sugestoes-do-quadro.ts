@@ -30,7 +30,7 @@ export function sugestoesDoQuadro(q: Pick<QuadroDto, "tarefas" | "colunas"> | nu
   const vivas = q.tarefas.filter((t) => { const g = grupo.get(t.status); return g === "nao_iniciado" || g === "iniciado"; });
   const s: Sugestao[] = [];
   // Revisão 4 (M2, ADR-143): no quadro com várias pessoas, só a pendência que a própria pessoa decide vira "Responder".
-  const espera = q.tarefas.find((t) => t.status === "voce" && (!t.decide || t.decide.voce));
+  const espera = q.tarefas.find((t) => t.esperaPessoa && (!t.decide || t.decide.voce));
   if (espera) { const c = codigoSeguro(espera); s.push({ tipo: "abrir", rotulo: c ? `Responder ${c}` : "Responder o que espera você", tarefaId: espera.id }); }
   const travada = q.tarefas.find((t) => t.status === "bloqueado" && codigoSeguro(t));
   const ct = travada ? codigoSeguro(travada) : null;

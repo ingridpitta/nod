@@ -2,6 +2,7 @@ import { botaoDaBarraSemIa, conversaAguardandoIa, dicaDoComposerSemIa, iasNoCard
 import { escNoEspaco, focoAoAbrirEspaco, voltarParaLista } from "./lib/navegacao-config.ts";
 import { perfilMudou } from "./lib/perfil-mudou.ts";
 import "./lib/mascote-elemento.ts";
+import { ligarModoDeFoco } from "./lib/modo-de-foco.ts";
 import { alternarExplicacao, detailsParaFecharComEsc } from "./lib/recomeco.ts";
 import { abrirCapturaAmpliada } from "./telas/captura-ampliada.ts";
 import { abrirPreviaArquivo } from "./telas/previa-arquivo.ts";
@@ -1189,6 +1190,8 @@ const daAtividade = (q: Invalidacao): boolean => q.startsWith("atividade:") || q
 const focoPendente = criarFocoPendente({ get activeElement() { return document.activeElement; }, get body() { return document.body; }, querySelector: (s) => document.querySelector<HTMLElement>(s) as unknown as ElDaLista | null }, () => Date.now());
 document.addEventListener("pointerdown", () => focoPendente.descartar(), true);
 document.addEventListener("keydown", () => focoPendente.descartar(), true);
+// O contorno de foco só para quem navega pelo teclado (web/lib/modo-de-foco.ts).
+ligarModoDeFoco(document as never);
 
 /**
  * ADR-125: o que foi escolhido e ainda não voltou confirmado, por bot: a frota relida no meio não desfaz na tela.

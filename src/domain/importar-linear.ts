@@ -1,3 +1,4 @@
+import { LIMITES_LABEL } from "../contracts/quadro-labels.ts";
 import type { ColunaQuadro, GrupoColuna, IdColuna } from "../contracts/quadro.ts";
 import type { ComentarioLinear, FiltroImportacao, IssueLinear, PreviaImportacao } from "../contracts/quadro-importacao.ts";
 import { LIMITES_QUADRO } from "../contracts/quadro.ts";
@@ -26,7 +27,7 @@ export function importacaoParada(i: { estado: string; atualizadoEm: number }, ag
 }
 /** Só os últimos comentários vêm; o resto fica no Linear (decisão 5). */
 export const COMENTARIOS_POR_TAREFA = 10;
-/** A etiqueta do Linear que manda a tarefa para "Precisa de você". */
+/** A etiqueta do Linear que deixa a tarefa esperando a pessoa (ADR-162: na coluna do estado). */
 export const ETIQUETA_PRECISA_HUMANO = "precisa-humano";
 export type { ComentarioLinear, FiltroImportacao, IssueLinear, PreviaImportacao };
 
@@ -59,7 +60,7 @@ export function colunaDoEstado(estado: string): { coluna: IdColuna; nota: string
  * As colunas do quadro depois da importação: as da tabela (renomeando as padrão que elas reaproveitam), com o
  * responsável padrão de cada uma resolvido entre os bots da pessoa (bot que não existe deixa a coluna sem ninguém; a
  * coluna que já tinha responsável ou passagem fica com os dela), e as
- * nativas que já existiam no lugar delas. A ordem é a dos grupos; "Precisa de você" segue a última do andamento.
+ * nativas que já existiam no lugar delas. A ordem é a dos grupos.
  */
 export function colunasDaImportacao(atuais: readonly ColunaQuadro[], agentes: readonly { id: string; nome: string }[]): ColunaQuadro[] | { erro: string } {
   const doBot = (nome: string | null) => (nome ? agentes.find((a) => normalizarNome(a.nome) === normalizarNome(nome))?.id ?? null : null);
@@ -75,13 +76,13 @@ export function colunasDaImportacao(atuais: readonly ColunaQuadro[], agentes: re
       saida.push({ ...(atual ?? {}), id: e.coluna, nome: e.nome, grupo: g, ...(responsavel ? { responsavel } : {}) });
     }
     const nativas = atuais.filter((c) => c.grupo === g && !daTabela.has(c.id));
-    saida.push(...nativas.filter((c) => c.id !== "voce").map((c) => ({ ...c })), ...nativas.filter((c) => c.id === "voce").map((c) => ({ ...c })));
+    saida.push(...nativas.filter((c) => c.id !== "voce").map((c) => ({ ...c })));
   }
   const e = validarColunas(saida);
   return e ?? saida;
 }
 
-/** A tarefa que a issue vira. `status` é o id da coluna; precisa-humano vai para `voce` e volta para a do estado. */
+/** A tarefa que a issue vira. `status` é o id da coluna; precisa-humano fica esperando a pessoa (`voce`, ADR-162) na coluna do estado (`voltarPara`). */
 export type ItemImportado = {
   identificador: string;
   numero: number;
@@ -94,6 +95,8 @@ export type ItemImportado = {
   estadoLinear: string;
   noEstadoDesde: number;
   comentarios: ComentarioLinear[];
+  /** 0159: as etiquetas da issue, que viram labels da tarefa nova (as que cabem no nome da label). */
+  etiquetas: string[];
 };
 
 const sufixoDoCorte = (url: string | null) => (url ? `\n\n… continua no Linear: ${url}` : "\n\n… continua no Linear");
@@ -147,6 +150,7 @@ export function itemDaIssue(i: IssueLinear): ItemImportado {
     estadoLinear: i.estado,
     noEstadoDesde: i.noEstadoDesde,
     comentarios,
+    etiquetas: i.etiquetas.map((e) => e.trim().replace(/\s+/g, " ")).filter((e) => e.length > 0 && e.length <= LIMITES_LABEL.nome).slice(0, LIMITES_LABEL.porTarefa),
   };
 }
 
@@ -164,7 +168,8 @@ export function passaNoFiltro(i: Pick<IssueLinear, "estado">, filtro: FiltroImpo
 
 /**
  * A prévia por coluna. Revisão 4 do PR #630: cada issue conta numa coluna só, a mesma do aplicarImportacao (itemDaIssue):
- * a precisa-humano vai para "Precisa de você", não para a do estado; a soma das colunas é o total.
+ * ADR-162: a precisa-humano conta na coluna do estado (é onde o card aparece, esperando a pessoa); a soma das colunas é o
+ * total e `precisamDeVoce` diz quantas esperam.
  */
 export function previaDaImportacao(issues: readonly Pick<IssueLinear, "estado" | "etiquetas">[], responsaveis: ReadonlyMap<IdColuna, string>): PreviaImportacao {
   const n = new Map<IdColuna, number>();
@@ -175,15 +180,11 @@ export function previaDaImportacao(issues: readonly Pick<IssueLinear, "estado" |
     if (nota) semColuna.add(i.estado);
     const precisa = temEtiqueta(i, ETIQUETA_PRECISA_HUMANO);
     if (precisa) precisamDeVoce++;
-    const destino: IdColuna = precisa ? "voce" : coluna;
-    n.set(destino, (n.get(destino) ?? 0) + 1);
+    n.set(coluna, (n.get(coluna) ?? 0) + 1);
   }
   return {
     total: issues.length,
-    colunas: [
-      ...MAPA_DE_ESTADOS.map((e) => ({ coluna: e.coluna, nome: e.nome, estado: e.estado, tarefas: n.get(e.coluna) ?? 0, responsavel: responsaveis.get(e.coluna) ?? null })),
-      { coluna: "voce", nome: "Precisa de você", estado: ETIQUETA_PRECISA_HUMANO, tarefas: n.get("voce") ?? 0, responsavel: null },
-    ],
+    colunas: MAPA_DE_ESTADOS.map((e) => ({ coluna: e.coluna, nome: e.nome, estado: e.estado, tarefas: n.get(e.coluna) ?? 0, responsavel: responsaveis.get(e.coluna) ?? null })),
     precisamDeVoce,
     semColuna: [...semColuna].sort(),
   };

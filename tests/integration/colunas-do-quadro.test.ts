@@ -310,7 +310,7 @@ describeIntegracao("colunas do quadro (NOD-448, ADR-140)", () => {
       const p = await executar(m.d, gerirQuadro, { ...ctx, acoes: [{ tipo: "substituir_colunas", colunas: DOCES }] });
       if (!p.data.ok || !p.data.proposta_id) throw new Error(JSON.stringify(p.data));
       expect((await executar(m.d, decidirColunasDoQuadro, { decisaoId: p.data.proposta_id, recusar: false, executor: "catcher" })).data).toMatchObject({ aplicado: true });
-      expect((await m.quadro()).colunas.map((c) => c.nome)).toEqual(["Pedido", "Compras", "Produção", "Finalização", "Embalagem", "Entrega", "Precisa de você", "Pago", "Cancelado"]);
+      expect((await m.quadro()).colunas.map((c) => c.nome)).toEqual(["Pedido", "Compras", "Produção", "Finalização", "Embalagem", "Entrega", "Pago", "Cancelado"]);
       ok(await executar(m.d, gerirQuadro, { ...ctx, acoes: [{ tipo: "criar_tarefa", titulo: "Brigadeiro", status: "Pedido" }, { tipo: "criar_tarefa", titulo: "Bolo", status: "Pedido" }, { tipo: "criar_tarefa", titulo: "Torta", status: "Pedido" }] }));
       for (const col of ["Compras", "Produção", "Finalização", "Embalagem", "Entrega", "Pago"]) ok(await executar(m.d, gerirQuadro, { ...ctx, acoes: [{ tipo: "mudar_tarefa", tarefa: "Brigadeiro", status: col }] }));
       ok(await executar(m.d, gerirQuadro, { ...ctx, acoes: [{ tipo: "mudar_tarefa", tarefa: "Torta", status: "Cancelado", motivo: "o cliente desistiu" }] }));

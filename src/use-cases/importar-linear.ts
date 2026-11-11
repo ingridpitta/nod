@@ -1,3 +1,4 @@
+import { resolverLabelsDasOps } from "../domain/quadro-labels.ts";
 import { randomUUID } from "node:crypto";
 import type { Agente } from "../contracts/agente.ts";
 import type { RuntimeEvent } from "../contracts/evento.ts";
@@ -396,6 +397,17 @@ export async function aplicarImportacao(deps: Deps, importacaoId: string, todas:
   const codigosDoTime: typeof codigos = [];
   const regra = { tipo: "regra" } as const;
   const agora = deps.agora();
+  // 0159: as etiquetas do Linear viram labels da tarefa NOVA (a que já existe guarda as labels que a pessoa pôs). A que
+  // falta no catálogo nasce nele, com a cor fixa do nome.
+  const catalogo = (await repo.labels(q.id)).map((l) => ({ id: l.id, nome: l.nome, cor: l.cor }));
+  const labelsDe = async (etiquetas: readonly string[]): Promise<string[]> => {
+    const r = resolverLabelsDasOps([{ tipo: "criar_tarefa", titulo: "-", labels: [...etiquetas] }], catalogo, randomUUID, true);
+    if ("erro" in r) return [];
+    await repo.inserirLabels(q.id, r.novas);
+    catalogo.push(...r.novas);
+    const op = r.ops[0];
+    return op?.tipo === "criar_tarefa" ? op.labels ?? [] : [];
+  };
   for (const it of itens) {
     const numero = numeros.get(it.identificador)!;
     const pergunta = it.status === "voce" ? PERGUNTA_DO_LINEAR : null;
@@ -428,7 +440,7 @@ export async function aplicarImportacao(deps: Deps, importacaoId: string, todas:
         }
       }
     } else {
-      const nova = await repo.inserirTarefa({ quadroId: q.id, ...campos, agenteId: null, linearId: it.identificador, deFora: true, terminadaEm: null, numero });
+      const nova = await repo.inserirTarefa({ quadroId: q.id, ...campos, agenteId: null, linearId: it.identificador, deFora: true, terminadaEm: null, numero, labelIds: it.etiquetas.length ? await labelsDe(it.etiquetas) : [] });
       tarefaId = nova.id;
       foto.push({ id: nova.id, antes: null });
       historico.push({ tarefaId, campo: "criada", de: null, para: it.status, autor: regra });

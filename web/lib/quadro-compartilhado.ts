@@ -28,7 +28,7 @@ export function ehMinha(q: QuadroDto, t: TarefaDto): boolean {
 /** Muda o status de qualquer tarefa; a que espera alguém ("Com você") só sai pela mão de quem decide. */
 export function podeMudarStatus(q: QuadroDto, t: TarefaDto): boolean {
   if (soComenta(q)) return false;
-  if (t.status === "voce" && !ehDona(q)) return t.decide?.voce === true;
+  if (t.esperaPessoa && !ehDona(q)) return t.decide?.voce === true;
   return true;
 }
 
@@ -39,7 +39,7 @@ export function podeEditar(q: QuadroDto, t: TarefaDto): boolean {
 
 /** Responde só quando é ela quem decide. */
 export function podeResponder(q: QuadroDto, t: TarefaDto): boolean {
-  return !soComenta(q) && t.status === "voce" && (ehDona(q) || t.decide?.voce === true);
+  return !soComenta(q) && t.esperaPessoa === true && (ehDona(q) || t.decide?.voce === true);
 }
 
 /** Pede tarefa nova ao quadro (no "só a dona", o campo vira recado). */

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { entradaDoComentario, mencionados, quemAcionar } from "../../../src/domain/comentarios-quadro.ts";
+import { entradaDoComentario, mencionados } from "../../../src/domain/comentarios-quadro.ts";
+import { rotaDoComentario } from "../../../src/domain/rota-comentario.ts";
+
+/** O quemAcionar do NOD-417 virou rotaDoComentario (2026-11-10): os mesmos casos, só os ids. */
+const quemAcionar = (p: Parameters<typeof rotaDoComentario>[0]): string[] => rotaDoComentario(p).map((r) => r.agenteId);
 import { lerOp, lerOps } from "../../../src/domain/quadro.ts";
 
 /** NOD-417: quem um comentário da tarefa aciona e o texto que o acionado recebe. */
@@ -58,7 +62,7 @@ describe("entradaDoComentario", () => {
     expect(e).toContain("Linear NOD-9");
   });
   it("o mencionado é avisado de que a tarefa não passou a ele", () => {
-    expect(entradaDoComentario({ ...base, texto: "oi", responsavel: false })).toContain("não mude o status nem o responsável");
+    expect(entradaDoComentario({ ...base, texto: "oi", responsavel: false })).toContain("deixe o status e o responsável com");
   });
 });
 

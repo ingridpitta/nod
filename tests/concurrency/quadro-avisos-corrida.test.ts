@@ -58,7 +58,7 @@ describeIntegracao("aviso do quadro: lote e varredor ao mesmo tempo (NOD-420)", 
       await d.repos.conversas.criar({ id: conversaId, tipo: "propria", agenteId });
       const l = await aplicarLoteQuadro(d, { autor: { tipo: "pessoa" }, anfitriaoId: agenteId, executor: "catcher", ops: [{ tipo: "criar_quadro", meta: "M" }, { tipo: "criar_tarefa", titulo: "A" }, { tipo: "mudar_tarefa", tarefa: "A", status: "voce", pergunta: "Azul?" }, { tipo: "criar_tarefa", titulo: "B" }] });
       if (!l.data.ok) throw new Error(l.data.detalhe);
-      // A entrada em Precisa de você foi há 10 min: a janela já passou.
+      // A entrada na espera da pessoa (ADR-162) foi há 10 min: a janela já passou.
       await trx`update quadro_tarefas set na_coluna_desde = now() - interval '10 minutes', avisada_em = null where titulo = 'A' and owner_id = ${PESSOA.pessoaId}`;
     });
 

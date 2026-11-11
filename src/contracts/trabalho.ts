@@ -10,15 +10,14 @@ import type { CotaNosTrabalhos, CotaNoTrabalho, LeituraDaMaquinaViva, LeituraDeM
 /**
  * Trabalho (definido em 2026-10-07, ADR-083, épico #188): uma unidade de trabalho longo de um bot, com sessão do CLI e
  * pasta próprias, que roda em paralelo com a conversa e com outros trabalhos do mesmo bot. Na tela é a "task".
- * O nome no código é `trabalho` porque `tarefa` já quer dizer outras três coisas: o `tarefaId` do pedido entre bots
- * (o id do turno delegado), a ferramenta `iniciar_tarefa` da ligação e a lista do TaskCreate (`turno.tarefas`).
- *
+ * `trabalho`, não `tarefa`: esta já é o `tarefaId` entre bots, o `iniciar_tarefa` da ligação e o TaskCreate.
  * - `pessoa`: a conversa coordenadora abriu (`abrir_task`) a partir de um pedido da pessoa;
  * - `rotina`: uma execução de rotina (uma por execução, nunca uma por rotina);
  * - `colega`: um pedido de outro bot (`pedir_a_bot`), com os acessos de quem recebe (ADR-058);
- * - `rede`: um turno de conversa que passou de 2 min trabalhando e foi promovido sozinho.
+ * - `rede`: um turno de conversa que passou de 2 min trabalhando e foi promovido sozinho;
+ * - `quadro` (ADR-163): uma tarefa do quadro, um trabalho só por (bot, tarefa), reaberto a cada etapa (a sessão segue).
  */
-export type OrigemTrabalho = "pessoa" | "rotina" | "colega" | "rede";
+export type OrigemTrabalho = "pessoa" | "rotina" | "colega" | "rede" | "quadro";
 
 /**
  * `na_fila`: criado, ainda sem turno despachado (ou esperando o trabalho de `depoisDeTrabalhoId`);
@@ -41,6 +40,7 @@ export type Trabalho = CamposDeFrente & {
   origem: OrigemTrabalho;
   /** origem = colega: o bot que pediu. */
   pedidoPorAgenteId: string | null;
+  tarefaId?: string | null; // 0164: a tarefa do quadro (trabalho da tarefa, origem quadro + forma task, ADR-163; ou frente dela)
   /** origem = rotina. */
   rotinaId: string | null;
   /** Aberto por um trabalho de rotina (profundidade 1): este não abre outros. */

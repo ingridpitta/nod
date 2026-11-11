@@ -1,5 +1,7 @@
 # ADR-083 — Trabalhos em paralelo: a conversa coordena, cada trabalho longo roda à parte
 
+> Emendada pela [ADR-163](adr-163-tarefa-do-quadro-e-trabalho.md): a tarefa do quadro roda num trabalho próprio (origem `quadro`), sem teto próprio (o freio é o portão de recursos da ADR-085) e fora dos bastidores.
+
 > Emendada pela [ADR-147](adr-147-motor-no-windows-nativo.md): no Windows o grupo de processo vira a árvore vista.
 
 Status: aceito · Data: 2026-10-07 · Emenda a [ADR-010](adr-010-fila-por-conversa-no-postgres-prazo-absoluto.md) (emenda 13,

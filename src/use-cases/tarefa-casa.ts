@@ -7,7 +7,7 @@ import { ErroDeDominio } from "../domain/erro.ts";
 import { LIMITES_QUADRO } from "../domain/quadro.ts";
 import { tarefaCasaLigada } from "../shared/tarefa-casa.ts";
 import { evento } from "./apoio-l7.ts";
-import { aplicarLoteQuadro } from "./quadro.ts";
+import { aplicarLoteQuadro, comentarPergunta } from "./quadro.ts";
 import { autoriaDoAgente } from "./registrar-negacao.ts";
 import { PRAZO_DECISAO_MS } from "./pedir-a-pessoa.ts";
 import { fecharComResposta, retomarComResposta, TIPOS_RESPONDIVEIS } from "./responder-decisao.ts";
@@ -15,13 +15,14 @@ import type { Deps } from "./tipos.ts";
 
 /**
  * ADA-28 (ADR-159, "a tarefa é a casa do trabalho"), escopo A: um único "Precisa de você". A pergunta ou a aprovação que o
- * bot faz durante uma tarefa é a espera DA TAREFA: a decisão leva o `tarefa_id`, a tarefa vai para "Precisa de você" (sem
+ * bot faz durante uma tarefa é a espera DA TAREFA: a decisão leva o `tarefa_id`, a tarefa fica esperando a pessoa (ADR-162:
+ * na coluna, com a pergunta em comentário; sem
  * o aviso "Preciso de você no quadro", que seria o segundo) e o chat ganha a linha "ADA-28 precisa de você". Responder no
  * card ou na Sua vez resolve as duas, e só a retomada da decisão acorda o bot (uma vez). Tudo atrás de NOD_TAREFA_CASA.
  */
 
 /** A frase da resposta que veio de fora do card (a Sua vez, o cartão): o card mostra que já foi respondida. */
-export const RESPONDIDA_FORA_DO_CARD = "Respondida em Precisa de você.";
+export const RESPONDIDA_FORA_DO_CARD = "Respondida na Sua vez.";
 
 /** O texto da linha no chat. A web põe o código como botão que abre a tarefa (web/telas/conversa.ts, linhaDaTarefa). */
 export function textoDaLinha(motivo: "precisa" | "resultado", codigo: string, botNome: string | null, coluna?: string): string {
@@ -112,7 +113,9 @@ export async function responderPelaDecisao(deps: Deps, p: { tarefaId: string; re
   const seguinte = abertas.find((d) => d.id !== respondivel.id);
   const t = seguinte ? await deps.repos.quadros.tarefa(p.tarefaId) : null;
   if (seguinte && t && t.status !== "voce") {
-    await deps.repos.quadros.salvarTarefa(t.id, { ...t, status: "voce", voltarPara: t.status, pergunta: [...seguinte.frase].slice(0, LIMITES_QUADRO.pergunta).join("") });
+    const salva = await deps.repos.quadros.salvarTarefa(t.id, { ...t, status: "voce", voltarPara: t.status, pergunta: [...seguinte.frase].slice(0, LIMITES_QUADRO.pergunta).join(""), resposta: null });
+    // ADR-162: a pergunta seguinte também vira comentário (o card fica na coluna, esperando a pessoa).
+    if (salva) await comentarPergunta(deps, salva, { tipo: "agente", agenteId: seguinte.agenteId });
   }
   return [...(fechada.events ?? []), ...(retomada.events ?? [])];
 }

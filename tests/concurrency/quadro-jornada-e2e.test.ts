@@ -150,9 +150,9 @@ describeIntegracao("e2e com catcher: a jornada do quadro-agente, da meta ao merg
     ].join("\n"));
     expect(t4.estado).toBe("concluido");
 
-    // 5–7. Ao vivo: o Beto trava e pergunta (o quadro passa a "Precisa de você"); a Ada abre o PR (Em revisão) e o fecha
+    // 5–7. Ao vivo: o Beto trava e pergunta (ADR-162: a tarefa fica na coluna, esperando a pessoa); a Ada abre o PR (Em revisão) e o fecha
     // no merge (Feito) — tudo pelos turnos que as próprias tarefas abriram.
-    q = await quando(ada.agenteId, "planos em voce e depoimentos feito", (x) => tarefa(x, "Seção de planos")?.status === "voce" && tarefa(x, "Seção de depoimentos")?.status === "feito");
+    q = await quando(ada.agenteId, "planos em voce e depoimentos feito", (x) => tarefa(x, "Seção de planos")?.esperaPessoa === true && tarefa(x, "Seção de depoimentos")?.status === "feito");
     expect(tarefa(q, "Seção de planos")).toMatchObject({ agenteNome: "Beto", pergunta: "Planos em reais ou em dólares?" });
     expect(tarefa(q, "Seção de depoimentos")).toMatchObject({ agenteNome: "Ada", prUrl: PR_B });
     expect(q.cumpridoEm).toBeNull();

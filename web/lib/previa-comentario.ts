@@ -3,10 +3,12 @@ import type { ColunaDto } from "../../src/contracts/quadro.ts";
 /**
  * ADA-28 (ADR-159, escopo D): a linha sutil embaixo do campo de comentário diz, antes de enviar, se ele aciona alguém.
  * A web não importa o domínio (ADR-018), então a regra é espelhada aqui e o teste tests/unit/web/previa-comentario.test.ts
- * confere contra o servidor (`andando`, `mencionados` e `quemAcionar` de src/domain): uma regra só, provada por teste.
- * Quem comenta pela tela é sempre a pessoa; o freio (src/domain/freios-quadro.ts) só vale para comentário de bot.
+ * confere contra o servidor (`mencionados`, `mencionaTodos` e `rotaDoComentario` de src/domain): uma regra só, provada
+ * por teste. Quem comenta pela tela é sempre a pessoa; o freio (src/domain/freios-quadro.ts) só vale para comentário de
+ * bot. 2026-11-10: o computador mostra os chips da prévia do servidor (GET …/comentarios/previa); este espelho segue no
+ * campo do celular, sem thread. O responsável é acionado em qualquer coluna; @todos o tira.
  */
-export type PreviaDoComentario = { acionados: string[]; motivo: "andamento" | "mencao" | "fora_do_andamento" | "sem_responsavel" };
+export type PreviaDoComentario = { acionados: string[]; motivo: "andamento" | "mencao" | "todos" | "sem_responsavel" };
 
 type Agente = { id: string; nome: string; nod?: boolean };
 
@@ -35,27 +37,25 @@ function mencionadosNaTela(texto: string, agentes: readonly Agente[]): Agente[] 
   return achados.sort((x, y) => x.pos - y.pos).map((x) => x.a);
 }
 
-/** Igual a `andando` do domínio: coluna do grupo iniciado, fora Precisa de você e Bloqueado. */
-function andandoNaTela(colunas: readonly Pick<ColunaDto, "id" | "grupo">[], status: string): boolean {
-  return colunas.find((c) => c.id === status)?.grupo === "iniciado" && status !== "voce" && status !== "bloqueado";
-}
+/** Igual a `mencionaTodos` do domínio: @todos ou @all inteiros. */
+const TODOS = /(^|[^\p{L}\p{N}_])@(todos|all)(?![\p{L}\p{N}_])/iu;
 
 export function previaDoComentario(p: { tarefa: { agenteId: string | null; status: string }; colunas: readonly Pick<ColunaDto, "id" | "grupo">[]; texto: string; agentes: readonly Agente[] }): PreviaDoComentario {
-  const anda = andandoNaTela(p.colunas, p.tarefa.status);
-  const responsavel = anda && p.tarefa.agenteId ? p.agentes.find((a) => a.id === p.tarefa.agenteId && !a.nod) ?? null : null;
+  const todos = TODOS.test(p.texto);
+  const responsavel = !todos && p.tarefa.agenteId ? p.agentes.find((a) => a.id === p.tarefa.agenteId && !a.nod) ?? null : null;
   const mencoes = mencionadosNaTela(p.texto, p.agentes);
   const vistos = new Set<string>();
   const acionados = [...(responsavel ? [responsavel] : []), ...mencoes].filter((a) => !vistos.has(a.id) && vistos.add(a.id)).map((a) => a.nome.trim());
   if (mencoes.some((m) => m.id !== responsavel?.id)) return { acionados, motivo: "mencao" };
   if (responsavel) return { acionados, motivo: "andamento" };
-  return { acionados, motivo: p.tarefa.agenteId ? "fora_do_andamento" : "sem_responsavel" };
+  return { acionados, motivo: todos && p.tarefa.agenteId ? "todos" : "sem_responsavel" };
 }
 
-/** O texto da linha: "Faustino vai ver agora", "Faustino e Gil vão ver agora", "fica só registrado (A fazer não aciona ninguém)". */
-export function textoDaPrevia(p: PreviaDoComentario, nomeDaColuna: string | null): string {
+/** O texto da linha: "Faustino vai ver agora", "Faustino e Gil vão ver agora", "@todos é anúncio…". */
+export function textoDaPrevia(p: PreviaDoComentario, _nomeDaColuna?: string | null): string {
   const n = p.acionados;
   if (n.length === 1) return `${n[0]} vai ver agora`;
   if (n.length > 1) return `${n.slice(0, -1).join(", ")} e ${n.at(-1)} vão ver agora`;
-  if (p.motivo === "sem_responsavel") return "fica só registrado (a tarefa não tem responsável; @nome chama um bot)";
-  return `fica só registrado (${nomeDaColuna ?? "esta coluna"} não aciona ninguém; @nome chama um bot)`;
+  if (p.motivo === "todos") return "@todos é anúncio: não aciona o responsável (@nome chama um bot)";
+  return "fica só registrado (a tarefa não tem responsável; @nome chama um bot)";
 }

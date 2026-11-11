@@ -55,7 +55,8 @@
   --signal: #1866c0;
   --on-signal: #ffffff;
   --signal-soft: #e6f0fb;
-  --focus-ring: var(--ink);
+  /* Mais suave que a tinta (pedido do Marlon): o anel aparece só no teclado e não grita (contraste ~5:1 no claro). */
+  --focus-ring: var(--ink-3);
 
   /* O revisor do Automático (modos de aprovação, PR 4; tela A3, o cartão compacto "estilo Grok"): o azul claro do
      cartão, a borda, o escudo e o Aprovar. Próprio, e não signal: signal é só o que é NOVO, nunca botão. */

@@ -252,6 +252,23 @@ async function esperasDaCotaDe(deps: Pick<Deps, "repos">, trabalhos: readonly Tr
   return saida;
 }
 
+/**
+ * ADR-085: o portão do topo, que junta as máquinas da pessoa (a pior leitura). Sem leitura nos últimos 2 min, aberto.
+ * QA do PR 341 (C15): a regra "linux só a vermelha" vale para ele quando TODAS as máquinas com leitura são linux (com
+ * uma darwin no meio, a pior pode ser dela, e o topo fica com a regra de sempre). Desligada, nada muda.
+ * ADA-16 (ADR-163): o card do quadro usa o mesmo portão para dizer que a tarefa espera a máquina, e por quê.
+ */
+export function portaoDoTopo(deps: Pick<Deps, "escopo"> & { services: Pick<Deps["services"], "trabalhosVivos" | "maquinas"> }, usoDoMac: Parameters<typeof portaoDoMac>[0]): PortaoDoMac {
+  const memoria = deps.services.trabalhosVivos?.memoria(deps.escopo.pessoaId) ?? null;
+  if (memoria === null) return portaoDoMac("livre", null);
+  const servico = deps.services.maquinas;
+  const leituras = servico ? servico.leituras(deps.escopo.pessoaId) : [];
+  const linux = leituras.length > 0 && leituras.every((l) => servico?.plataforma?.(deps.escopo, l.machineId) === "linux");
+  const regra = linux ? { plataforma: "linux" as const, linuxSoVermelha: servico?.fundoLinuxSoVermelha === true } : {};
+  const nivelDisco = memoria.discoNivel !== undefined ? memoria.discoNivel : nivelDoDisco(memoria.disco ?? null);
+  return portaoDoMac(usoDoMac, { memoria: memoria.nivel, processador: piorNivel(memoria.processador ?? null, memoria.fila ?? null), discoNivel: nivelDisco }, regra);
+}
+
 /** definido em 2026-10-07: "Terminados hoje" — o servidor manda as últimas 24 h e a tela corta no dia dela. */
 export const JANELA_TERMINADOS_MS = 24 * 60 * 60_000;
 
@@ -303,12 +320,7 @@ export const listarTrabalhos: CasoDeUso<{ agenteId?: string }, TrabalhosDto> = a
       pedidosNaFila.push({ turnoId: t.id, agenteId: t.agenteId, de, pedido, ia: espera.ia, situacao: espera.situacao, voltaEm: espera.voltaEm, criadoEm: t.criadoEm });
     }
   }
-  // QA do PR 341 (C15): o topo junta as máquinas; a regra "linux só a vermelha" vale para ele quando TODAS as máquinas com
-  // leitura são linux (com uma darwin no meio, a pior pode ser dela, e o topo fica com a regra de sempre). Desligada, nada muda.
-  const leiturasDoTopo = servico && memoria !== null ? servico.leituras(deps.escopo.pessoaId) : [];
-  const topoLinux = leiturasDoTopo.length > 0 && leiturasDoTopo.every((l) => servico?.plataforma?.(deps.escopo, l.machineId) === "linux");
-  const regraDoTopo = topoLinux ? { plataforma: "linux" as const, linuxSoVermelha: servico?.fundoLinuxSoVermelha === true } : {};
-  const portao = memoria === null ? portaoDoMac("livre", null) : portaoDoMac(usoDoMac, { memoria: memoria.nivel, processador: piorNivel(processador, fila), discoNivel: nivelDisco }, regraDoTopo);
+  const portao = portaoDoTopo(deps, usoDoMac);
   const agora = deps.agora();
   const topo = { cota: cotaParaTela(cotaAgora), pedidosNaFila, pressao: memoria?.nivel ?? null, memoriaTotalMb: memoria?.totalMb ?? null, processador, cargaProcessador: memoria?.carga ?? null, usoProcessador: memoria?.uso ?? null, fila, segurando: portao.fundo !== null, motivoEspera: portao.fundo, seguraTudoNovo: portao.tudoNovo !== null, disco: disco && nivelDisco ? { ...disco, nivel: nivelDisco, alertaMb: DISCO_ALERTA_MB, criticoMb: DISCO_CRITICO_MB, acabaEmMs: acabaLogo(memoria?.discoAcabaEmMs) } : null, discoSuportado: memoria?.discoSuportado ?? disco !== null };
   // definido em 2026-10-12 (ADR-099, I10): o dono de cada bot (a linha do bot em Trabalhos), calculado aqui no servidor.

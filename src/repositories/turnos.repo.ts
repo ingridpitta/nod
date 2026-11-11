@@ -429,15 +429,22 @@ export function turnosRepo(conn: Conn, escopo: Escopo) {
                   -- O turno de um trabalho espera só outro turno do MESMO trabalho e o trabalho de que ele depende
                   -- ("Fazer depois da …"), até ele terminar, parar ou falhar.
                   and not exists (select 1 from turnos d where d.tenant_id = t.tenant_id and d.trabalho_id = t.trabalho_id and d.estado = 'despachando')
+                  -- revisto em 2026-11-10 (ADA-16, ADR-163): a tarefa do quadro (trabalho de origem 'quadro') NÃO tem teto
+                  -- próprio por bot nem por máquina. Tarefas diferentes rodam juntas; a mesma tarefa com o mesmo bot segue
+                  -- em série pela regra acima (o mesmo trabalho). O freio de recurso é o do nod: o portão da máquina abaixo
+                  -- (ADR-085) e o pool elástico de laços do executor.
                   -- definido em 2026-10-08 (ADR-085): com o Mac apertado (pelo "uso do Mac" da pessoa), trabalho NOVO em
                   -- segundo plano — rotina ou pedido de colega que ainda não começou — espera. O que já começou segue,
                   -- e o que a pessoa espera também (a task que ela abriu, "Executar agora", o pedido feito na conversa).
                   -- Revisão do #209: a espera vai até ESPERA_MAXIMA_FUNDO_MS; e, logo depois de um trabalho novo em
                   -- segundo plano começar neste Mac (espacarFundo), o próximo espera, mesmo o que passou da espera máxima.
-                  -- Mesma regra de seguravelPeloMac (domain/memoria-mac.ts).
+                  -- Mesma regra de seguravelPeloMac (domain/memoria-mac.ts). ADA-16 (ADR-163): a tarefa do quadro, que
+                  -- agora roda em paralelo, também é segurada pelo Mac apertado (a primeira etapa dela; a seguinte já
+                  -- começou), mas não entra no espaço de 30 s, que a serializaria; sem teto próprio, o freio dela é este portão.
                   ${p.espacarFundo !== true && p.segurarFundo !== true ? trx`` : trx`and not exists (select 1 from trabalhos w where w.tenant_id = t.tenant_id and w.id = t.trabalho_id
-                    and w.iniciado_em is null and w.origem in ('rotina', 'colega') and not w.pessoa_esperando
-                    ${p.espacarFundo === true || p.fundoSemPrazo === true ? trx`` : trx`and w.criado_em > ${data(p.agora - ESPERA_MAXIMA_FUNDO_MS)}`})`}
+                    and w.iniciado_em is null and not w.pessoa_esperando and (false
+                    ${p.espacarFundo === true ? trx`or w.origem in ('rotina', 'colega')` : trx``}
+                    ${p.segurarFundo === true ? trx`or (w.origem in ('rotina', 'colega', 'quadro') ${p.fundoSemPrazo === true ? trx`` : trx`and w.criado_em > ${data(p.agora - ESPERA_MAXIMA_FUNDO_MS)}`})` : trx``}))`}
                   -- revisto em 2026-10-09 (revisão do #224, decisão do coordenador do #221): a volta marcada ("me chame às
                   -- 16:00", ADR-086) é o próximo passo de uma task já começada — o segundo plano apertado e o espaço entre
                   -- dois começos não a seguram mais (era a revisão do #212); só o disco crítico (segurarNovo, abaixo).

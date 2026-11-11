@@ -39,7 +39,8 @@
 .qd-pil { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; padding: 2px 3px 2px 2px; border: 1px solid var(--line); border-radius: 999px;
   background: var(--surface); box-shadow: var(--shadow-pop); pointer-events: auto; }
 .cabecalho.cabecalho-pilula .qd-pil > .pilula-bot { min-width: 0; border: 0; box-shadow: none; background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
-.qd-pil:has(> .pilula-bot:hover, > .pilula-bot:focus-visible) { border-color: var(--ink); }
+/* Hover e foco da pílula: a borda só escurece um tom (line-strong), sem o contorno preto (pedido do Marlon). */
+.qd-pil:has(> .pilula-bot:hover, > .pilula-bot:focus-visible) { border-color: var(--line-strong); }
 /* Com a busca aberta, a cápsula vai para o miolo dela: só o nome do bot fica, sem o segmento nem a borda da cápsula. */
 .bnc-pilula .qd-pil { display: contents; }
 .bnc-pilula .qd-pil > .qd-seg { display: none; }
@@ -206,16 +207,6 @@
 .qd-pas-inst { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: none; color: var(--ink); font: inherit; font-size: 13px; resize: vertical; }
 .qd-pas-inst:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 .qd-pop-passa:not(:has(input[value="agente"]:checked)) #qd-pas-agente { display: none; }
-/* Revisão do PR 622 (decisão da PM): o card solto vira uma linha discreta no topo da lista de destino, sem popover. */
-.qd-soltar { padding: 7px 10px; border: 1px dashed color-mix(in srgb, var(--signal) 45%, var(--line)); border-radius: var(--qd-raio);
-  background: color-mix(in srgb, var(--signal) 5%, transparent); font-size: 12.5px; color: var(--ink-2); }
-.qd-soltar-tit { margin: 0; line-height: 1.35; overflow-wrap: anywhere; }
-.qd-soltar-tit b { color: var(--ink); font-weight: 500; }
-.qd-soltar .qd-pas-bts { margin-top: 3px; }
-.qd-lg-lista .qd-soltar { margin: 4px 0; }
-/* Revisão 7 do PR 623: a mesma linha sob o Status da tarefa aberta. */
-.qd-t-soltar { list-style: none; margin: 6px 0 0; padding: 0; }
-.qd-saindo { opacity: .45; }
 /* O "Mover para…" do card: aparece no hover e no foco (sempre no toque), acima do clique do card inteiro. */
 .qd-card-mover { position: relative; z-index: 1; align-self: flex-start; display: inline-flex; align-items: center; min-height: 24px; min-width: 24px; padding: 0 2px;
   border: 0; background: none; color: var(--ink-3); font: inherit; font-size: 11.5px; cursor: pointer; opacity: 0; transition: opacity .12s; }
@@ -328,6 +319,10 @@ li.qd-card[draggable="true"] { cursor: grab; }
 .qd-quem .icon.mascote svg { width: 15px; height: 15px; }
 .qd-quem .qd-anel { width: 18px; height: 18px; font-size: 8.5px; border-width: 1.5px; }
 .qd-quando { margin-left: auto; flex: none; font-size: 11.5px; color: var(--ink-3); white-space: nowrap; }
+/* ADR-162: a tarefa que espera você fica na coluna dela; o card só diz "te perguntou", pequeno e cinza (sem cor nem selo). */
+.qd-perguntou { margin-left: auto; flex: none; font-size: 11.5px; color: var(--ink-3); white-space: nowrap; }
+.qd-perguntou + .qd-quando { margin-left: 0; }
+.qd-l-fim .qd-perguntou { margin-left: 0; }
 /* Linha 1: o estado do trabalho, em tinta 3; o ícone carrega a cor. Texto longo quebra dentro do card. */
 .qd-estado { display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: 100%; font-size: 11.5px; line-height: 1.35; color: var(--ink-3); overflow-wrap: anywhere; }
 .qd-estado > span { min-width: 0; }
@@ -978,3 +973,46 @@ a.qd-chip:hover { background: var(--surface-raised); }
   .qd-qs-busca, .qd-qs-novo input, .qd-qs-novo select, .qd-qs-novo .qd-bt { min-height: 44px; font-size: 16px; }
 }
 @media (prefers-reduced-motion: reduce) { .qd-qs-pop { animation: none; } }
+
+/* 0159: labels e prazo na tarefa aberta. Sutil: chip de contorno com um ponto da cor (nunca fundo chapado); o prazo só
+   ganha cor quando pede atenção (vencida, hoje), e mesmo assim em tinta, sem fundo. */
+.qd-labels-campo { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
+.qd-labels { display: contents; list-style: none; margin: 0; padding: 0; }
+.qd-label { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; height: 24px; padding: 0 2px 0 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink-2); font-size: 12px; }
+.qd-label-nome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qd-label-ponto { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--agent-gris); }
+.qd-label-ponto[data-cor="azul"] { background: var(--agent-bleu); }
+.qd-label-ponto[data-cor="verde"] { background: var(--agent-vert); }
+.qd-label-ponto[data-cor="ambar"] { background: var(--agent-ambre); }
+.qd-label-ponto[data-cor="laranja"] { background: var(--agent-orange); }
+.qd-label-ponto[data-cor="vermelho"] { background: var(--agent-rouge); }
+.qd-label-ponto[data-cor="rosa"] { background: var(--agent-rose); }
+.qd-label-ponto[data-cor="violeta"] { background: var(--agent-violet); }
+.qd-label-ponto[data-cor="turquesa"] { background: var(--agent-turquoise); }
+.qd-label-x { display: inline-grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--ink-3); font: inherit; line-height: 1; cursor: pointer; }
+.qd-label-x:hover { background: var(--surface-raised); color: var(--ink); }
+.qd-label-x:focus-visible, .qd-label-in:focus-visible, .qd-data:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.qd-label-form { flex: 1 1 96px; min-width: 96px; margin: 0; }
+.qd-label-in { width: 100%; height: 24px; padding: 0 6px; border: 1px dashed var(--line); border-radius: 999px; background: transparent; color: var(--ink); font: inherit; font-size: 12px; }
+.qd-label-in::placeholder { color: var(--ink-3); }
+.qd-prazo-t { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.qd-data { min-height: 28px; padding: 2px 6px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--ink); font: inherit; }
+.qd-prazo-tom { color: var(--ink-3); font-size: 12px; }
+.qd-prazo-tom[data-tom="vencida"] { color: var(--danger); }
+.qd-prazo-tom[data-tom="hoje"] { color: var(--warning); }
+.qd-prazo-limpar { font-size: 12px; }
+.qd-t-campos { display: grid; gap: 8px; margin: 10px 0 4px; }
+@media (hover: none) and (pointer: coarse) {
+  .qd-label { height: 32px; font-size: 14px; }
+  .qd-label-x { width: 44px; height: 44px; margin: -6px -8px -6px -10px; }
+  .qd-label-in, .qd-data { min-height: 44px; height: 44px; font-size: 16px; }
+  .qd-prazo-limpar { min-height: 44px; padding: 0 6px; }
+}
+/* 2026-11-10 (o wakeup do Multica): a espera num chip pequeno com sino, contorno e sem fundo; "você" com a tinta forte. */
+.qd-espera { display: inline-flex; align-items: center; gap: 4px; min-width: 0; padding: 1px 7px 1px 6px; border: 1px solid var(--line); border-radius: 999px;
+  font-size: 11.5px; line-height: 1.5; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qd-espera > span { overflow: hidden; text-overflow: ellipsis; }
+.qd-espera-ic { flex: none; color: var(--ink-3); }
+.qd-espera-voce { color: var(--ink); border-color: var(--line-strong); }
+.qd-espera-voce .qd-espera-ic { color: var(--signal); }
+.qd-card-l1 .qd-espera { margin-left: auto; }

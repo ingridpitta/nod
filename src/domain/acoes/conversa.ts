@@ -74,8 +74,8 @@ export const ACOES_CONVERSA = [
   // ADA-18: ganha a visão do celular e fica viva pelo gerir_quadro (op exibir), com o mesmo executor do PUT.
   {
     id: "preferencias.exibir_quadro",
-    titulo: "Mudar o Exibir do quadro (a visão no celular, as recolhidas e o compacto)",
-    schema: objeto({ quadro: PROPRIEDADES_QUADRO.quadro, visao: PROPRIEDADES_QUADRO.visao, recolhidas: PROPRIEDADES_QUADRO.recolhidas, compacto: PROPRIEDADES_QUADRO.compacto }, []),
+    titulo: "Mudar o Exibir do quadro (a visão no celular, as recolhidas, o compacto e as Opções do quadro)",
+    schema: objeto({ quadro: PROPRIEDADES_QUADRO.quadro, visao: PROPRIEDADES_QUADRO.visao, recolhidas: PROPRIEDADES_QUADRO.recolhidas, compacto: PROPRIEDADES_QUADRO.compacto, vista: PROPRIEDADES_QUADRO.vista, agrupar: PROPRIEDADES_QUADRO.agrupar, ordenar: PROPRIEDADES_QUADRO.ordenar, inverter: PROPRIEDADES_QUADRO.inverter, ocultas: PROPRIEDADES_QUADRO.ocultas, propriedades: PROPRIEDADES_QUADRO.propriedades }, []),
     risco: "muda",
     cartaoNoChat: false,
     chat: { estado: "vivo", via: { ferramenta: "gerir_quadro" }, contrato: "tests/integration/paridade-quadro.test.ts" },

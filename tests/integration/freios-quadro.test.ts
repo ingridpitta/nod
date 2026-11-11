@@ -88,7 +88,7 @@ describeIntegracao("freios e travas do quadro (NOD-419)", () => {
       const recusou = await lote(d, host, [{ tipo: "nao_e_comigo", tarefa: "Login", motivo: "é de design" }], { tipo: "agente", agenteId: ada });
       const recusa = ok(recusou);
       const t = recusa.quadro!.tarefas[0]!;
-      expect(t).toMatchObject({ status: "voce", agenteId: null, pergunta: expect.stringContaining("é de design") });
+      expect(t).toMatchObject({ status: "revisao", esperaPessoa: true, agenteId: null, pergunta: expect.stringContaining("é de design") });
       expect(t.movimentos![0]).toMatchObject({ tipo: "nao_e_comigo", motivo: "é de design", autorNome: `Ada ${s}` });
       expect(await d.repos.quadroComentarios.daTarefa(t.id)).toMatchObject([{ texto: expect.stringContaining("é de design") }]);
       // Revisão 4 do PR #629 + NOD-420: sem responsável, o aviso de "Precisa de você" sai depois da janela, pela conversa do
@@ -105,7 +105,7 @@ describeIntegracao("freios e travas do quadro (NOD-419)", () => {
       const { d, host, ada } = await montar(trx);
       ok(await lote(d, host, [{ tipo: "criar_quadro" }, { tipo: "criar_tarefa", titulo: "Login", status: "fazendo", agente: ada }]));
       const r = await executar(d, aplicarLoteQuadro, { autor: { tipo: "agente", agenteId: ada }, anfitriaoId: host, executor: "catcher", ops: [{ tipo: "nao_e_comigo", tarefa: "Login", motivo: "é de design" }], origemConfiavel: false });
-      expect(ok(r).quadro!.tarefas[0]).toMatchObject({ status: "voce", agenteId: null });
+      expect(ok(r).quadro!.tarefas[0]).toMatchObject({ status: "fazendo", esperaPessoa: true, agenteId: null });
       expect(r.events.some((e) => e.kind === "mensagem_criada")).toBe(false);
     });
   });
@@ -366,7 +366,8 @@ describeIntegracao("freios e travas do quadro (NOD-419)", () => {
         await trx`update quadro_movimentos set criado_em = criado_em - interval '30 hours' where tarefa_id = ${laco.id}`;
         const passo = depois(ada, xu)[i]!;
         const meio = ok(await lote(d, host, passo.ops, { tipo: "agente", agenteId: passo.autor })).quadro!.tarefas[0]!;
-        expect(["bloqueado", "voce"]).toContain(meio.status);
+        // ADR-162: esperando a pessoa, o DTO traz a coluna de onde veio e a marca.
+        expect(meio.status === "bloqueado" || meio.esperaPessoa === true).toBe(true);
         for (const agenteId of [ada, xu]) {
           expect((await lote(d, host, [{ tipo: "mudar_tarefa", tarefa: "Login", status: "revisao", agente: agenteId }], { tipo: "agente", agenteId })).data).toMatchObject({ ok: false, detalhe: expect.stringContaining("só a pessoa a tira de lá") });
         }
@@ -522,7 +523,8 @@ describeIntegracao("freios e travas do quadro (NOD-419)", () => {
       const reatribuida = ok(await loteComo(d, host, [{ tipo: "nao_e_comigo", tarefa: "Login", motivo: "não é meu" }, { tipo: "mudar_tarefa", tarefa: "Login", agente: xu }], { tipo: "agente", agenteId: ada }, { autorNaConversa: true }));
       const t = reatribuida.quadro!.tarefas[0]!;
       expect(t).toMatchObject({ agenteId: xu });
-      expect(await d.repos.quadroComentarios.daTarefa(t.id)).toEqual([]);
+      // ADR-162: a recusa coberta não deixa comentário de agente; a espera que ficou é explicada pelo sistema.
+      expect((await d.repos.quadroComentarios.daTarefa(t.id)).filter((c) => c.autor.tipo !== "sistema")).toEqual([]);
     });
   });
 
@@ -532,7 +534,7 @@ describeIntegracao("freios e travas do quadro (NOD-419)", () => {
       ok(await lote(d, host, [{ tipo: "criar_quadro" }]));
       const r = ok(await lote(d, host, [{ tipo: "criar_tarefa", titulo: "Login", status: "fazendo", agente: ada }, { tipo: "nao_e_comigo", tarefa: "Login", motivo: "é de design" }], { tipo: "agente", agenteId: ada }));
       const t = r.quadro!.tarefas[0]!;
-      expect(t).toMatchObject({ status: "voce", agenteId: null });
+      expect(t).toMatchObject({ status: "fazendo", esperaPessoa: true, agenteId: null });
       expect(await d.repos.quadroComentarios.daTarefa(t.id)).toMatchObject([{ tarefaId: t.id, texto: expect.stringContaining("é de design") }]);
     });
   });

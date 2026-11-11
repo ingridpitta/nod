@@ -16,12 +16,12 @@ const item = (acao: string, valor: string, rotulo: string, marcado: boolean, ext
   `<li><button type="button" class="qd-fo-op" role="radio" aria-checked="${marcado}" data-folha-acao="${esc(acao)}" data-valor="${esc(valor)}"${extra}>` +
   `<span class="qd-fo-rot">${esc(rotulo)}</span>${marcado ? MARCA : ""}</button></li>`;
 
-/** Status: as colunas do quadro por grupo; "Precisa de você" só aparece se a tarefa já está lá (como no select). */
+/** Status: as colunas do quadro por grupo (ADR-162: sem "Precisa de você"). */
 export function folhaDeStatus(t: Pick<TarefaDto, "status">, colunas: readonly Pick<ColunaDto, "id" | "nome" | "grupo">[]): string {
   const grupos = opcoesDeStatus(colunas);
   const conhecida = colunas.some((c) => c.id === t.status);
   return grupos.map((g) => {
-    const itens = g.colunas.filter((c) => c.id !== "voce" || c.id === t.status).map((c) => item("status", c.id, c.nome, c.id === t.status)).join("");
+    const itens = g.colunas.map((c) => item("status", c.id, c.nome, c.id === t.status)).join("");
     return itens ? `<div class="qd-fo-g" role="radiogroup" aria-label="${esc(g.grupo)}"><p class="qd-fo-gtit">${esc(g.grupo)}</p><ul class="qd-fo-ops">${itens}</ul></div>` : "";
   }).join("") + (conhecida ? "" : `<ul class="qd-fo-ops">${item("status", t.status, t.status, true)}</ul>`);
 }
@@ -37,18 +37,16 @@ export function folhaDeCancelar(titulo: string): string {
 }
 
 /**
- * Responsável: busca, "Sem responsável" e os bots. Em "Precisa de você" o atual é Você (o responsável efetivo, como no
- * chip): nenhum bot aparece marcado. Sem a lista de bots, só leitura (quem chama não abre a folha).
+ * Responsável: busca, "Sem responsável" e os bots. ADR-162: a tarefa que espera você segue com o responsável dela. Sem a
+ * lista de bots, só leitura (quem chama não abre a folha).
  */
 export function folhaDoResponsavel(t: Pick<TarefaDto, "status" | "agenteId" | "agenteNome">, bots: readonly { id: string; nome: string }[]): string {
-  const comVoce = t.status === "voce";
   const lista = t.agenteId && !bots.some((b) => b.id === t.agenteId) ? [...bots, { id: t.agenteId, nome: t.agenteNome ?? "Outro bot" }] : bots;
   const busca = lista.length > 6
     ? `<label class="qd-sr" for="qd-fo-busca">Buscar bot</label><input id="qd-fo-busca" class="qd-fo-campo" type="search" data-folha-busca placeholder="Buscar" autocomplete="off">` : "";
-  const voce = comVoce ? `<ul class="qd-fo-ops">${`<li><span class="qd-fo-op qd-fo-op-fixo" role="radio" aria-checked="true" aria-disabled="true"><span class="qd-fo-rot">Você</span>${MARCA}</span></li>`}</ul>` : "";
-  const ninguem = `<ul class="qd-fo-ops">${item("agente", "", "Sem responsável", !comVoce && !t.agenteId)}</ul>`;
-  const bots_ = lista.map((b) => item("agente", b.id, b.nome, !comVoce && b.id === t.agenteId, ` data-busca="${esc(b.nome.toLowerCase())}"`)).join("");
-  return `${busca}<div role="radiogroup" aria-label="Responsável">${voce}${ninguem}${bots_ ? `<p class="qd-fo-gtit">Bots</p><ul class="qd-fo-ops">${bots_}</ul>` : ""}</div>`;
+  const ninguem = `<ul class="qd-fo-ops">${item("agente", "", "Sem responsável", !t.agenteId)}</ul>`;
+  const bots_ = lista.map((b) => item("agente", b.id, b.nome, b.id === t.agenteId, ` data-busca="${esc(b.nome.toLowerCase())}"`)).join("");
+  return `${busca}<div role="radiogroup" aria-label="Responsável">${ninguem}${bots_ ? `<p class="qd-fo-gtit">Bots</p><ul class="qd-fo-ops">${bots_}</ul>` : ""}</div>`;
 }
 
 /** O filtro da busca do responsável: o que não casa fica escondido (o "Sem responsável" sempre fica). */

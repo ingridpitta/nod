@@ -11,7 +11,7 @@ import { COLUNAS_PADRAO, colunasDto } from "../../../src/domain/colunas.ts";
 const MAL = `<img src=x onerror="alert(1)">"'&`;
 const t = (id: string, extra: Partial<TarefaDto> = {}): TarefaDto => ({
   id, quadroId: "q1", titulo: `Tarefa ${id}`, descricao: "", status: "afazer", voltarPara: null, agenteId: "a", ordem: 1, linearId: null, linearUrl: null, prUrl: null,
-  pergunta: null, resposta: null, deFora: false, turnoId: null, criadoEm: 1, mudadoEm: 1, terminadaEm: null, execucao: null, agenteNome: "Ada", numero: null, codigo: `ADA-${id}`, branch: "", ...extra,
+  pergunta: null, resposta: null, deFora: false, turnoId: null, criadoEm: 1, mudadoEm: 1, terminadaEm: null, execucao: null, agenteNome: "Ada", numero: null, prioridade: "sem", codigo: `ADA-${id}`, branch: "", ...extra,
 });
 const q = (tarefas: TarefaDto[]): QuadroDto => ({
   id: "q1", agenteId: "a", nome: null, projetoId: null, prefixo: null, modoConversa: "individual", meta: "Meta", prazo: null, cumpridoEm: null, resumo: null, criadoEm: 1, atualizadoEm: 1, metaDesde: 1, agenteNome: "Ada",
@@ -89,13 +89,13 @@ describe("ADA-6 critério 3: os recibos com ação", () => {
 
 describe("ADA-6 critério 4: Responder sem fundo cheio", () => {
   it("o botão do Responder é leve, não primário", () => {
-    const h = tarefaAberta({ t: t("1", { status: "voce", pergunta: "Qual?" }), q: q([]), agente });
+    const h = tarefaAberta({ t: t("1", { status: "fazendo", esperaPessoa: true, pergunta: "Qual?" }), q: q([]), agente });
     expect(h).toMatch(/class="qd-bt qd-bt-leve">Responder</);
     expect(h).not.toMatch(/qd-bt-pri">Responder/);
   });
 
   it("o Enviar do Responder no card e na linha também é leve (revisão 3)", () => {
-    const c = { id: "c1", titulo: "Trocar o token", status: "voce", responder: 4000 } as unknown as Parameters<typeof card>[0];
+    const c = { id: "c1", titulo: "Trocar o token", status: "bloqueado", responder: 4000 } as unknown as Parameters<typeof card>[0];
     for (const h of [String(card(c)), String(linha(c))]) {
       expect(h).toMatch(/class="qd-bt qd-bt-leve qd-card-resp-bt"/);
       expect(h).not.toMatch(/qd-bt-pri[^"]*qd-card-resp-bt/);
@@ -106,11 +106,11 @@ describe("ADA-6 critério 4: Responder sem fundo cheio", () => {
 describe("ADA-6 critério 5: até 3 sugestões do quadro na pílula vazia", () => {
   it("sem quadro ou com tarefa aberta, nenhuma", () => {
     expect(sugestoesDoQuadro(null, null)).toEqual([]);
-    expect(sugestoesDoQuadro(q([t("1", { status: "voce" })]), "1")).toEqual([]);
+    expect(sugestoesDoQuadro(q([t("1", { status: "fazendo", esperaPessoa: true })]), "1")).toEqual([]);
   });
 
   it("no máximo 3: a que espera a pessoa abre a tarefa, a travada pergunta, e as gerais completam", () => {
-    const s = sugestoesDoQuadro(q([t("1", { status: "voce" }), t("2", { status: "bloqueado" }), t("3")]), null);
+    const s = sugestoesDoQuadro(q([t("1", { status: "fazendo", esperaPessoa: true }), t("2", { status: "bloqueado" }), t("3")]), null);
     expect(s).toHaveLength(MAX_SUGESTOES);
     expect(s[0]).toEqual({ tipo: "abrir", rotulo: "Responder ADA-1", tarefaId: "1" });
     expect(s[1]).toMatchObject({ tipo: "texto", rotulo: "Por que ADA-2 travou?" });
@@ -120,14 +120,14 @@ describe("ADA-6 critério 5: até 3 sugestões do quadro na pílula vazia", () =
   });
 
   it("revisão 4: no quadro com várias pessoas, a pendência que outra pessoa decide não vira Responder", () => {
-    const outra = t("1", { status: "voce", decide: { pessoaId: "p2", nome: "Bia", voce: false, saiu: null } });
+    const outra = t("1", { status: "fazendo", esperaPessoa: true, decide: { pessoaId: "p2", nome: "Bia", voce: false, saiu: null } });
     expect(sugestoesDoQuadro(q([outra]), null).some((x) => x.tipo === "abrir")).toBe(false);
-    const minha = t("2", { status: "voce", decide: { pessoaId: "p1", nome: "Eu", voce: true, saiu: null } });
+    const minha = t("2", { status: "fazendo", esperaPessoa: true, decide: { pessoaId: "p1", nome: "Eu", voce: true, saiu: null } });
     expect(sugestoesDoQuadro(q([outra, minha]), null)[0]).toEqual({ tipo: "abrir", rotulo: "Responder ADA-2", tarefaId: "2" });
   });
 
   it("usa só o código da tarefa, nunca o título (que pode ter vindo de fora)", () => {
-    const s = sugestoesDoQuadro(q([t("1", { status: "voce", titulo: MAL }), t("2", { status: "bloqueado", titulo: MAL })]), null);
+    const s = sugestoesDoQuadro(q([t("1", { status: "fazendo", esperaPessoa: true, titulo: MAL }), t("2", { status: "bloqueado", titulo: MAL })]), null);
     expect(JSON.stringify(s)).not.toContain("onerror");
   });
 
@@ -144,7 +144,7 @@ describe("ADA-6 critério 5: até 3 sugestões do quadro na pílula vazia", () =
   });
 
   it("revisão M1: o id do Linear e o código provisório não viram chip; sem código do quadro, o Abrir tem rótulo neutro", () => {
-    const s = sugestoesDoQuadro(q([t("1", { status: "voce", codigo: "", linearId: "ENG-9" }), t("2", { status: "bloqueado", codigo: "ENG-10", linearId: "ENG-10" }), t("3", { status: "bloqueado", codigo: "#ab12" })]), null);
+    const s = sugestoesDoQuadro(q([t("1", { status: "fazendo", esperaPessoa: true, codigo: "", linearId: "ENG-9" }), t("2", { status: "bloqueado", codigo: "ENG-10", linearId: "ENG-10" }), t("3", { status: "bloqueado", codigo: "#ab12" })]), null);
     expect(s[0]).toEqual({ tipo: "abrir", rotulo: "Responder o que espera você", tarefaId: "1" });
     expect(JSON.stringify(s)).not.toMatch(/ENG-|#ab12/);
     expect(s.map((x) => x.rotulo)).not.toContain("Por que ENG-10 travou?");

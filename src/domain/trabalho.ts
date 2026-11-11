@@ -342,9 +342,11 @@ export function esperaDoTrabalho(t: Pick<TrabalhoDto, "estado" | "turnoVivoId"> 
 /**
  * Quem pode abrir task (`abrir_task`, #193): a conversa (turno sem trabalho) e o trabalho de rotina sem mãe
  * (profundidade 1: a rotina abre, as filhas não). Trabalho da pessoa, de colega ou da rede não abre: ele já é a task.
+ * revisto em 2026-11-10 (merge da ADA-16 com a ADA-232/ADA-28, ADR-163): o trabalho da tarefa do quadro (origem
+ * `quadro`) abre, como abria o turno da tarefa antes de ter trabalho próprio — a frente nasce da tarefa (`tarefa_id`).
  */
 export function podeAbrirTask(trabalho: { origem: OrigemTrabalho; trabalhoMaeId: string | null } | null): boolean {
-  return trabalho === null || (trabalho.origem === "rotina" && trabalho.trabalhoMaeId === null);
+  return trabalho === null || ((trabalho.origem === "rotina" || trabalho.origem === "quadro") && trabalho.trabalhoMaeId === null);
 }
 
 /**

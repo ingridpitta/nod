@@ -62,13 +62,15 @@ export const ICONE = {
 
 /* ---------- Estado do trabalho, aviso e avatar ---------- */
 
-export type EstadoDoTrabalho = "rodando" | "fila" | "falhou";
+export type EstadoDoTrabalho = "rodando" | "fila" | "esperando" | "falhou";
+// ADA-16 (ADR-163): cada tarefa roda num trabalho próprio, sem teto; a fila é a da máquina pegar, a da mesma tarefa ou a do portão.
 const FRASE: Record<EstadoDoTrabalho, { curta: string; longa: string }> = {
   rodando: { curta: "", longa: "o agente está trabalhando nela agora" },
-  fila: { curta: "na fila", longa: "esperando o agente terminar a anterior" },
+  fila: { curta: "na fila", longa: "esperando a máquina começar; o motivo, se houver, aparece ao lado" },
+  esperando: { curta: "esperando", longa: "esperando a CI, um colega ou um comando" },
   falhou: { curta: "falhou", longa: "falhou e vai tentar de novo" },
 };
-const VERBO: Record<EstadoDoTrabalho, string> = { rodando: "executando", fila: "na fila", falhou: "falhou" };
+const VERBO: Record<EstadoDoTrabalho, string> = { rodando: "executando", fila: "na fila", esperando: "esperando", falhou: "falhou" };
 
 /** O anel com a inicial: uma pessoa; você, cheio. */
 export function anel(iniciais: string, rotulo: string, voce = false): Html {
@@ -105,6 +107,8 @@ function emudecer(av: Html): string {
 const SELO: Partial<Record<EstadoDoTrabalho, string>> = {
   falhou: '<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true"><circle cx="6" cy="6" r="6" fill="var(--danger)"/><path d="m4 4 4 4M8 4 4 8" stroke="var(--qd-card, var(--surface))" stroke-width="1.6" stroke-linecap="round"/></svg>',
   fila: '<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true"><circle cx="6" cy="6" r="5.25" fill="var(--qd-card, var(--surface))" stroke="var(--ink-3)" stroke-width="1.3"/><path d="M6 3.4V6l1.7 1.1" fill="none" stroke="var(--ink-3)" stroke-width="1.3" stroke-linecap="round"/></svg>',
+  // ADA-16: esperando (a CI, um colega, um comando) é uma pausa, não um relógio de fila: dois traços.
+  esperando: '<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true"><circle cx="6" cy="6" r="5.25" fill="var(--qd-card, var(--surface))" stroke="var(--ink-3)" stroke-width="1.3"/><path d="M4.8 4v4M7.2 4v4" stroke="var(--ink-3)" stroke-width="1.3" stroke-linecap="round"/></svg>',
 };
 
 /**
@@ -132,8 +136,11 @@ export interface Card {
   estadoTexto?: string;
   /** Bloqueado: o motivo vai na linha 1. */
   motivo?: string;
-  /** Precisa de você: a pergunta, em azul, na linha 3. */
-  voce?: string;
+  /**
+   * ADR-162 (fluxo Multica): o bot perguntou e a tarefa espera você, na coluna dela. O card só mostra "te perguntou",
+   * pequeno e cinza (a única concessão além do Multica; tirar é apagar este campo); a pergunta vai no rótulo e no comentário.
+   */
+  perguntou?: string;
   tags?: string[];
   /** NOD-421: o PR do card com o ponto discreto do estado (antes das tags); o estado em texto vai no title e no qd-sr. */
   pr?: { texto: string; tom: "pendente" | "ok" | "falhou" | "conflito" | "mergeado" | "fechado"; titulo: string };
@@ -159,9 +166,38 @@ export interface Card {
   rodandoHa?: string;
   /** ADA-232: o bot marcou a volta; a linha 1 diz "Esperando · <motivo>" (sem motivo, só "Esperando"). */
   esperando?: { motivo: string | null };
+  /**
+   * 2026-11-10 (o wakeup do Multica: wait.reply_from, wait.pr_checks, wait.time): a espera da tarefa num chip com sino, na
+   * linha de cima do card e no fim da linha da lista — "Esperando você responder", "Esperando a CI", "Volta às 14:00".
+   * Ganha do "te perguntou" e do "Esperando · motivo".
+   */
+  espera?: { texto: string; voce: boolean };
+  /** Quadro minimalista (2026-11-10): o ícone de prioridade antes do código (já pronto, web/telas/opcoes-quadro.ts). */
+  prioridade?: Html;
+  /** A descrição em até duas linhas, debaixo do título (propriedade do card ligada). */
+  descricao?: string;
+  /** "Atualizado há 1 h", à direita do rodapé (quando não há o "parada há" da coluna). */
+  atualizado?: string;
+  /** Quantos comentários a tarefa tem (o balãozinho do rodapé; 0 não aparece). */
+  comentarios?: number;
+  /** As labels da tarefa (outra frente cria o campo): o nome e, se houver, a cor do pontinho. */
+  labels?: { nome: string; cor?: string | null }[];
+  /** O prazo da tarefa ("até 12 nov"); vencida = em perigo (a única cor). */
+  prazo?: { texto: string; vencida: boolean };
 }
 
 /** ADA-232: a frase da linha 1 de quem marcou a volta (o motivo vem do bot, sempre escapado). */
+/** Labels e Prazo no card (só quando a tarefa os traz). A cor da label só entra se for um #rgb/#rrggbb (dado de fora). */
+function extrasDoCard(c: Card): string {
+  const cor = (x?: string | null): string => (x && /^#[0-9a-f]{3,8}$/i.test(x) ? ` style="--qm-cor:${x}"` : "");
+  const paleta = (x?: string | null): string => (x && /^[a-z]+$/.test(x) ? ` class="qd-label-ponto" data-cor="${esc(x)}"` : "");
+  const labels = (c.labels ?? []).map((l) => `<span class="qd-tag qm-label"${cor(l.cor)}><i${paleta(l.cor)} aria-hidden="true"></i>${esc(l.nome)}</span>`).join("");
+  const prazo = c.prazo ? `<span class="qd-tag qm-prazo${c.prazo.vencida ? " qm-vencida" : ""}" title="${esc(c.prazo.vencida ? `Vencida: ${c.prazo.texto}` : `Prazo: ${c.prazo.texto}`)}">${esc(c.prazo.texto)}${c.prazo.vencida ? '<span class="qd-sr">, vencida</span>' : ""}</span>` : "";
+  return labels + prazo;
+}
+
+const COMENTARIO = svg('<path d="M4.5 18.5V6.5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2V14a2 2 0 0 1-2 2H8z"/>', "qm-ic-com", 12, 1.8);
+
 export const fraseEsperando = (motivo: string | null): string => (motivo ? `Esperando · ${motivo}` : "Esperando");
 
 /** O "Mover para…" do card (ADR-142, revisão do PR #622): leva ao mesmo lugar que arrastar, sem precisar de mouse. */
@@ -181,7 +217,7 @@ export function avataresDoCard(c: Card): { html: Html; rodam: QuemRoda[] } {
   const rodam = quemRodaNoCard(c);
   const r = c.responsavel;
   const dele = r ? rodam.find((q) => q.nome === r.nome) : undefined;
-  const k: EstadoDoTrabalho | null = dele ? "rodando" : !c.motivo && (c.estado === "fila" || c.estado === "falhou") ? c.estado : null;
+  const k: EstadoDoTrabalho | null = dele ? "rodando" : !c.motivo && (c.estado === "fila" || c.estado === "esperando" || c.estado === "falhou") ? c.estado : null;
   const base = r ? avatar(dele ? { ...dele, avatar: r.avatar, estado: "rodando" } : { avatar: r.avatar, nome: r.nome, estado: k, acao: k ? c.estadoTexto : undefined }) : "";
   const outros = rodam.filter((q) => q !== dele).map((q) => avatar({ ...q, estado: "rodando", sobre: true }));
   return { html: juntar([base, ...outros]), rodam };
@@ -191,20 +227,23 @@ function estadoDoCard(c: Card): Html {
   if (c.motivo) {
     return h(`<span class="qd-estado qd-e-bloqueado" title="${esc(`bloqueada: ${c.motivo}`)}">${ICONE.pausa}<span>${esc(c.motivo)}</span></span>`);
   }
+  if (c.espera) return chipDeEspera(c.espera);
   if (c.esperando) {
     const f = fraseEsperando(c.esperando.motivo);
     return h(`<span class="qd-estado qd-e-esperando" title="${esc(`o bot volta sozinho: ${f}`)}"><span>${esc(f)}</span></span>`);
   }
-  if (c.estado === "rodando") return seloTrabalhando(c.rodandoHa);
+  if (c.estado === "rodando") return seloTrabalhando(c.rodandoHa, c.responsavel?.avatar);
   if (!c.estado) return h("");
   const f = FRASE[c.estado];
-  return h(`<span class="qd-estado qd-e-${c.estado}" title="${esc(f.longa)}"><span>${esc(c.estadoTexto || f.curta)}</span></span>`);
+  return h(`<span class="qd-estado qd-e-${c.estado}" title="${esc(c.estadoTexto ? `${c.estadoTexto}: ${f.longa}` : f.longa)}"><span>${esc(c.estadoTexto || f.curta)}</span></span>`);
 }
 
 /** NOD-460: o selo discreto de quem roda agora (bolinha verde parada, sem pulsar), com há quanto tempo. */
-export function seloTrabalhando(ha?: string): Html {
+export function seloTrabalhando(ha?: string, av?: Html): Html {
   const txt = ha ? `Trabalhando · ${ha}` : "Trabalhando";
-  return h(`<span class="qd-selo" title="${esc(ha ? `Trabalhando ${ha}` : "Trabalhando agora")}"><i aria-hidden="true"></i>${esc(txt)}</span>`);
+  // Quadro minimalista (2026-11-10): com o avatar de quem roda (pequeno, mudo), como o "Working" do Multica.
+  const marca = av ? `<span class="qm-selo-av" aria-hidden="true">${emudecer(av)}</span>` : `<i aria-hidden="true"></i>`;
+  return h(`<span class="qd-selo${av ? " qm-selo" : ""}" title="${esc(ha ? `Trabalhando ${ha}` : "Trabalhando agora")}">${marca}${esc(txt)}</span>`);
 }
 
 /** NOD-420 (revisão 4 do PR #624): o que o leitor de tela ouve da tarefa parada além do prazo da coluna. */
@@ -223,10 +262,10 @@ export function rotuloDoCard(c: Card): string {
   return [
     c.codigo ?? c.id, c.titulo, c.responsavel?.nome,
     c.motivo ? `bloqueada: ${c.motivo}` : "",
-    c.voce ? `precisa de você: ${c.voce}` : "",
-    !c.motivo && c.esperando ? fraseEsperando(c.esperando.motivo) : "",
+    c.espera ? `${c.espera.texto}${c.perguntou ? `: ${c.perguntou}` : ""}` : c.perguntou !== undefined ? `te perguntou${c.perguntou ? `: ${c.perguntou}` : ""}` : "",
+    !c.motivo && !c.espera && c.esperando ? fraseEsperando(c.esperando.motivo) : "",
     ...rodam.map((q) => rotuloDoAvatar(q.nome, "rodando", q.acao, q.tempo)),
-    !c.motivo && !c.esperando && c.estado && c.estado !== "rodando" ? FRASE[c.estado].longa : "",
+    !c.motivo && !c.esperando && !c.espera && c.estado && c.estado !== "rodando" ? FRASE[c.estado].longa : "",
     c.aviso ? c.aviso.texto : "",
     c.atrasada ? PASSOU_DO_PRAZO : "",
   ].filter(Boolean).join(", ");
@@ -246,23 +285,37 @@ export function formDoResponder(c: Card, onde: "card" | "linha"): string {
 
 /**
  * O card: branco, 4 linhas. 1) id + o que não é execução (na fila, falhou, o motivo do bloqueio) ou o aviso; 2) o título
- * (até 2 linhas), que é o botão — o clique vale no card inteiro; 3) as tags ou a pergunta de quem precisa de você;
- * 4) os avatares (com o anel de quem roda) e quando mudou.
+ * (até 2 linhas), que é o botão — o clique vale no card inteiro; 3) as tags; 4) os avatares (com o anel de quem roda),
+ * o "te perguntou" (ADR-162) e quando mudou.
  */
 export function card(c: Card): Html {
   const av = avataresDoCard(c);
   const r = c.responsavel;
   const quem = r || av.rodam.length ? `<span class="qd-quem"><span class="qd-avs">${av.html}</span><span>${esc(r?.nome ?? "")}</span></span>` : "";
-  const quando = quandoDoCard(c);
+  const quando = `${perguntouDoCard(c)}${quandoDoCard(c) || (c.atualizado ? `<span class="qd-quando qm-atualizado">${esc(c.atualizado)}</span>` : "")}`;
+  const coms = c.comentarios ? `<span class="qm-coms" title="${esc(`${c.comentarios} ${c.comentarios === 1 ? "comentário" : "comentários"}`)}">${COMENTARIO}<span>${c.comentarios}</span><span class="qd-sr"> ${c.comentarios === 1 ? "comentário" : "comentários"}</span></span>` : "";
   const resp = formDoResponder(c, "card");
   const l1 = c.aviso ? aviso(c.aviso) : estadoDoCard(c);
-  const l3 = c.voce ? `<span class="qd-voce-frase">${esc(c.voce)}</span>`
-    : c.pr || c.tags?.length ? `<span class="qd-tags">${c.pr ? `<span class="qd-tag qd-tag-pr" title="${esc(c.pr.titulo)}"><i class="qd-pr-ponto qd-pr-${c.pr.tom}" aria-hidden="true"></i>${esc(c.pr.texto)}<span class="qd-sr"> (${esc(c.pr.titulo)})</span></span>` : ""}${(c.tags ?? []).map((t) => `<span class="qd-tag">${esc(t)}</span>`).join("")}</span>` : "";
-  const classe = cl("qd-card", c.menu && "qd-com-menu", c.motivo && "qd-bloqueado", c.voce && "qd-precisa", c.brilho && "qd-brilho", c.aviso && "qd-com-aviso", c.classe && esc(c.classe));
+  const l3 = c.pr || c.tags?.length ? `<span class="qd-tags">${c.pr ? `<span class="qd-tag qd-tag-pr" title="${esc(c.pr.titulo)}"><i class="qd-pr-ponto qd-pr-${c.pr.tom}" aria-hidden="true"></i>${esc(c.pr.texto)}<span class="qd-sr"> (${esc(c.pr.titulo)})</span></span>` : ""}${(c.tags ?? []).map((t) => `<span class="qd-tag">${esc(t)}</span>`).join("")}${extrasDoCard(c)}</span>` : extrasDoCard(c) ? `<span class="qd-tags">${extrasDoCard(c)}</span>` : "";
+  const classe = cl("qd-card", c.menu && "qd-com-menu", c.motivo && "qd-bloqueado", c.brilho && "qd-brilho", c.aviso && "qd-com-aviso", c.classe && esc(c.classe));
   return h(`<li class="${classe}" data-tarefa="${esc(c.id)}"${c.arrastavel ? ' draggable="true"' : ""}>` +
-    `<div class="qd-card-l1"><span class="qd-id">${c.codigoHtml ?? esc(c.codigo ?? c.id)}</span>${l1}</div>` +
+    `<div class="qd-card-l1">${c.prioridade ?? ""}<span class="qd-id">${c.codigoHtml ?? esc(c.codigo ?? c.id)}</span>${l1}</div>` +
     `<button type="button" class="qd-card-bt" data-act="abrir-tarefa" data-id="${esc(c.id)}" aria-label="${esc(rotuloDoCard(c))}"><span class="qd-card-tit">${c.tituloHtml ?? esc(c.titulo)}</span></button>` +
-    l3 + resp + (quem || quando ? `<div class="qd-card-pe">${quem}${quando}</div>` : "") + botaoDeMover(c) + (c.menu ?? "") + `</li>`);
+    (c.descricao ? `<p class="qm-desc">${esc(c.descricao)}</p>` : "") +
+    l3 + resp + (quem || quando || coms ? `<div class="qd-card-pe">${quem}${coms}${quando}</div>` : "") + botaoDeMover(c) + (c.menu ?? "") + `</li>`);
+}
+
+/** ADR-162: o sinal discreto da tarefa que espera você. 2026-11-10: com o chip da espera (`espera`), o chip fala por ele. */
+export function perguntouDoCard(c: Pick<Card, "perguntou" | "espera">): string {
+  if (c.espera) return "";
+  return c.perguntou !== undefined ? `<span class="qd-perguntou">te perguntou</span>` : "";
+}
+
+const SINO = '<svg class="qd-espera-ic" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>';
+
+/** 2026-11-10: o chip da espera (sino + frase), pequeno, com contorno e sem fundo; o de "você" com a tinta mais forte. */
+export function chipDeEspera(e: { texto: string; voce: boolean }): Html {
+  return h(`<span class="${cl("qd-espera", e.voce && "qd-espera-voce")}" title="${esc(e.texto)}">${SINO}<span>${esc(e.texto)}</span></span>`);
 }
 
 /* ---------- Coluna, quadro, barra e meta ---------- */
@@ -305,6 +358,8 @@ export interface Coluna {
   classe?: string;
   /** NOD-448 / NOD-429: tira presa à direita (o `right` dela, quando há outras presas depois). */
   presa?: string;
+  /** Quadro minimalista (agrupar por responsável): o avatar no lugar do ícone de status. */
+  avatar?: Html;
 }
 
 export const iconeDe = (c: Pick<Coluna, "status" | "icone" | "pessoa">): Html => {
@@ -315,7 +370,7 @@ export const iconeDe = (c: Pick<Coluna, "status" | "icone" | "pessoa">): Html =>
 export function coluna(c: Coluna): Html {
   const cards = c.cards ?? [];
   const n = c.n ?? cards.length;
-  const ic = iconeDe(c);
+  const ic = c.avatar ? h(`<span class="qm-av qm-col-av" aria-hidden="true">${emudecer(c.avatar)}</span>`) : iconeDe(c);
   const grupo = c.grupo ?? GRUPO_DO_STATUS[c.status as Status] ?? "iniciado";
   const id = esc(c.status);
   const presa = c.presa !== undefined ? ` style="right: ${esc(c.presa)}"` : "";
@@ -363,7 +418,7 @@ export type { Filtro } from "../lib/vista-do-quadro.ts";
 /** NOD-460: um chip de agente da barra (o avatar, o nome e quantas tarefas ele tem no quadro). */
 export interface ChipDaBarra { agenteId: string; avatar: Html; nome: string; n: number }
 /** NOD-460: o Exibir (por pessoa e por quadro). `recolhidas` = mostrar as tiras das colunas recolhidas. */
-export interface ExibirDaBarra { recolhidas: boolean; compacto: boolean; aberto?: boolean }
+export type ExibirDaBarra = { recolhidas: boolean; compacto: boolean; aberto?: boolean } & import("../../src/contracts/quadro-opcoes.ts").OpcoesDoQuadro;
 
 const ICONE_BUSCA = svg('<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>', "qd-ic-busca", 15, 1.9);
 const ICONE_EXIBIR = svg('<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>', "qd-ic-exibir", 15, 1.8);
@@ -446,14 +501,14 @@ export function linha(c: Card): Html {
   const sel = !c.aviso && !c.motivo && c.estado === "rodando" ? seloTrabalhando(c.rodandoHa) : "";
   const fim = c.aviso ? aviso(c.aviso) : `${est}${sel}<span class="qd-id">${c.codigoHtml ?? esc(c.codigo ?? c.id)}</span>`;
   return h(`<li class="${cl("qd-l", c.menu && "qd-com-menu", c.aviso && "qd-com-aviso", c.classe && esc(c.classe))}" data-tarefa="${esc(c.id)}">` +
-    `<button type="button" class="qd-l-bt" data-act="abrir-tarefa" data-id="${esc(c.id)}" aria-label="${esc(rotuloDoCard(c))}">${av.html ? `<span class="qd-avs">${av.html}</span>` : ""}<span class="qd-l-tit">${c.tituloHtml ?? esc(c.titulo)}</span></button>` +
-    `<span class="qd-l-fim">${quandoDoCard(c)}${fim}</span>${botaoDeMover(c)}${c.menu ?? ""}${formDoResponder(c, "linha")}</li>`);
+    `<button type="button" class="qd-l-bt" data-act="abrir-tarefa" data-id="${esc(c.id)}" aria-label="${esc(rotuloDoCard(c))}">${c.prioridade ?? ""}${av.html ? `<span class="qd-avs">${av.html}</span>` : ""}<span class="qd-l-tit">${c.tituloHtml ?? esc(c.titulo)}</span></button>` +
+    `<span class="qd-l-fim">${c.espera && !c.aviso && !c.motivo ? chipDeEspera(c.espera) : perguntouDoCard(c)}${quandoDoCard(c)}${fim}</span>${botaoDeMover(c)}${c.menu ?? ""}${formDoResponder(c, "linha")}</li>`);
 }
 
-export function lista(o: { grupos: { status: string; nome: string; icone?: Status; pessoa?: boolean; linhas: Html[]; n?: number; recolhido?: boolean; vazio?: string }[]; rotulo?: string; novaTarefa?: boolean; antes?: Html }): Html {
+export function lista(o: { grupos: { status: string; nome: string; icone?: Status; pessoa?: boolean; avatar?: Html; linhas: Html[]; n?: number; recolhido?: boolean; vazio?: string }[]; rotulo?: string; novaTarefa?: boolean; antes?: Html }): Html {
   const g = o.grupos.map((gr) => {
     const n = gr.n ?? gr.linhas.length;
-    const cab = `<h3 class="qd-lg-cab"><button type="button" class="qd-lg-bt" data-act="abrir-coluna" data-status="${esc(gr.status)}" aria-expanded="${!gr.recolhido}">${iconeDe(gr)}<span>${esc(gr.nome)}</span><span class="qd-n">${n}</span>${gr.recolhido ? ICONE.chev : ""}</button>` +
+    const cab = `<h3 class="qd-lg-cab"><button type="button" class="qd-lg-bt" data-act="abrir-coluna" data-status="${esc(gr.status)}" aria-expanded="${!gr.recolhido}">${gr.avatar ? `<span class="qm-av qm-col-av" aria-hidden="true">${emudecer(gr.avatar)}</span>` : iconeDe(gr)}<span>${esc(gr.nome)}</span><span class="qd-n">${n}</span>${gr.recolhido ? ICONE.chev : ""}</button>` +
       `${gr.recolhido || !o.novaTarefa ? "" : `<button type="button" class="qd-lg-mais" data-act="col-nova-tarefa" data-status="${esc(gr.status)}" aria-label="${esc(`Nova tarefa em ${gr.nome}`)}">${ICONE.novo}</button>`}</h3>`;
     // Aberto e vazio diz que está vazio (como a coluna da grade), em vez de abrir nada; o vazio "" (NOD-460) não diz.
     const corpo = gr.linhas.length ? gr.linhas.join("") : gr.vazio === "" ? "" : `<li class="qd-col-vazio">${esc(gr.vazio ?? "Nada aqui")}</li>`;

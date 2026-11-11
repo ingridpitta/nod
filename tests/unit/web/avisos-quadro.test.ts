@@ -14,7 +14,7 @@ const AGORA = 1_800_000_000_000;
 const MAL = `<img src=x onerror="alert(1)">"'&`;
 const comPrazo = (): ColunaQuadro[] => COLUNAS_PADRAO.map((c) => (c.id === "revisao" ? { ...c, prazoMin: 120 } : c));
 const t = (id: string, extra: Partial<TarefaDto> = {}): TarefaDto => ({
-  id, quadroId: "q1", titulo: `Tarefa ${id}`, descricao: "", status: "afazer", voltarPara: null, terminadaEm: null, agenteId: "a", ordem: 1, linearId: null, linearUrl: null, prUrl: null,
+  id, quadroId: "q1", titulo: `Tarefa ${id}`, descricao: "", status: "afazer", voltarPara: null, terminadaEm: null, agenteId: "a", ordem: 1, prioridade: "sem", linearId: null, linearUrl: null, prUrl: null,
   pergunta: null, resposta: null, deFora: false, turnoId: null, criadoEm: 1, mudadoEm: 1, execucao: null, agenteNome: "Ada", numero: null, codigo: `#${id}`, branch: "", ...extra,
 });
 const q = (tarefas: TarefaDto[], cs: ColunaQuadro[] = comPrazo()): QuadroDto => ({
@@ -47,7 +47,8 @@ describe("web/lib/colunas: prazo (NOD-420)", () => {
     const de = (id: string) => menuDaColuna(cs, cs.find((c) => c.id === id)!, "Ada");
     expect(de("revisao")).toContain("Prazo: 2 h");
     expect(de("fazendo")).toContain("Definir prazo");
-    for (const id of ["afazer", "voce", "bloqueado", "feito"]) expect(de(id)).not.toContain('data-act="col-prazo"');
+    for (const id of ["afazer", "bloqueado", "feito"]) expect(de(id)).not.toContain('data-act="col-prazo"');
+    expect(cs.some((c) => c.id === "voce")).toBe(false);
     expect(tela([])).toContain(`<span class="qd-col-prazo" title="Prazo da coluna: 2 h"><span class="qd-sr">Prazo: </span>2 h</span>`);
   });
 
@@ -153,17 +154,19 @@ describe("card: parada há e Responder (NOD-420)", () => {
     expect(h).not.toContain('class="qd-col-prazo"');
   });
 
-  it("Bloqueado e Precisa de você trazem o Responder no card e na linha; as outras não", () => {
-    const h = tela([t("1", { status: "voce", pergunta: "Azul?" }), t("2", { status: "bloqueado", pergunta: "Acesso?" }), t("3", { status: "fazendo", titulo: MAL })]);
-    for (const id of ["1", "2"]) {
-      expect(h).toContain(`<form class="qd-card-resp" data-form="responder-tarefa" data-id="${id}">`);
-      expect(h).toContain(`id="qd-cresp-card-${id}"`);
-      expect(h).toContain(`id="qd-cresp-linha-${id}"`);
-    }
-    expect(h).toContain(`aria-label="Responder: Tarefa 1"`);
+  it("Bloqueado traz o Responder no card e na linha; a pergunta do bot (ADR-162) só o \"te perguntou\"; as outras nada", () => {
+    const h = tela([t("1", { status: "fazendo", voltarPara: "fazendo", esperaPessoa: true, pergunta: "Azul?" }), t("2", { status: "bloqueado", pergunta: "Acesso?" }), t("3", { status: "fazendo", titulo: MAL })]);
+    expect(h).toContain(`<form class="qd-card-resp" data-form="responder-tarefa" data-id="2">`);
+    expect(h).toContain(`id="qd-cresp-card-2"`);
+    expect(h).toContain(`id="qd-cresp-linha-2"`);
+    expect(h).not.toContain(`data-form="responder-tarefa" data-id="1"`);
+    // A que espera a pessoa fica na coluna dela, com o chip com sino (2026-11-10), no card e na linha do celular.
+    expect((h.match(/<span class="qd-espera qd-espera-voce" title="Esperando você responder">/g) ?? []).length).toBe(2);
+    expect(h).not.toContain("qd-perguntou");
+    expect(h).toContain(`aria-label="Responder: Tarefa 2"`);
     // O Enviar diz de qual tarefa é (revisão 3 do PR #624), com o título escapado.
-    expect(h).toContain(`aria-label="Enviar resposta: Tarefa 1"`);
-    const mal = tela([t("4", { status: "voce", pergunta: "?", titulo: MAL })]);
+    expect(h).toContain(`aria-label="Enviar resposta: Tarefa 2"`);
+    const mal = tela([t("4", { status: "bloqueado", pergunta: "?", titulo: MAL })]);
     expect(mal).toContain(`aria-label="Enviar resposta: ${MAL.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;")}"`);
     expect(h).toContain(`maxlength="${LIMITES_QUADRO.resposta}"`);
     expect(h).not.toContain('data-id="3"><textarea');

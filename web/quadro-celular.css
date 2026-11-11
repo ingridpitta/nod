@@ -75,5 +75,12 @@
   /* ---------- O ⋯ do topo (passo 7) ---------- */
   .qd-cel-it-sub { margin-left: auto; font-size: 14px; color: var(--ink-3); }
   .qd-cel-perigo { color: var(--danger, var(--ink)); }
+  .qd-cel-teste { margin: 8px 16px 4px; font-size: 12px; color: var(--ink-3); }
+  .qd-cel-meta { display: flex; padding: 4px 16px 8px; }
+  .qd-cel-meta .qd-meta-in { flex: 1; }
+  .qd-cel-imp { margin: 0 16px 6px; font-size: 13px; color: var(--ink-3); }
   .qd-cel-data input { margin-left: auto; min-height: 44px; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: 16px; }
 }
+.qd-com-resposta { margin-left: 22px; padding-left: 10px; border-left: 1.6px solid var(--line); } /* 2026-11-10: a resposta na thread, recuada */
+.qd-t-espera { margin: 6px 0 0; font-size: 12.5px; color: var(--ink-2); } /* 2026-11-10: a pergunta do bot é comentário */
+.qd-t-espera span { filter: grayscale(1); }

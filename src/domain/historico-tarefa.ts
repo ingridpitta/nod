@@ -37,12 +37,14 @@ export function mudancasDaTarefa(p: {
 
 /**
  * A coluna da tarefa no quadro de destino: a mesma, se o destino a tem; senão a padrão do mesmo grupo (Backlog, Fazendo,
- * Feito, Cancelado). "Precisa de você" é fixa e existe em todo quadro. Revisão 7 do PR #623, a regra da main
+ * Feito, Cancelado). A espera da pessoa (`voce`, ADR-162) não é coluna e segue com a tarefa (a coluna de onde veio é
+ * levada à parte, no `voltarPara`). Revisão 7 do PR #623, a regra da main
  * (ADR-142): o mover não faz passagem. A coluna do destino com responsável (`responsavelDe`) que não é o da tarefa fica
  * de fora (a tarefa estaria na etapa de um bot sem ser dele, e sem ele acionado); cai na do mesmo grupo sem passagem.
  * Cair numa coluna que aciona (`acionaNaColuna`) não começa ninguém: quem aciona é o lote, e o mover não é lote.
  */
 export function statusNoDestino(origem: readonly ColunaQuadro[], status: IdColuna, destino: readonly ColunaQuadro[], agenteId: string | null = null, turnoVivo = true): IdColuna {
+  if (status === "voce") return status;
   const livre = (id: IdColuna) => { const r = responsavelDe(destino, id); return r === null || r === agenteId; };
   if (destino.some((c) => c.id === status) && livre(status)) return status;
   const g = grupoDe(origem, status) ?? "nao_iniciado";

@@ -12,11 +12,6 @@ import { GRUPOS, NOME_DO_GRUPO, comColunas } from "./colunas.ts";
 /** NOD-416: o parâmetro do link da tarefa (`?tarefa=ZE-12`). */
 export const PARAMETRO_TAREFA = "tarefa";
 
-/**
- * Revisão 2 do PR #623: em Precisa de você o responsável efetivo é a pessoa. O select do Responsável mostra "Você" com
- * este valor (opção desligada); quem aplica o campo o ignora, porque não é bot nenhum.
- */
-export const RESP_VOCE = "__voce__";
 
 /**
  * O código no canto do card: o do quadro (NOD-416: prefixo + número, ZE-12, estável); de um servidor velho sem ele, o do
@@ -24,6 +19,29 @@ export const RESP_VOCE = "__voce__";
  */
 export function codigoDaTarefa(t: Pick<TarefaDto, "id" | "linearId"> & { codigo?: string }): string {
   return t.codigo || (t.linearId ?? `#${t.id.replace(/-/g, "").slice(0, 4)}`);
+}
+
+/**
+ * A espera da tarefa numa frase, para o chip com sino do card (definido em 2026-11-10, os textos do wakeup do Multica:
+ * wait.reply_from, wait.pr_checks, wait.time). A pergunta à pessoa ganha das outras: "Esperando <nome> responder" (ou
+ * "você", para quem lê); a volta pela CI, "Esperando a CI"; a volta marcada, "Volta às 14:00" (outro dia: "Volta 12/11 às
+ * 14:00"); outra espera do bot, "Esperando · <motivo>". null = não espera.
+ */
+export function fraseDaEspera(t: Pick<TarefaDto, "esperaPessoa" | "decide" | "estadoLinha">, agora: number): { texto: string; voce: boolean } | null {
+  if (t.esperaPessoa) {
+    const outro = t.decide && !t.decide.voce ? t.decide.nome : null;
+    return { texto: `Esperando ${outro ?? "você"} responder`, voce: !outro };
+  }
+  const l = t.estadoLinha;
+  if (l?.tipo !== "esperando") return null;
+  if (l.volta.quando === "ci") return { texto: "Esperando a CI", voce: false };
+  if (l.volta.em !== null) {
+    const d = new Date(l.volta.em);
+    const h = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    const hoje = new Date(agora).toDateString() === d.toDateString();
+    return { texto: hoje ? `Volta às ${h}` : `Volta ${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")} às ${h}`, voce: false };
+  }
+  return { texto: l.motivo ? `Esperando · ${l.motivo}` : "Esperando", voce: false };
 }
 
 /**

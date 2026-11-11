@@ -15,7 +15,7 @@ const DONA = "p-marlon";
 const ANA = "p-ana";
 const t = (id: string, extra: Partial<TarefaDto> = {}): TarefaDto => ({
   id, quadroId: "q1", titulo: `Tarefa ${id}`, descricao: "", status: "afazer", voltarPara: null, agenteId: "a", ordem: 1, linearId: null, linearUrl: null, prUrl: null,
-  pergunta: null, resposta: null, deFora: false, turnoId: null, criadoEm: 1, mudadoEm: 1, terminadaEm: null, execucao: null, agenteNome: "Ada", numero: 1, codigo: `ZE-${id}`, branch: "", ...extra,
+  pergunta: null, resposta: null, deFora: false, turnoId: null, criadoEm: 1, mudadoEm: 1, terminadaEm: null, execucao: null, agenteNome: "Ada", numero: 1, prioridade: "sem", codigo: `ZE-${id}`, branch: "", ...extra,
 });
 const q = (tarefas: TarefaDto[], extra: Partial<QuadroDto> = {}): QuadroDto => ({
   id: "q1", agenteId: "a", nome: null, projetoId: null, prefixo: "ZE", modoConversa: "individual", meta: "Meta", prazo: null, cumpridoEm: null, resumo: null, criadoEm: 1, atualizadoEm: 1, metaDesde: 1, agenteNome: "Ada",
@@ -41,8 +41,8 @@ describe("o gate da participante", () => {
   });
 
   it("a que espera alguém: só quem decide responde ou a tira de Com você", () => {
-    const minhaVez = t("4", { status: "voce", pergunta: "?", decide: { pessoaId: EU, nome: "Bia", voce: true, saiu: null } });
-    const vezDaAna = t("5", { status: "voce", pergunta: "?", decide: { pessoaId: ANA, nome: "Ana", voce: false, saiu: null } });
+    const minhaVez = t("4", { status: "fazendo", voltarPara: "fazendo", esperaPessoa: true, pergunta: "?", decide: { pessoaId: EU, nome: "Bia", voce: true, saiu: null } });
+    const vezDaAna = t("5", { status: "fazendo", voltarPara: "fazendo", esperaPessoa: true, pergunta: "?", decide: { pessoaId: ANA, nome: "Ana", voce: false, saiu: null } });
     const quadro = q([minhaVez, vezDaAna]);
     expect(podeResponder(quadro, minhaVez)).toBe(true);
     expect(podeMudarStatus(quadro, minhaVez)).toBe(true);
@@ -52,11 +52,11 @@ describe("o gate da participante", () => {
     // QA: a frase não promete o select que não aparece.
     expect(linhaDaTarefaAlheia(quadro, { ...vezDaAna, pedidoPor: ANA })).toBe("Tarefa da Ana: você comenta");
     // G6: a que espera alguém sem `decide` (o servidor não disse quem): ninguém de fora muda o status.
-    expect(podeMudarStatus(quadro, t("7", { status: "voce", pergunta: "?" }))).toBe(false);
+    expect(podeMudarStatus(quadro, t("7", { status: "fazendo", voltarPara: "fazendo", esperaPessoa: true, pergunta: "?" }))).toBe(false);
   });
 
   it("só a dona: só comenta (nem status, nem editar, nem responder, nem desfazer, nem pedir)", () => {
-    const minhaVez = t("4", { status: "voce", pedidoPor: EU, decide: { pessoaId: EU, nome: "Bia", voce: true, saiu: null } });
+    const minhaVez = t("4", { status: "fazendo", voltarPara: "fazendo", esperaPessoa: true, pedidoPor: EU, decide: { pessoaId: EU, nome: "Bia", voce: true, saiu: null } });
     const quadro = q([minha, minhaVez], { modoConversa: "so_dono", voce: { pessoaId: EU, papel: "membro", podeDesfazer: true }, ultimoLote: lote });
     expect(soComenta(quadro)).toBe(true);
     expect(podeMudarStatus(quadro, minha)).toBe(false);

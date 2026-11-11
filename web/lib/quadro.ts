@@ -31,13 +31,13 @@ export interface ColunaPadrao { status: Status; nome: string; recolhida: boolean
 
 /** As colunas de um quadro novo, sem tarefa nenhuma (o modo Quadro da NOD-429, antes dos dados da NOD-415). */
 export function colunasPadrao(): ColunaPadrao[] {
-  return STATUS.map((status) => ({ status, nome: NOME_DO_STATUS[status], recolhida: RECOLHIDAS_PADRAO.has(status) }));
+  // ADR-162: `voce` segue no tipo (o ícone, o servidor de antes), mas não é coluna.
+  return STATUS.filter((s) => s !== "voce").map((status) => ({ status, nome: NOME_DO_STATUS[status], recolhida: RECOLHIDAS_PADRAO.has(status) }));
 }
 
-/** Como a coluna se encaixa na grade: tira estreita, "Precisa de você" um pouco mais larga, as outras iguais. */
+/** Como a coluna se encaixa na grade: tira estreita, as outras iguais. */
 export function trilhaDaColuna(c: { status?: string; recolhida?: boolean }): string {
   if (c.recolhida) return "var(--qd-tira)";
-  if (c.status === "voce") return "minmax(calc(var(--qd-col-min) + 20px), 1fr)";
   return "minmax(var(--qd-col-min), 1fr)";
 }
 
@@ -151,3 +151,12 @@ export const RESERVA_MS = 10_000;
 export const ECO_DA_PESSOA_MS = 2000;
 /** ADA-7, definido em 2026-11-03: o arrasto de card ou de coluna segura a releitura até soltar; este teto só cobre um fim perdido. */
 export const ARRASTO_ATE_MS = 30_000;
+
+/**
+ * 2026-11-10 (card preso em "começando"): a resposta de uma mudança traz o quadro do commit, com o turno recém-criado ainda
+ * pendente ("fila"). Quando ela chega depois da releitura do frame do despacho, regrava o quadro velho. Um quadro que não
+ * veio de frame e tem card na fila pede uma releitura a mais (a de frame não pede outra: sem laço).
+ */
+export function releComecando(novo: { tarefas: readonly { execucao?: string | null }[] } | null, doFrame: boolean): boolean {
+  return !doFrame && !!novo?.tarefas.some((t) => t.execucao === "fila");
+}

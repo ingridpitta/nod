@@ -8,6 +8,12 @@ body { margin: 0; color: var(--ink); font: 400 14px/1.45 var(--font-sans); -webk
 button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; text-align: left; }
 input, select, textarea { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 8px; }
+/* O contorno só no teclado (web/lib/modo-de-foco.ts): depois de um clique ou toque ele some em todo lugar, inclusive nos
+   anéis de box-shadow dos campos; no alto contraste do sistema (forced-colors) ele fica sempre. */
+@media not (forced-colors: active) {
+  html[data-foco="ponteiro"] :is(:focus-visible, :has(:focus-visible)) { outline-color: transparent !important; }
+  html[data-foco="ponteiro"] :focus-within:is(input, select, textarea, [class*="busca"], [class*="campo"]) { box-shadow: none !important; }
+}
 [hidden] { display: none !important; }
 code { font-family: var(--font-mono); font-size: 12px; background: var(--surface-raised); padding: 1px 5px; border-radius: 4px; }
 body.ocupado { cursor: progress; }

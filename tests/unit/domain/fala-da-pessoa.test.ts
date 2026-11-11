@@ -97,7 +97,7 @@ describe("planejarLote com pela_fala (ADA-15, QA)", () => {
   const T1 = "10000000-0000-4000-8000-000000000001";
   const tarefa: TarefaQuadro = {
     id: T1, quadroId: "q", titulo: "Protótipo", descricao: "", status: "voce", voltarPara: "afazer", agenteId: ENG.id, ordem: 1, linearId: "NOD-12", linearUrl: null,
-    prUrl: null, pergunta: "Aprova?", resposta: null, deFora: true, turnoId: null, criadoEm: AGORA - 60_000, mudadoEm: AGORA - 60_000, terminadaEm: null, numero: null,
+    prUrl: null, pergunta: "Aprova?", resposta: null, deFora: true, turnoId: null, criadoEm: AGORA - 60_000, mudadoEm: AGORA - 60_000, terminadaEm: null, numero: null, prioridade: "sem",
   };
   const planejar = (ops: unknown[], falas: Fala[] | null) => {
     const lidas = lerOps(ops);

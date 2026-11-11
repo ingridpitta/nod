@@ -137,4 +137,27 @@ describeIntegracao("concorrência: reivindicação de turno (advisory lock por p
     expect((await disputa())?.id).toBe(daConversa);
     expect(await disputa()).toBeNull();
   });
+
+  // Regression: pedido do Marlon (2026-11-10, "não quero limites"): o quadro não tem mais teto próprio (ADR-163 §4).
+  // Duas tarefas do mesmo bot em duas conexões ao mesmo tempo saem as duas; a segunda só espera o advisory lock da pessoa.
+  it("ADR-163: sem teto, duas tarefas do quadro do mesmo bot disputadas em duas conexões saem as duas", async () => {
+    const agenteId = randomUUID();
+    const conversaId = randomUUID();
+    const turnos = [randomUUID(), randomUUID()];
+    await escopado(async (trx) => {
+      const repos = criarRepos(trx, MARLON);
+      await repos.agentes.criar({ id: agenteId, nome: "Sem teto", dono: "pessoa", forma: "shape-hex", cor: "c-purple", modelo: "m" });
+      await repos.conversas.criar({ id: conversaId, tipo: "propria", agenteId });
+      for (const id of turnos) {
+        const w = (await repos.trabalhos.criar({ agenteId, conversaId, titulo: `Tarefa ${id.slice(0, 4)}`, origem: "quadro" }))!;
+        await repos.turnos.enfileirar({ executor: "catcher", id, conversaId, agenteId, origem: "delegacao", trabalhoId: w.id, prazoEm: Date.now() + 60_000, profundidade: 0, entradaTexto: "x", entradaConfianca: "confiavel", modelo: "m" });
+      }
+    });
+    criados.agentes.push(agenteId);
+    criados.conversas.push(conversaId);
+    criados.turnos.push(...turnos);
+    const maquina = randomUUID();
+    const pegos = await Promise.all([0, 1].map(() => escopado(async (trx) => criarRepos(trx, MARLON).turnos.reivindicar({ machineId: maquina, agora: Date.now() }))));
+    expect(pegos.map((t) => t?.id).sort()).toEqual([...turnos].sort());
+  });
 });

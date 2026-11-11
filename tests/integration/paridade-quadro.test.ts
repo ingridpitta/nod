@@ -34,7 +34,7 @@ import { withRollback } from "../helpers/with-rollback.ts";
  * bot comum chegam ao mesmo quadro. É o arquivo que o registro cita como `contrato` (src/domain/acoes/quadro.ts).
  */
 
-type Retrato = { meta: string | null; prazo: string | null; cumprida: boolean; resumo: string | null; colunas: unknown[]; tarefas: unknown[]; turnosAbertos: number; importacao: unknown[] | null; assumido: boolean; rotinas: string[]; modo: string; membros: string[]; comentarios: unknown[] };
+type Retrato = { meta: string | null; prazo: string | null; cumprida: boolean; resumo: string | null; colunas: unknown[]; tarefas: unknown[]; turnosAbertos: number; importacao: unknown[] | null; assumido: boolean; rotinas: string[]; modo: string; membros: string[]; comentarios: unknown[]; labels: unknown[] };
 
 /** NOD-422: o Linear de mentira (as duas pontas recebem as mesmas issues abertas do time). */
 const issueFalsa = (n: number, estado: string, o: Partial<IssueLinear> = {}): IssueLinear => ({
@@ -60,7 +60,9 @@ const retrato = (q: QuadroDto | null, turnos: number, rotinas: string[] = []): R
         cumprida: q.cumpridoEm !== null,
         resumo: q.resumo,
         colunas: q.colunas.map((c) => [c.id, c.nome, c.grupo, c.responsavelNome ?? null, c.instrucoes ?? null, c.trava ?? null, c.prazoMin ?? null]),
-        tarefas: q.tarefas.map((t) => [t.titulo, t.descricao, t.status, t.agenteNome, t.linearId, t.prUrl, t.pergunta, t.resposta, t.execucao]),
+        tarefas: q.tarefas.map((t) => [t.titulo, t.descricao, t.status, t.agenteNome, t.linearId, t.prUrl, t.pergunta, t.resposta, t.execucao, t.prioridade, (t.labels ?? []).map((l) => l.nome), t.prazoEm ?? null]),
+        // 0159: o catálogo de labels (nome e cor; o id difere entre os dois quadros).
+        labels: (q.labels ?? []).map((l) => [l.nome, l.cor]),
         turnosAbertos: turnos,
         importacao: q.importacao ? [q.importacao.estado, q.importacao.time, q.importacao.total, q.importacao.trazidas, q.importacao.colunas] : null,
         // NOD-422 (PR 2): o quadro assumido e o estado das rotinas do anfitrião (pela instrução, na ordem).
@@ -137,11 +139,20 @@ describeIntegracao("paridade tela × chat do quadro.* (NOD-442, ADR-135)", () =>
       const turnos = await Promise.all(execs.map((e) => m.d.repos.turnos.buscar(e.turnoId)));
       // ADA-232: a volta que dorme na cadeia (o "Acordar agora" a traz para já).
       const dormindo = await Promise.all(execs.map(async (e) => (await trxAtual!<{ n: number }[]>`select count(*)::int as n from turnos where retoma_turno_id = ${e.turnoId} and estado = 'pendente' and acordar_em > clock_timestamp()`)[0]!.n));
+      // 2026-11-10: os comentários da tarefa (texto, apagado, se é resposta): editar e apagar chegam ao mesmo estado.
+      const coms = (await m.d.repos.quadroComentarios.daTarefa(t.id)).map((c) => [c.texto, c.apagado ?? false, (c.paiId ?? null) !== null]);
+      trabalhos.push([t.titulo, coms]);
       trabalhos.push([t.titulo, execs.map((e, i) => [e.numero, e.origem, e.canceladaEm !== null, turnos[i]?.estado, turnos[i]?.pararSolicitadoEm != null, turnos[i]?.entradaTexto?.includes("use a branch y"), dormindo[i]]), recados.map((x) => [x.texto, x.entregueEm !== null, x.canceladoEm !== null])]);
     }
     return r ? { ...r, trabalhos } : null;
   };
 
+  /** O último comentário da tarefa no quadro do anfitrião (o bot o lê na saída do comentar: "responder_a …"). */
+  const comentarioDe = async (m: M, anfitriaoId: string, titulo: string) => {
+    const q = (await m.d.repos.quadros.doAgente(anfitriaoId))!;
+    const t = (await m.d.repos.quadros.tarefas(q.id)).find((x) => x.titulo === titulo)!;
+    return (await m.d.repos.quadroComentarios.daTarefa(t.id)).at(-1)!.id;
+  };
   const ultimoMovimento = async (m: M, anfitriaoId: string, titulo: string) => {
     const q = (await m.d.repos.quadros.doAgente(anfitriaoId))!;
     const t = (await m.d.repos.quadros.tarefas(q.id)).find((x) => x.titulo === titulo)!;
@@ -184,7 +195,7 @@ describeIntegracao("paridade tela × chat do quadro.* (NOD-442, ADR-135)", () =>
   const CENARIOS: Cenario[] = [
     { id: "quadro.criar", tela: async (_m, q) => ({ metodo: "POST", caminho: `/agentes/${q.anfitriao}/quadro`, corpo: { meta: "Lançar login", prazo: "2026-11-06" }, status: 201 }), chat: () => ({ tipo: "criar_quadro", meta: "Lançar login", prazo: "2026-11-06" }) },
     { id: "quadro.editar", preparar: BASE, tela: async (_m, q) => ({ metodo: "PATCH", caminho: `/agentes/${q.anfitriao}/quadro`, corpo: { meta: "Lançar o login novo", prazo: null }, status: 200 }), chat: () => ({ tipo: "editar_quadro", meta: "Lançar o login novo", prazo: null }) },
-    { id: "quadro.criar_tarefa", preparar: BASE, tela: async (m, q) => ({ metodo: "POST", caminho: `/agentes/${q.anfitriao}/quadro/tarefas`, corpo: { titulo: "T3", descricao: "d", agente: m.nomeCaio }, status: 201 }), chat: (m) => ({ tipo: "criar_tarefa", titulo: "T3", descricao: "d", agente: m.nomeCaio }) },
+    { id: "quadro.criar_tarefa", preparar: BASE, tela: async (m, q) => ({ metodo: "POST", caminho: `/agentes/${q.anfitriao}/quadro/tarefas`, corpo: { titulo: "T3", descricao: "d", agente: m.nomeCaio, prioridade: "alta" }, status: 201 }), chat: (m) => ({ tipo: "criar_tarefa", titulo: "T3", descricao: "d", agente: m.nomeCaio, prioridade: "alta" }) },
     {
       id: "quadro.importar_linear",
       preparar: BASE,
@@ -213,8 +224,9 @@ describeIntegracao("paridade tela × chat do quadro.* (NOD-442, ADR-135)", () =>
     {
       id: "quadro.mudar_tarefa",
       preparar: BASE,
-      tela: async (m, q) => ({ metodo: "PATCH", caminho: `/agentes/${q.anfitriao}/quadro/tarefas/${await q.tarefa("T1")}`, corpo: { status: "afazer", agente: m.nomeCaio }, status: 200 }),
-      chat: (m) => ({ tipo: "mudar_tarefa", tarefa: "T1", status: "afazer", agente: m.nomeCaio }),
+      tela: async (m, q) => ({ metodo: "PATCH", caminho: `/agentes/${q.anfitriao}/quadro/tarefas/${await q.tarefa("T1")}`, corpo: { status: "afazer", agente: m.nomeCaio, prioridade: "urgente", por_labels: ["Bug"], prazo_em: "2026-11-20" }, status: 200 }),
+      // 0159: as labels (nome novo cria) e o prazo vão no mesmo passo, pela tela e pelo chat.
+      chat: (m) => ({ tipo: "mudar_tarefa", tarefa: "T1", status: "afazer", agente: m.nomeCaio, prioridade: "urgente", por_labels: ["Bug"], prazo_em: "2026-11-20" }),
     },
     {
       id: "quadro.responder",
@@ -229,6 +241,19 @@ describeIntegracao("paridade tela × chat do quadro.* (NOD-442, ADR-135)", () =>
       preparar: BASE,
       tela: async (m, q) => ({ metodo: "POST", caminho: `/agentes/${q.anfitriao}/quadro/tarefas/${await q.tarefa("T2")}/comentarios`, corpo: { texto: `@${m.nomeCaio} dá uma olhada` }, status: 201 }),
       chat: (m) => ({ tipo: "comentar", tarefa: "T2", texto: `@${m.nomeCaio} dá uma olhada` }),
+    },
+    {
+      // 2026-11-10: o comentário da pessoa (no preparo) editado pela tela e pelo bot a pedido dela na conversa.
+      id: "quadro.editar_comentario",
+      preparar: (m) => [...BASE(m), [{ tipo: "comentar", tarefa: "T2", texto: "com erro" }]],
+      tela: async (m, q) => ({ metodo: "PATCH", caminho: `/agentes/${q.anfitriao}/quadro/tarefas/${await q.tarefa("T2")}/comentarios/${await comentarioDe(m, m.tela.agenteId, "T2")}`, corpo: { texto: "certo" }, status: 200 }),
+      chat: async (m) => ({ tipo: "editar_comentario", tarefa: "T2", comentario: await comentarioDe(m, m.chat.agenteId, "T2"), texto: "certo" }),
+    },
+    {
+      id: "quadro.apagar_comentario",
+      preparar: (m) => [...BASE(m), [{ tipo: "comentar", tarefa: "T2", texto: "não era aqui" }]],
+      tela: async (m, q) => ({ metodo: "DELETE", caminho: `/agentes/${q.anfitriao}/quadro/tarefas/${await q.tarefa("T2")}/comentarios/${await comentarioDe(m, m.tela.agenteId, "T2")}`, status: 200 }),
+      chat: async (m) => ({ tipo: "apagar_comentario", tarefa: "T2", comentario: await comentarioDe(m, m.chat.agenteId, "T2") }),
     },
     {
       id: "quadro.desfazer",
@@ -254,6 +279,25 @@ describeIntegracao("paridade tela × chat do quadro.* (NOD-442, ADR-135)", () =>
       chat: (m) => ({ tipo: "mover_quadro", tarefa: "T1", quadro: m.nomeGil }),
       destinos: (m) => [m.caio.agenteId, m.gil.agenteId],
     },
+    // 0159: o catálogo de labels (na URL, o nome também serve, como na conversa).
+    {
+      id: "quadro.criar_label",
+      preparar: BASE,
+      tela: async (_m, q) => ({ metodo: "POST", caminho: `/agentes/${q.anfitriao}/quadro/labels`, corpo: { nome: "Bug", cor: "azul" }, status: 201 }),
+      chat: () => ({ tipo: "criar_label", nome: "Bug", cor: "azul" }),
+    },
+    {
+      id: "quadro.editar_label",
+      preparar: (m) => [...BASE(m), [{ tipo: "mudar_tarefa", tarefa: "T1", labels: ["Bug"], prazo_em: "2026-11-20" }]],
+      tela: async (_m, q) => ({ metodo: "PATCH", caminho: `/agentes/${q.anfitriao}/quadro/labels/Bug`, corpo: { nome: "Defeito", cor: "vermelho" }, status: 200 }),
+      chat: () => ({ tipo: "editar_label", label: "Bug", nome: "Defeito", cor: "vermelho" }),
+    },
+    {
+      id: "quadro.remover_label",
+      preparar: (m) => [...BASE(m), [{ tipo: "mudar_tarefa", tarefa: "T1", labels: ["Bug", "Front"] }]],
+      tela: async (_m, q) => ({ metodo: "DELETE", caminho: `/agentes/${q.anfitriao}/quadro/labels/Bug`, status: 200 }),
+      chat: () => ({ tipo: "remover_label", label: "Bug" }),
+    },
     // NOD-448 (ADR-140): as colunas.
     {
       id: "quadro.criar_coluna",
@@ -264,8 +308,8 @@ describeIntegracao("paridade tela × chat do quadro.* (NOD-442, ADR-135)", () =>
     {
       id: "quadro.renomear_coluna",
       preparar: BASE,
-      tela: async (_m, q) => ({ metodo: "PATCH", caminho: `/agentes/${q.anfitriao}/quadro/colunas/voce`, corpo: { nome: "Comigo" }, status: 200 }),
-      chat: () => ({ tipo: "renomear_coluna", coluna: "Precisa de você", nome: "Comigo" }),
+      tela: async (_m, q) => ({ metodo: "PATCH", caminho: `/agentes/${q.anfitriao}/quadro/colunas/bloqueado`, corpo: { nome: "Travado" }, status: 200 }),
+      chat: () => ({ tipo: "renomear_coluna", coluna: "Bloqueado", nome: "Travado" }),
     },
     {
       id: "quadro.mover_coluna",
@@ -511,9 +555,9 @@ describeIntegracao("paridade tela × chat do quadro.* (NOD-442, ADR-135)", () =>
         expect((await prazoDe(m.tela.agenteId))?.at(-1)).toBe(prazo_min);
         expect(await estado(m, m.chat.agenteId)).toEqual(await estado(m, m.tela.agenteId));
       }
-      // Fora do andamento (Precisa de você), a tela e o chat recusam do mesmo jeito.
-      expect((await servidor.chamar(sessao, "PATCH", `/agentes/${m.tela.agenteId}/quadro/colunas/voce`, { prazo_min: 60 })).status).toBe(400);
-      expect((await executar(m.d, gerirQuadro, { ...ctx, quadro: m.nomeChat, acoes: [{ tipo: "renomear_coluna", coluna: "Precisa de você", prazo_min: 60 }] })).data).toMatchObject({ ok: false });
+      // Fora do andamento (Bloqueado), a tela e o chat recusam do mesmo jeito.
+      expect((await servidor.chamar(sessao, "PATCH", `/agentes/${m.tela.agenteId}/quadro/colunas/bloqueado`, { prazo_min: 60 })).status).toBe(400);
+      expect((await executar(m.d, gerirQuadro, { ...ctx, quadro: m.nomeChat, acoes: [{ tipo: "renomear_coluna", coluna: "Bloqueado", prazo_min: 60 }] })).data).toMatchObject({ ok: false });
       // O tipo do prazo_min é da rota (revisão 3 do PR #624): texto, fração ou booleano é 400 e o quadro não muda.
       const antes = await estado(m, m.tela.agenteId);
       for (const prazo_min of ["60", 1.5, true]) {
@@ -975,6 +1019,39 @@ describeIntegracao("paridade tela × chat do quadro.* (NOD-442, ADR-135)", () =>
       const desligado = await executar(m.d, gerirQuadro, { ...(await turnoDe(m.d, m.gil.agenteId, m.gil.conversaId)), quadro: m.nomeChat, acoes: [{ tipo: "exibir", visao: "lista" }] });
       expect(desligado.data).toMatchObject({ ok: false, erro: "experimento_desligado" });
       expect(await exibir(qChat)).toEqual({ recolhidas: false, compacto: true, visao: "minhas" });
+    });
+  });
+  it("quadro minimalista: as Opções do quadro (vista, agrupar, ordenar, inverter, ocultas, propriedades) pela tela e pelo chat deixam o mesmo Exibir; inválido recusa", async () => {
+    await withRollback(MARLON, async (trx) => {
+      trxAtual = trx;
+      const m = await montar(trx);
+      await pessoa(m.d, m.tela.agenteId, [{ tipo: "criar_quadro" }]);
+      await pessoa(m.d, m.chat.agenteId, [{ tipo: "criar_quadro" }]);
+      const qTela = (await m.d.repos.quadros.doAgente(m.tela.agenteId))!.id;
+      const qChat = (await m.d.repos.quadros.doAgente(m.chat.agenteId))!.id;
+      const exibir = async (id: string) => (await m.d.repos.preferencias.buscar()).quadroExibir?.[id];
+      const sessao = await servidor.entrar("marlon");
+      const passos: Record<string, unknown>[] = [
+        { vista: "lista", agrupar: "responsavel" },
+        { ordenar: "prioridade", inverter: true },
+        { ocultas: ["backlog", "cancelado"], propriedades: ["prioridade", "descricao"] },
+        // O array substitui o anterior (não junta); [] mostra todas as colunas e deixa o card só com o título.
+        { ocultas: ["feito"], propriedades: [] },
+      ];
+      for (const corpo of passos) {
+        const resp = await servidor.chamar(sessao, "PUT", `/preferencias/quadros/${qTela}/exibir`, corpo);
+        expect(resp.status, JSON.stringify(corpo)).toBe(200);
+        const r = await executar(m.d, gerirQuadro, { ...(await turnoDe(m.d, m.gil.agenteId, m.gil.conversaId)), quadro: m.nomeChat, acoes: [{ tipo: "exibir", ...corpo } as OpQuadro] });
+        expect(r.data, JSON.stringify(corpo)).toMatchObject({ ok: true, lote_id: null });
+        expect(await exibir(qChat), JSON.stringify(corpo)).toEqual(await exibir(qTela));
+      }
+      expect(await exibir(qChat)).toEqual({ recolhidas: true, compacto: false, vista: "lista", agrupar: "responsavel", ordenar: "prioridade", inverter: true, ocultas: ["feito"], propriedades: [] });
+      for (const ruim of [{ vista: "tabela" }, { ordenar: "x" }, { inverter: "sim" }, { ocultas: ["a", "a"] }, { ocultas: [""] }, { propriedades: ["capa"] }, { propriedades: ["pr", "pr"] }]) {
+        expect((await servidor.chamar(sessao, "PUT", `/preferencias/quadros/${qTela}/exibir`, ruim)).status, JSON.stringify(ruim)).toBe(400);
+        const r = await executar(m.d, gerirQuadro, { ...(await turnoDe(m.d, m.gil.agenteId, m.gil.conversaId)), quadro: m.nomeChat, acoes: [{ tipo: "exibir", ...ruim } as unknown as OpQuadro] });
+        expect(r.data, JSON.stringify(ruim)).toMatchObject({ ok: false, erro: "entrada_invalida" });
+      }
+      expect(await exibir(qChat)).toEqual(await exibir(qTela));
     });
   });
 });

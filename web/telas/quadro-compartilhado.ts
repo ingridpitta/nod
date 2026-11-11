@@ -82,7 +82,7 @@ function cardAssinado(t: TarefaDto, agente: AgenteDoQuadro, m: readonly LinhaMur
 
 function grade(q: QuadroDto, v: VistaDoCompartilhado, agente: AgenteDoQuadro, m: readonly LinhaMuralDto[] | null): string {
   const por = tarefasPorStatus(q);
-  const cs = comColunas(q).colunas.map((c) => (c.id === "voce" && c.nome === "Precisa de você" ? { ...c, nome: "Precisa de alguém" } : c));
+  const cs = comColunas(q).colunas;
   const cols = cs.map((c) => {
     const ts = por[c.id] ?? [];
     const padrao = c.recolhida && ts.length === 0;
@@ -103,7 +103,7 @@ function campoDoStatus(q: QuadroDto, t: TarefaDto, ocupado: boolean): string {
   if (!podeMudarStatus(q, t)) return `<span id="qcp-status">${esc(atual?.nome ?? t.status)}</span>`;
   const op = (id: string, nome: string, sel: boolean) => `<option value="${esc(id)}"${sel ? " selected" : ""}>${esc(nome)}</option>`;
   return `<select id="qcp-status" class="qd-sel" data-campo="qcp-status" data-id="${esc(t.id)}"${ocupado ? " disabled" : ""}>` +
-    opcoesDeStatus(cs).map((g) => `<optgroup label="${esc(g.grupo)}">${g.colunas.filter((c) => c.id !== "voce" || c.id === t.status).map((c) => op(c.id, c.nome, c.id === t.status)).join("")}</optgroup>`).join("") +
+    opcoesDeStatus(cs).map((g) => `<optgroup label="${esc(g.grupo)}">${g.colunas.map((c) => op(c.id, c.nome, c.id === t.status)).join("")}</optgroup>`).join("") +
     (atual ? "" : op(t.status, t.status, true)) + `</select>`;
 }
 
@@ -122,8 +122,8 @@ function detalhe(q: QuadroDto, t: TarefaDto, v: VistaDoCompartilhado, agente: Ag
       (t.descricao.trim() ? `<div class="qd-t-desc">${esc(t.descricao)}</div>` : `<div class="qd-t-desc qd-t-desc-vazia">Sem descrição.</div>`);
   const acoes = meu && v.editando !== t.id
     ? `<p class="qcp-acoes"><button type="button" class="qd-link" data-act="qcp-editar" data-id="${id}">Editar</button> · <button type="button" class="qd-link" data-act="qcp-excluir" data-id="${id}"${v.ocupado ? " disabled" : ""}>Excluir</button></p>` : "";
-  const pergunta = t.pergunta && (t.status === "voce" || t.status === "bloqueado")
-    ? `<h2 class="qd-t-sec">${t.status === "voce" ? (outro ? `Esperando ${esc(outro)}` : "Precisa de você") : "Bloqueada"}</h2><p class="qd-voce-frase">${esc(t.pergunta)}</p>` +
+  const pergunta = t.pergunta && (t.esperaPessoa || t.status === "bloqueado")
+    ? `<h2 class="qd-t-sec">${t.esperaPessoa ? (outro ? `Esperando ${esc(outro)}` : `${esc(t.agenteNome ?? "O bot")} te perguntou`) : "Bloqueada"}</h2><p class="qd-voce-frase">${esc(t.pergunta)}</p>` +
       (podeResponder(q, t)
         ? `<form class="qd-resp-form" data-form="qcp-responder" data-id="${id}"><label class="qd-sr" for="qcp-resp">Sua resposta</label>` +
           `<textarea id="qcp-resp" class="qd-resp-in" name="resposta" rows="2" maxlength="4000" required placeholder="Sua resposta"></textarea>` +

@@ -393,7 +393,7 @@ describeIntegracao("quadro com várias pessoas (NOD-443, ADR-143)", () => {
       expect((await executar(da, gerirQuadro, { ...ctx, quadro: m.qid, acoes: [{ tipo: "responder", tarefa: "T1", resposta: "Sim" }] })).data).toMatchObject(recusada);
       expect((await daTela(await como(trx, BIA.escopo), m.qid, [{ tipo: "responder", tarefa: "Da Ana", resposta: "Verde" }])).data).toMatchObject(recusada);
       let q = await quadroDaDona(trx, m);
-      expect(q.tarefas.filter((t) => t.status === "voce").map((t) => t.titulo).sort()).toEqual(["Da Ana", "T1"]);
+      expect(q.tarefas.filter((t) => t.esperaPessoa).map((t) => t.titulo).sort()).toEqual(["Da Ana", "T1"]);
       // A recusa trouxe o título da tarefa da dona: aquele turno ficou contaminado (revisão 8 do PR #634, ADR-047).
       expect(await (await como(trx, ANA.escopo)).repos.turnos.contaminado(ctx.turnoId)).toBe(true);
       // Cada uma responde a sua (num turno limpo: responder é a fala da pessoa).
@@ -402,7 +402,7 @@ describeIntegracao("quadro com várias pessoas (NOD-443, ADR-143)", () => {
       expect((await executar(daOutra, gerirQuadro, { ...ctxLimpo, quadro: m.qid, acoes: [{ tipo: "responder", tarefa: "Da Ana", resposta: "Azul" }] })).data).toMatchObject({ ok: true });
       expect((await lote(await como(trx, DONA.escopo), m.ada.agenteId, [{ tipo: "responder", tarefa: "T1", resposta: "Sim" }])).data).toMatchObject({ ok: true });
       q = await quadroDaDona(trx, m);
-      expect(q.tarefas.filter((t) => t.status === "voce")).toEqual([]);
+      expect(q.tarefas.filter((t) => t.esperaPessoa)).toEqual([]);
     });
   });
 
@@ -740,7 +740,7 @@ describeIntegracao("quadro com várias pessoas (NOD-443, ADR-143)", () => {
       const naAda = async (acoes: OpQuadro[]) => (await executar(await como(trx, DONA.escopo), gerirQuadro, { turnoId, agenteId: m.ada.agenteId, conversaId: m.ada.conversaId, acoes })).data;
       // Merge da NOD-430: o limite normal do turno da tarefa já recusa (entrada_invalida); o que vale é a recusa.
       expect(await naAda([{ tipo: "mudar_tarefa", tarefa: "T1", status: "afazer" }])).toMatchObject({ ok: false });
-      expect((await quadroDaDona(trx, m)).tarefas.find((t) => t.titulo === "T1")!.status).toBe("voce");
+      expect((await quadroDaDona(trx, m)).tarefas.find((t) => t.titulo === "T1")!.esperaPessoa).toBe(true);
       // A dela, sim: pergunta e retira a pergunta.
       expect(await naAda([{ tipo: "mudar_tarefa", tarefa: "X", status: "voce", pergunta: "Qual?" }])).toMatchObject({ ok: true });
       const tira = await naAda([{ tipo: "mudar_tarefa", tarefa: "X", status: "fazendo" }]);

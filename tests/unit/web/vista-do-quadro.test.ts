@@ -6,17 +6,31 @@ import { agentesComTarefa, chipsDaBarra, contarNaVista, ehFiltro, fraseDoVazio, 
 
 const t = (id: string, extra: Partial<TarefaDto> = {}): TarefaDto => ({
   id, quadroId: "q1", titulo: `Tarefa ${id}`, descricao: "", status: "afazer", voltarPara: null, agenteId: "a", ordem: 1, linearId: null, linearUrl: null, prUrl: null,
-  pergunta: null, resposta: null, deFora: false, turnoId: null, criadoEm: 1, mudadoEm: 1, terminadaEm: null, execucao: null, agenteNome: "Ada", numero: null, codigo: `ZE-${id}`, branch: "", ...extra,
+  pergunta: null, resposta: null, deFora: false, turnoId: null, criadoEm: 1, mudadoEm: 1, terminadaEm: null, execucao: null, agenteNome: "Ada", numero: null, prioridade: "sem", codigo: `ZE-${id}`, branch: "", ...extra,
 });
 
 describe("vista do quadro: filtro", () => {
   it("Todas passa tudo; Comigo só o que espera quem lê (não o que outra pessoa decide)", () => {
-    const minha = t("1", { status: "voce" });
-    const deOutro = t("2", { status: "voce", decide: { voce: false, nome: "Ana", pessoaId: "p2" } as never });
-    const minhaDecido = t("3", { status: "voce", decide: { voce: true, nome: "Você", pessoaId: "p1" } as never });
+    // ADR-162: sem a coluna Precisa de você, a tarefa que espera fica na coluna dela com a marca esperaPessoa.
+    const minha = t("1", { status: "fazendo", voltarPara: "fazendo", esperaPessoa: true });
+    const deOutro = t("2", { status: "fazendo", esperaPessoa: true, decide: { voce: false, nome: "Ana", pessoaId: "p2" } as never });
+    const minhaDecido = t("3", { status: "revisao", esperaPessoa: true, decide: { voce: true, nome: "Você", pessoaId: "p1" } as never });
     const fazendo = t("4", { status: "fazendo" });
     for (const x of [minha, deOutro, minhaDecido, fazendo]) expect(passaNoFiltro(x, "todos")).toBe(true);
     expect([minha, deOutro, minhaDecido, fazendo].filter((x) => passaNoFiltro(x, "comigo")).map((x) => x.id)).toEqual(["1", "3"]);
+  });
+
+  it("ADR-162: Comigo também conta Bloqueado e a coluna \"só a pessoa tira daqui\" (NOD-419), como a espera do servidor", () => {
+    const colunas = [{ id: "fazendo" }, { id: "bloqueado" }, { id: "c-aprovar", trava: { soPessoa: true } }, { id: "c-testar", trava: { saiPara: ["fazendo"] } }];
+    const bloqueada = t("1", { status: "bloqueado", pergunta: "cadê o acesso?" });
+    const soPessoa = t("2", { status: "c-aprovar" });
+    const travadaSoDestino = t("3", { status: "c-testar" });
+    const andando = t("4", { status: "fazendo" });
+    const ts = [bloqueada, soPessoa, travadaSoDestino, andando];
+    expect(ts.filter((x) => passaNoFiltro(x, "comigo", colunas)).map((x) => x.id)).toEqual(["1", "2"]);
+    // Sem as colunas, a trava não é conhecida: só Bloqueado conta.
+    expect(ts.filter((x) => passaNoFiltro(x, "comigo")).map((x) => x.id)).toEqual(["1"]);
+    expect(contarNaVista(ts, "comigo", "", colunas)).toBe(2);
   });
 
   it("trabalhando = execução rodando (fila e falhou não); agente:<id> = só as daquele bot", () => {

@@ -17,7 +17,7 @@ const T1 = "10000000-0000-4000-8000-000000000001";
 
 const tarefa = (o: Partial<TarefaQuadro> = {}): TarefaQuadro => ({
   id: T1, quadroId: "q", titulo: "Login", descricao: "", status: "afazer", voltarPara: null, agenteId: null, ordem: 1,
-  linearId: null, linearUrl: null, prUrl: null, pergunta: null, resposta: null, deFora: false, turnoId: null, criadoEm: AGORA, mudadoEm: AGORA, terminadaEm: null, numero: null, ...o,
+  linearId: null, linearUrl: null, prUrl: null, pergunta: null, resposta: null, deFora: false, turnoId: null, criadoEm: AGORA, mudadoEm: AGORA, terminadaEm: null, numero: null, prioridade: "sem", ...o,
 });
 
 let seq = 0;

@@ -28,13 +28,18 @@ describe("colunas: padrão", () => {
     expect(colunasDe({ colunas: null })).toEqual(COLUNAS_PADRAO);
     expect(validarColunas(COLUNAS_PADRAO)).toBeNull();
     expect(saoPadrao(COLUNAS_PADRAO)).toBe(true);
-    expect(ids(COLUNAS_PADRAO).at(-3)).toBe("voce");
+    // ADR-162: 7 padrão, sem "Precisa de você" (a espera da pessoa é a marca `voce`, não coluna).
+    expect(ids(COLUNAS_PADRAO)).toEqual(["backlog", "afazer", "fazendo", "revisao", "bloqueado", "feito", "cancelado"]);
+    expect(colunasDe({ colunas: [...COLUNAS_PADRAO.slice(0, 5), { id: "voce", nome: "Precisa de você", grupo: "iniciado" }, ...COLUNAS_PADRAO.slice(5)] })).toEqual(COLUNAS_PADRAO);
+    expect(validarColunas([...COLUNAS_PADRAO.slice(0, 5), { id: "voce", nome: "Precisa de você", grupo: "iniciado" }, ...COLUNAS_PADRAO.slice(5)])).toMatchObject({ erro: expect.stringContaining("não é mais coluna") });
   });
 
   it("DTO marca fixas, da pessoa e recolhidas", () => {
     const c = ok(criarColuna(COLUNAS_PADRAO, { nome: "Teste", grupo: "iniciado" }));
     const dto = colunasDto(c.colunas);
-    expect(dto.find((x) => x.id === "voce")).toMatchObject({ fixa: true, daPessoa: false, recolhida: false });
+    expect(dto.find((x) => x.id === "voce")).toBeUndefined();
+    expect(dto.find((x) => x.id === "cancelado")).toMatchObject({ fixa: true, daPessoa: false });
+    expect(dto.find((x) => x.id === "bloqueado")).toMatchObject({ fixa: false, daPessoa: false, recolhida: false });
     expect(dto.find((x) => x.id === c.id)).toMatchObject({ fixa: false, daPessoa: true, recolhida: false });
     expect(dto.find((x) => x.id === "feito")!.recolhida).toBe(true);
     expect(dto.find((x) => x.id === "backlog")!.recolhida).toBe(true);
@@ -42,11 +47,11 @@ describe("colunas: padrão", () => {
 });
 
 describe("colunas: criar", () => {
-  it("exige grupo e nasce no fim do grupo, antes de Precisa de você", () => {
+  it("exige grupo e nasce no fim do grupo", () => {
     expect(criarColuna(COLUNAS_PADRAO, { nome: "X", grupo: "qualquer" as never })).toMatchObject({ erro: expect.stringContaining("grupo") });
     const c = ok(criarColuna(COLUNAS_PADRAO, { nome: "Testes", grupo: "iniciado" }));
     expect(c.id).toBe("c-testes");
-    expect(ids(c.colunas).slice(-4)).toEqual(["c-testes", "voce", "feito", "cancelado"]);
+    expect(ids(c.colunas).slice(-4)).toEqual(["bloqueado", "c-testes", "feito", "cancelado"]);
     expect(c.ajustada).toBe(false);
   });
 
@@ -65,10 +70,11 @@ describe("colunas: criar", () => {
 });
 
 describe("colunas: renomear e mover", () => {
-  it("renomeia qualquer uma, inclusive Precisa de você e Cancelado", () => {
-    const r = ok(renomearColuna(COLUNAS_PADRAO, { coluna: "Precisa de você", nome: "Comigo" }));
-    expect(r.colunas.find((c) => c.id === "voce")!.nome).toBe("Comigo");
-    expect(r.antes).toBe("Precisa de você");
+  it("renomeia qualquer uma, inclusive Bloqueado e Cancelado; Precisa de você não é coluna (ADR-162)", () => {
+    const r = ok(renomearColuna(COLUNAS_PADRAO, { coluna: "Bloqueado", nome: "Travado" }));
+    expect(r.colunas.find((c) => c.id === "bloqueado")!.nome).toBe("Travado");
+    expect(r.antes).toBe("Bloqueado");
+    expect(renomearColuna(COLUNAS_PADRAO, { coluna: "Precisa de você", nome: "Comigo" })).toMatchObject({ erro: expect.stringContaining("não existe") });
     expect(ok(renomearColuna(COLUNAS_PADRAO, { coluna: "cancelado", nome: "Arquivado" })).id).toBe("cancelado");
   });
 
@@ -79,7 +85,8 @@ describe("colunas: renomear e mover", () => {
     const fora = ok(moverColuna(COLUNAS_PADRAO, { coluna: "fazendo", depois_de: "feito" }));
     expect(fora.ajustada).toBe(true);
     expect(validarColunas(fora.colunas)).toBeNull();
-    expect(moverColuna(COLUNAS_PADRAO, { coluna: "voce", antes_de: "fazendo" })).toMatchObject({ erro: expect.stringContaining("não muda de lugar") });
+    expect(moverColuna(COLUNAS_PADRAO, { coluna: "cancelado", antes_de: "feito" })).toMatchObject({ erro: expect.stringContaining("não muda de lugar") });
+    expect(moverColuna(COLUNAS_PADRAO, { coluna: "voce", antes_de: "fazendo" })).toMatchObject({ erro: expect.stringContaining("não existe") });
     expect(moverColuna(COLUNAS_PADRAO, { coluna: "fazendo" })).toMatchObject({ erro: expect.any(String) });
   });
 });
@@ -89,11 +96,11 @@ describe("colunas: remover", () => {
     const r = ok(removerColuna(COLUNAS_PADRAO, { coluna: "revisao" }, []));
     expect(ids(r.colunas)).not.toContain("revisao");
     expect(r.movidas).toBe(0);
-    expect(removerColuna(COLUNAS_PADRAO, { coluna: "voce" }, [])).toMatchObject({ erro: expect.stringContaining("não sai") });
+    expect(removerColuna(COLUNAS_PADRAO, { coluna: "voce" }, [])).toMatchObject({ erro: expect.stringContaining("não existe") });
     expect(removerColuna(COLUNAS_PADRAO, { coluna: "cancelado" }, [])).toMatchObject({ erro: expect.stringContaining("não sai") });
   });
 
-  it("com tarefas pede destino (e lista os possíveis), sem Precisa de você nem ela mesma", () => {
+  it("com tarefas pede destino (e lista os possíveis), nunca a espera da pessoa nem ela mesma", () => {
     const tarefas = [{ status: "revisao" }, { status: "revisao" }, { status: "afazer" }];
     expect(removerColuna(COLUNAS_PADRAO, { coluna: "revisao" }, tarefas)).toMatchObject({ erro: expect.stringMatching(/^coluna_com_tarefas: .*2 tarefas.*Destinos:/) });
     expect(removerColuna(COLUNAS_PADRAO, { coluna: "revisao", destino: "voce" }, tarefas)).toMatchObject({ erro: expect.any(String) });
@@ -117,10 +124,10 @@ describe("colunas: substituir (o quadro dos doces)", () => {
   it("troca o conjunto, mantém as fixas e leva cada tarefa ao destino do grupo, sem perder nenhuma", () => {
     const tarefas = [
       { id: "t1", status: "afazer" }, { id: "t2", status: "fazendo" }, { id: "t3", status: "feito" },
-      { id: "t4", status: "voce" }, { id: "t5", status: "revisao" }, { id: "t6", status: "backlog" },
+      { id: "t5", status: "revisao" }, { id: "t6", status: "backlog" },
     ];
     const s = ok(substituirColunas(COLUNAS_PADRAO, { colunas: DOCES }, tarefas));
-    expect(s.colunas.map((c) => c.nome)).toEqual(["Pedido", "Compras", "Produção", "Finalização", "Embalagem", "Entrega", "Precisa de você", "Pago", "Cancelado"]);
+    expect(s.colunas.map((c) => c.nome)).toEqual(["Pedido", "Compras", "Produção", "Finalização", "Embalagem", "Entrega", "Pago", "Cancelado"]);
     expect(validarColunas(s.colunas)).toBeNull();
     expect(s.ajustada).toBe(true);
     const para = Object.fromEntries(s.movidas.map((m) => [m.tarefa, m.para]));
@@ -130,7 +137,12 @@ describe("colunas: substituir (o quadro dos doces)", () => {
     for (const t of tarefas) expect(finais.has(para[t.id] ?? t.status)).toBe(true);
   });
 
-  it("destinos explícitos valem, mas nunca para Precisa de você", () => {
+  it("ADR-162: a tarefa que espera a pessoa não é levada pela troca do conjunto (segue esperando)", () => {
+    const s = ok(substituirColunas(COLUNAS_PADRAO, { colunas: DOCES }, [{ id: "t4", status: "voce" }, { id: "t2", status: "fazendo" }]));
+    expect(s.movidas.map((m) => m.tarefa)).toEqual(["t2"]);
+  });
+
+  it("destinos explícitos valem, mas nunca para a espera da pessoa (não é coluna)", () => {
     const tarefas = [{ id: "t2", status: "fazendo" }];
     const s = ok(substituirColunas(COLUNAS_PADRAO, { colunas: DOCES, destinos: [{ de: "fazendo", para: "Produção" }] }, tarefas));
     expect(s.movidas).toEqual([{ tarefa: "t2", de: "fazendo", para: "c-producao" }]);
@@ -156,10 +168,10 @@ describe("colunas: substituir (o quadro dos doces)", () => {
 });
 
 describe("colunas: prazo (NOD-420)", () => {
-  it("só onde o trabalho anda: Fazendo, Em revisão e as da pessoa no Iniciado; nunca Bloqueado, Precisa de você ou fora do Iniciado", () => {
+  it("só onde o trabalho anda: Fazendo, Em revisão e as da pessoa no Iniciado; nunca Bloqueado ou fora do Iniciado", () => {
     expect(COLUNAS_PADRAO.filter(podeTerPrazo).map((c) => c.id)).toEqual(["fazendo", "revisao"]);
     expect(ok(renomearColuna(COLUNAS_PADRAO, { coluna: "revisao", prazo_min: 30 })).colunas.find((c) => c.id === "revisao")).toMatchObject({ nome: "Em revisão", prazoMin: 30 });
-    for (const coluna of ["bloqueado", "voce", "afazer", "feito"]) {
+    for (const coluna of ["bloqueado", "afazer", "feito"]) {
       expect(renomearColuna(COLUNAS_PADRAO, { coluna, prazo_min: 30 })).toMatchObject({ erro: expect.stringContaining("prazo só vale") });
     }
     const nova = ok(criarColuna(COLUNAS_PADRAO, { nome: "QA", grupo: "iniciado", prazo_min: 120 }));

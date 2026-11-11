@@ -256,9 +256,11 @@ export const ESPACO_FUNDO_MS = 30_000;
 /**
  * O Mac apertado seguraria este trabalho? Em segundo plano (rotina ou pedido de colega), ainda não começou, ninguém
  * esperando por ele (`pessoaEsperando`) e dentro da espera máxima. É a mesma regra do `reivindicar` (turnos.repo.ts).
+ * ADA-16 (ADR-163): a tarefa do quadro também, agora que roda em paralelo; mas ela não entra no espaço de 30 s entre
+ * trabalhos novos (ESPACO_FUNDO_MS), que a serializaria: sem teto próprio, o freio dela é este portão e o pool de laços.
  */
 export function seguravelPeloMac(t: Pick<Trabalho, "origem" | "iniciadoEm" | "criadoEm" | "pessoaEsperando">, agora: number): boolean {
-  return (t.origem === "rotina" || t.origem === "colega") && t.iniciadoEm === null && t.pessoaEsperando !== true && agora - t.criadoEm < ESPERA_MAXIMA_FUNDO_MS;
+  return (t.origem === "rotina" || t.origem === "colega" || t.origem === "quadro") && t.iniciadoEm === null && t.pessoaEsperando !== true && agora - t.criadoEm < ESPERA_MAXIMA_FUNDO_MS;
 }
 
 /** O pior de dois níveis (null = sem leitura). */

@@ -31,8 +31,8 @@ async function montar(trx: Tx) {
   const betoNome = `Beto ${sufixo}`;
   const pessoa = { tipo: "pessoa" } as const;
   const lote = (ops: OpQuadro[]) => aplicarLoteQuadro(deps, { autor: pessoa, anfitriaoId: ana.agenteId, executor: "catcher", ops });
-  const comentar = (texto: string, p: Partial<PedidoLote> = {}, tarefa = "T") =>
-    comentarTarefa(deps, { autor: pessoa, anfitriaoId: ana.agenteId, executor: "catcher", ops: [], ...p }, { tipo: "comentar", tarefa, texto });
+  const comentar = (texto: string, p: Partial<PedidoLote> = {}, tarefa = "T", op: { responder_a?: string; acionar?: Record<string, "acionar" | "agora" | "depois" | "no_lugar" | "nao"> } = {}) =>
+    comentarTarefa(deps, { autor: pessoa, anfitriaoId: ana.agenteId, executor: "catcher", ops: [], ...p }, { tipo: "comentar", tarefa, texto, ...op });
   const pendentesDe = async (agenteId: string) => (await trx<{ id: string }[]>`select id from turnos where agente_id = ${agenteId} and estado = 'pendente'`).map((l) => l.id);
   const tarefa = async () => {
     const q = await repos.quadros.doAgente(ana.agenteId);
@@ -76,30 +76,48 @@ describeIntegracao("comentários da tarefa do quadro (NOD-417)", () => {
     });
   });
 
-  it("revisão 4 do PR #622: fora do andamento (Backlog, Feito) o comentário fica na tarefa sem acionar o responsável", async () => {
+  it("ADR-162 (fluxo Multica): o bot pergunta com um comentário e a tarefa fica na coluna; o comentário da pessoa responde e aciona o responsável", async () => {
+    await withRollback(MARLON, async (trx) => {
+      const m = await montar(trx);
+      await m.emAndamento();
+      const pergunta = await aplicarLoteQuadro(m.deps, { autor: { tipo: "agente", agenteId: m.beto.agenteId }, anfitriaoId: m.ana.agenteId, executor: "catcher", ops: [{ tipo: "mudar_tarefa", tarefa: "T", pergunta: "Azul ou verde?" }] });
+      if (!pergunta.data.ok) throw new Error(pergunta.data.detalhe);
+      // O card fica na coluna, com o mesmo responsável, marcado esperando a pessoa; ninguém é acionado.
+      expect(pergunta.data.quadro!.tarefas[0]).toMatchObject({ status: "revisao", esperaPessoa: true, agenteId: m.beto.agenteId, pergunta: "Azul ou verde?" });
+      expect(pergunta.data.comecaram).toEqual([]);
+      expect(await m.pendentesDe(m.beto.agenteId)).toEqual([]);
+      expect(await m.tarefa()).toMatchObject({ status: "voce", voltarPara: "revisao" });
+      // A pergunta é um comentário do bot com a @menção da pessoa.
+      // (Sem a pessoa no cadastro do banco de teste, sai só a pergunta, sem a @menção.)
+      const nome = (await m.repos.pessoas.buscar(PESSOA_MARLON))?.nome;
+      const t = await m.tarefa();
+      expect(await m.repos.quadroComentarios.daTarefa(t.id)).toMatchObject([{ autor: { tipo: "agente", agenteId: m.beto.agenteId }, texto: `${nome ? `@${nome.split(/\s+/)[0]} ` : ""}Azul ou verde?`, deFora: true }]);
+      // A pessoa comenta: é a resposta. A marca sai, o card segue na coluna e o responsável volta a andar.
+      const r = await m.comentar("Verde");
+      if (!r.data.ok) throw new Error(r.data.detalhe);
+      expect(r.data.comecaram.map((c) => c.agenteId)).toEqual([m.beto.agenteId]);
+      expect(r.data.quadro!.tarefas[0]).toMatchObject({ status: "revisao", esperaPessoa: false, resposta: "Verde" });
+      const turno = await m.repos.turnos.buscar(r.data.comecaram[0]!.turnoId);
+      expect(turno?.entradaTexto).toContain("respondeu no quadro");
+      expect(turno?.entradaTexto).toContain("Verde");
+      expect((await m.repos.quadroComentarios.daTarefa(t.id)).map((c) => c.texto)).toContain("Verde");
+    });
+  });
+
+  it("2026-11-10 (regra do Multica): o comentário aciona o responsável em qualquer coluna, inclusive Backlog e Feito", async () => {
     await withRollback(MARLON, async (trx) => {
       const m = await montar(trx);
       await m.lote([{ tipo: "criar_quadro" }, { tipo: "criar_tarefa", titulo: "T", status: "backlog", agente: m.betoNome }]);
       const noBacklog = await m.comentar("Usa o azul do logo");
       if (!noBacklog.data.ok) throw new Error(noBacklog.data.detalhe);
-      expect(noBacklog.data.comecaram).toEqual([]);
-      expect(noBacklog.data.responsavelForaDoAndamento).toEqual({ agenteNome: m.betoNome, coluna: "Backlog" });
-      expect(await m.pendentesDe(m.beto.agenteId)).toEqual([]);
-      // A @menção segue acionando o mencionado.
-      const mencao = await m.comentar(`@${m.anaNome}, olha`);
-      if (!mencao.data.ok) throw new Error(mencao.data.detalhe);
-      expect(mencao.data.comecaram.map((c) => c.agenteId)).toEqual([m.ana.agenteId]);
+      expect(noBacklog.data.comecaram.map((c) => c.agenteId)).toEqual([m.beto.agenteId]);
       await m.lote([{ tipo: "mudar_tarefa", tarefa: "T", status: "feito" }]);
-      const noFeito = await m.comentar("Ficou ótimo");
+      const noFeito = await m.comentar("Ficou ótimo, só troca a vírgula");
       if (!noFeito.data.ok) throw new Error(noFeito.data.detalhe);
-      expect(noFeito.data).toMatchObject({ comecaram: [], responsavelForaDoAndamento: { coluna: "Feito" } });
-      expect((await verComentarios(m.deps, { agenteId: m.ana.agenteId, tarefaId: (await m.tarefa()).id })).data.comentarios).toHaveLength(3);
-      // Em Em revisão (andamento) aciona.
-      await m.lote([{ tipo: "mudar_tarefa", tarefa: "T", status: "revisao", sem_iniciar: true }]);
-      const andando = await m.comentar("Mais um ajuste");
-      if (!andando.data.ok) throw new Error(andando.data.detalhe);
-      expect(andando.data.comecaram.map((c) => c.agenteId)).toEqual([m.beto.agenteId]);
-      expect(andando.data.responsavelForaDoAndamento).toBeUndefined();
+      // Outra thread (comentário raiz novo): abre outro turno, não se junta ao da primeira.
+      expect(noFeito.data.comecaram.map((c) => c.agenteId)).toEqual([m.beto.agenteId]);
+      expect(noFeito.data.juntados).toBeUndefined();
+      expect((await m.tarefa()).status).toBe("feito");
     });
   });
 
@@ -112,12 +130,12 @@ describeIntegracao("comentários da tarefa do quadro (NOD-417)", () => {
       expect(r.data.comecaram.map((c) => c.agenteId)).toEqual([m.beto.agenteId, m.ana.agenteId]);
       const daAna = await m.repos.turnos.buscar(r.data.comecaram[1]!.turnoId);
       expect(daAna?.entradaTexto).toContain("mencionou você");
-      expect(daAna?.entradaTexto).toContain("não mude o status nem o responsável");
+      expect(daAna?.entradaTexto).toContain("deixe o status e o responsável com");
       expect((await m.tarefa()).agenteId).toBe(m.beto.agenteId);
     });
   });
 
-  it("dedup: com o trabalho do responsável ainda na fila, o comentário se junta a ele (um trabalho só)", async () => {
+  it("2026-11-10 (fila por thread, como o Multica): o trabalho da tarefa na fila tem a sua vez; o comentário abre o run da thread dele", async () => {
     await withRollback(MARLON, async (trx) => {
       const m = await montar(trx);
       // Em afazer com responsável: o Beto começa sozinho (turno pendente da tarefa).
@@ -125,24 +143,31 @@ describeIntegracao("comentários da tarefa do quadro (NOD-417)", () => {
       const [daTarefa] = await m.pendentesDe(m.beto.agenteId);
       const r = await m.comentar("Lembra do modo escuro");
       if (!r.data.ok) throw new Error(r.data.detalhe);
-      expect(r.data).toMatchObject({ juntados: 1, comecaram: [{ agenteId: m.beto.agenteId, turnoId: daTarefa }] });
-      expect(await m.pendentesDe(m.beto.agenteId)).toEqual([daTarefa]);
-      expect((await m.repos.turnos.buscar(daTarefa!))?.entradaTexto).toContain("Lembra do modo escuro");
+      expect(r.data.juntados).toBeUndefined();
+      expect(r.data.comecaram).toEqual([expect.objectContaining({ agenteId: m.beto.agenteId })]);
+      expect(r.data.comecaram[0]!.turnoId).not.toBe(daTarefa);
+      // Os dois rodam em série na conversa do Beto.
+      expect(await m.pendentesDe(m.beto.agenteId)).toHaveLength(2);
     });
   });
 
-  it("dedup: dois comentários seguidos geram um trabalho; depois que ele roda, o próximo abre outro", async () => {
+  it("dedup: dois comentários seguidos na mesma thread geram um trabalho; depois que ele roda, o próximo abre outro", async () => {
     await withRollback(MARLON, async (trx) => {
       const m = await montar(trx);
       await m.emAndamento();
       const r1 = await m.comentar("Primeiro");
-      const r2 = await m.comentar(`Segundo, @${m.betoNome}`);
+      if (!r1.data.ok) throw new Error(r1.data.detalhe);
+      const r2 = await m.comentar(`Segundo, @${m.betoNome}`, {}, "T", { responder_a: r1.data.comentario!.id });
       if (!r1.data.ok || !r2.data.ok) throw new Error("falhou");
       expect(r2.data.juntados).toBe(1);
       expect(r2.data.comecaram[0]!.turnoId).toBe(r1.data.comecaram[0]!.turnoId);
       expect(await m.pendentesDe(m.beto.agenteId)).toHaveLength(1);
       await trx`update turnos set estado = 'despachando' where id = ${r1.data.comecaram[0]!.turnoId}`;
-      const r3 = await m.comentar("Terceiro");
+      // Rodando na mesma thread: o padrão é mandar agora (entra no turno em andamento, como o Multica); "depois que
+      // terminar" abre o próximo.
+      const agora = await m.comentar("Terceiro", {}, "T", { responder_a: r1.data.comentario!.id });
+      expect(agora.data).toMatchObject({ ok: true, mandadosAgora: 1, comecaram: [] });
+      const r3 = await m.comentar("Quarto", {}, "T", { responder_a: r1.data.comentario!.id, acionar: { [m.beto.agenteId]: "depois" } });
       if (!r3.data.ok) throw new Error(r3.data.detalhe);
       expect(r3.data.juntados).toBeUndefined();
       expect(r3.data.comecaram[0]!.turnoId).not.toBe(r1.data.comecaram[0]!.turnoId);
@@ -181,7 +206,7 @@ describeIntegracao("comentários da tarefa do quadro (NOD-417)", () => {
       if (!r.data.ok) throw new Error(r.data.detalhe);
       expect(r.data).toMatchObject({ juntados: 1, comecaram: [{ agenteId: m.ana.agenteId, turnoId: daMencao }] });
       const entrada = (await m.repos.turnos.buscar(daMencao))?.entradaTexto ?? "";
-      const restricao = entrada.indexOf("não mude o status nem o responsável");
+      const restricao = entrada.indexOf("deixe o status e o responsável com");
       const libera = entrada.indexOf("isso não vale mais");
       expect(restricao).toBeGreaterThan(-1);
       expect(libera).toBeGreaterThan(restricao);
@@ -371,7 +396,7 @@ describeIntegracao("comentários da tarefa do quadro (NOD-417)", () => {
       const turno = c.data.comecaram[0]!.turnoId;
       expect((await m.repos.turnos.buscar(turno))?.profundidade).toBe(1);
       // Um comentário de um bot em profundidade 1 junta e leva o turno a 2.
-      const deBot = await m.comentar("E o rodapé", { autor: { tipo: "agente", agenteId: m.ana.agenteId }, profundidade: 1 });
+      const deBot = await m.comentar("E o rodapé", { autor: { tipo: "agente", agenteId: m.ana.agenteId }, profundidade: 1 }, "T", { responder_a: c.data.comentario!.id });
       expect(deBot.data).toMatchObject({ ok: true, juntados: 1 });
       expect((await m.repos.turnos.buscar(turno))?.profundidade).toBe(2);
       // O lote de um bot em profundidade 2 que manda a tarefa para A fazer junta e leva o turno a 3 (o limite da corrente).

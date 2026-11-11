@@ -18,7 +18,7 @@ export const LIMITE_IDAS_E_VOLTAS = 3;
 export const LIMITE_ACIONAMENTOS_HORA = 12;
 const HORA = 3_600_000;
 
-/** Pedir ajuda nunca fica travado: "Precisa de você" e Bloqueado são saída de qualquer coluna. */
+/** Pedir ajuda nunca fica travado: perguntar à pessoa (ADR-162, a marca `voce`) e Bloqueado são saída de qualquer coluna. */
 const ESPERA: ReadonlySet<string> = new Set(["voce", "bloqueado"]);
 const ESPERA_PESSOA = "voce";
 
@@ -57,7 +57,7 @@ export function conferirTrava(colunasDe: readonly ColunaQuadro[], colunasPara: r
   const trava = travaDe(colunasDe, de);
   if (!trava) return null;
   const nome = nomeDaColuna(colunasDe, de);
-  if (trava.soPessoa && autor.tipo === "agente") return `de ${nome} só a pessoa tira a tarefa: deixe onde está ou peça a ela (status voce com a pergunta)`;
+  if (trava.soPessoa && autor.tipo === "agente") return `de ${nome} só a pessoa tira a tarefa: deixe onde está ou pergunte a ela (mudar_tarefa só com a pergunta)`;
   // Revisão 7 do PR #629: os destinos são os das colunas do INÍCIO do lote. Remover o destino no mesmo lote não solta a
   // trava (antes, sem destino que existisse depois, a tarefa saía para qualquer coluna).
   const destinos = (trava.saiPara ?? []).filter((id) => colunasDe.some((c) => c.id === id));
@@ -157,8 +157,8 @@ export function esperar(t: TarefaNoFreio, status: IdColuna, pergunta: string): v
 
 /**
  * O agente diz "não é comigo" (com o motivo). Ele sai de responsável e o motivo fica no histórico. Se o quadro sugere
- * outro (o responsável da coluna, que ainda não recusou), a tarefa fica na coluna com ele; senão vai para "Precisa de
- * você". No 4º passe vai para o dono em Bloqueado de qualquer jeito.
+ * outro (o responsável da coluna, que ainda não recusou), a tarefa fica na coluna com ele; senão fica na coluna
+ * esperando a pessoa (ADR-162). No 4º passe vai para o dono em Bloqueado de qualquer jeito.
  */
 export function recusarTarefa(t: TarefaNoFreio, p: {
   autorAgenteId: string | null;
@@ -178,7 +178,7 @@ export function recusarTarefa(t: TarefaNoFreio, p: {
   if (!sugerido) {
     const quem = passe > LIMITE_PASSES ? `${passe}ª recusa: ${nome}` : nome;
     // Revisão 8 do PR #629 (decisão da Ada na issue, 02/11 03:33): no 4º passe a tarefa vai para o dono em Bloqueado
-    // (Precisa de você se o quadro não tiver Bloqueado). Antes do limite, sem candidato, Precisa de você.
+    // (esperando a pessoa se o quadro não tiver Bloqueado). Antes do limite, sem candidato, esperando a pessoa (ADR-162: na coluna).
     esperar(t, passe > LIMITE_PASSES ? bloqueio(p.colunas) : ESPERA_PESSOA, `${quem} disse que não é com ele: "${p.motivo}". Quem pega?`);
   }
   return { passe, sugerido };
@@ -239,7 +239,8 @@ export function desfazerMovimento(t: TarefaNoFreio, movimentoId: string | undefi
   if (!mudouATarefa(m)) return { erro: "esse movimento não mudou a tarefa de lugar nem de mão" };
   if (ultimo?.id !== m.id) return { erro: "só o último movimento da tarefa se desfaz: houve outro depois desse; mova à mão" };
   if (t.status !== m.para || t.agenteId !== m.agenteDepois) return { erro: "a tarefa mudou depois desse movimento: mova à mão" };
-  if (!colunas.some((c) => c.id === m.de)) return { erro: `a coluna de antes (${m.de.replace(/^c-/, "")}) não existe mais: mova à mão` };
+  // ADR-162: `voce` não é coluna, é a marca de esperando a pessoa: voltar a ela vale sempre.
+  if (m.de !== ESPERA_PESSOA && !colunas.some((c) => c.id === m.de)) return { erro: `a coluna de antes (${m.de.replace(/^c-/, "")}) não existe mais: mova à mão` };
   if (ESPERA.has(m.de)) { if (!ESPERA.has(t.status)) t.voltarPara = t.status; } else t.voltarPara = null;
   t.status = m.de;
   t.agenteId = m.agenteAntes;
@@ -373,7 +374,7 @@ export function acionamentosNaHora(historico: readonly MovimentoTarefa[], tarefa
 /** Revisão 8 do PR #629: o motivo do laço sem os nomes das colunas (o aviso de turno não confiável). */
 export const MOTIVO_LACO_SEM_NOMES = `Laço: a tarefa foi e voltou entre duas colunas mais de ${LIMITE_IDAS_E_VOLTAS} vezes. Confira e diga o próximo passo.`;
 
-/** Bloqueado, se o quadro tiver; senão Precisa de você (que nunca sai do quadro). */
+/** Bloqueado, se o quadro tiver; senão esperando a pessoa (ADR-162: a marca, que não depende de coluna). */
 const bloqueio = (colunas: readonly ColunaQuadro[]): IdColuna => (colunas.some((c) => c.id === "bloqueado") ? "bloqueado" : ESPERA_PESSOA);
 
 /**

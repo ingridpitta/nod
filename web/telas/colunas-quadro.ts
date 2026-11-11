@@ -52,7 +52,7 @@ export function menuDaColuna(cs: readonly ColunaDto[], c: ColunaDto, nomeDoBot: 
 
 /**
  * NOD-419: as travas no menu da coluna. "Só sai para…" abre o popover dos destinos; "Só a pessoa tira daqui" liga e
- * desliga na hora (um lote com Desfazer). Precisa de você e Bloqueado são saída sempre, então não entram na lista.
+ * desliga na hora (um lote com Desfazer). Perguntar à pessoa e Bloqueado são saída sempre (Bloqueado não entra na lista).
  */
 function itensDaTrava(cs: readonly ColunaDto[], c: ColunaDto): string {
   // Revisão 2 do PR #629: A fazer não leva trava (travarColuna recusa; a saída dela é o começo). Os itens voltam só para
@@ -73,7 +73,7 @@ export function popoverDeTrava(cs: readonly ColunaDto[], c: ColunaDto): Html {
   return confiar(`<div class="qd-pop qd-pop-trava" role="dialog" aria-labelledby="qd-trv-tit">` +
     `<form data-form="col-trava" data-coluna="${esc(c.id)}"><p class="qd-pop-tit" id="qd-trv-tit">De <b>${esc(c.nome)}</b> a tarefa só sai para</p>` +
     `<fieldset class="qd-pas-modos"><legend class="qd-sr">Destinos</legend>${ops}</fieldset>` +
-    `<p class="qd-dica">Nenhuma marcada: sai para qualquer coluna. Precisa de você e Bloqueado valem sempre.</p>` +
+    `<p class="qd-dica">Nenhuma marcada: sai para qualquer coluna. Bloqueado vale sempre.</p>` +
     `<div class="qd-pop-bts"><button type="button" class="qd-bt" data-act="col-fechar">Cancelar</button><button type="submit" class="qd-bt qd-bt-pri">Salvar</button></div></form></div>`);
 }
 
@@ -95,16 +95,36 @@ export type AgenteDaPassagem = { id: string; nome: string };
  * ADR-142: quem começa quando a tarefa entra na coluna. Com responsável, o nome curto (sempre à vista); sem, o
  * "Passar para…" discreto (como o ⋯, só no hover ou no foco). Só nas colunas que aceitam passagem.
  */
-export function passagemDoCabecalho(c: ColunaDto, aberta: boolean): Html {
+export function passagemDoCabecalho(c: ColunaDto, aberta: boolean, avatar?: Html | null): Html {
   if (!aceitaPassagem(c)) return confiar("");
   const nome = c.responsavel ? c.responsavelNome ?? "um agente" : null;
   const rotulo = nome ? `${c.nome} passa para ${nome}. Mudar a passagem` : `Passar ${c.nome} para um agente`;
-  return confiar(`<button type="button" class="qd-col-passa${nome ? " qd-col-passa-com" : ""}" data-act="col-passagem" data-coluna="${esc(c.id)}" aria-label="${esc(rotulo)}" aria-haspopup="dialog" aria-expanded="${aberta}">` +
-    `${nome ? `<span aria-hidden="true">→</span> ${esc(nome)}` : "Passar para…"}</button>`);
+  // Quadro minimalista (2026-11-10): o responsável da coluna como chip com o avatar dele (como no Multica); sem avatar, a seta.
+  const marca = avatar ? `<span class="qm-av" aria-hidden="true">${avatar}</span>` : `<span aria-hidden="true">→</span> `;
+  return confiar(`<button type="button" class="qd-col-passa${nome ? " qd-col-passa-com" : ""}${nome && avatar ? " qm-col-resp" : ""}" data-act="col-passagem" data-coluna="${esc(c.id)}" aria-label="${esc(rotulo)}" aria-haspopup="dialog" aria-expanded="${aberta}">` +
+    `${nome ? `${marca}<span class="qm-col-resp-nome">${esc(nome)}</span>` : "Passar para…"}</button>`);
 }
 
 /** O popover da passagem: sem passagem ou um agente (começa na hora só onde aciona; revisão 3 do PR #622), e o que a etapa faz. */
-export function popoverDePassagem(c: ColunaDto, agentes: readonly AgenteDaPassagem[]): Html {
+/**
+ * As saídas da etapa no popover (definido em 2026-11-10, o NextStatus/BackStatus do Multica): "Etapa concluída vai para" e
+ * "Ajustes voltam para", cada uma com o padrão (a seguinte que não é espera; a etapa anterior com responsável) e as colunas
+ * que o servidor aceita (o espelho de definirPassagem; o servidor confere de novo). É o definir_passagem {proxima, volta_para}.
+ */
+function saidasDoPopover(c: ColunaDto, cs: readonly ColunaDto[]): string {
+  const i = cs.findIndex((x) => x.id === c.id);
+  const espera = (x: ColunaDto) => x.id === "bloqueado" || x.id === "cancelado";
+  const padraoProx = cs.slice(i + 1).find((x) => !espera(x));
+  const padraoVolta = [...cs.slice(0, Math.max(0, i))].reverse().find((x) => x.responsavel && aceitaPassagem(x));
+  const sel = (nome: string, rotulo: string, atual: string | null | undefined, padrao: ColunaDto | undefined, validas: readonly ColunaDto[], vazio: string) =>
+    `<label class="qd-rotulo" for="qd-pas-${nome}">${esc(rotulo)}</label><select id="qd-pas-${nome}" class="qd-sel" name="${nome}">` +
+    `<option value="">${esc(padrao ? `${padrao.nome} (padrão)` : vazio)}</option>` +
+    validas.map((x) => `<option value="${esc(x.id)}"${x.id === atual ? " selected" : ""}>${esc(x.nome)}</option>`).join("") + `</select>`;
+  return sel("proxima", "Etapa concluída vai para", c.proxima, padraoProx, cs.filter((x) => x.id !== c.id && !espera(x)), "Fica aqui (última)") +
+    sel("volta", "Ajustes voltam para", c.volta, padraoVolta, cs.filter((x) => x.id !== c.id && aceitaPassagem(x)), "Sem volta (comente na tarefa)");
+}
+
+export function popoverDePassagem(c: ColunaDto, agentes: readonly AgenteDaPassagem[], cs: readonly ColunaDto[] = []): Html {
   const com = !!c.responsavel;
   const ops = [`<option value="">Escolha o agente</option>`, ...agentes.map((a) => `<option value="${esc(a.id)}"${a.id === c.responsavel ? " selected" : ""}>${esc(a.nome)}</option>`)].join("");
   const radio = (v: string, marcado: boolean, rotulo: string, dica: string) =>
@@ -116,6 +136,7 @@ export function popoverDePassagem(c: ColunaDto, agentes: readonly AgenteDaPassag
     `<label class="qd-sr" for="qd-pas-agente">Agente</label><select id="qd-pas-agente" class="qd-sel" name="agente">${ops}</select>` +
     `<label class="qd-rotulo" for="qd-pas-inst">O que essa etapa faz</label>` +
     `<textarea id="qd-pas-inst" class="qd-pas-inst" name="instrucoes" rows="3" maxlength="${LIMITE_INSTRUCOES}" placeholder="Ex.: revise o PR e aponte o que falta">${esc(c.instrucoes ?? "")}</textarea>` +
+    (cs.length ? saidasDoPopover(c, cs) : "") +
     `<div class="qd-pop-bts"><button type="button" class="qd-bt" data-act="col-fechar">Cancelar</button><button type="submit" class="qd-bt qd-bt-pri">Salvar</button></div></form></div>`);
 }
 
@@ -138,21 +159,8 @@ export function popoverDePrazo(c: ColunaDto, erro?: string): Html {
 }
 
 /**
- * O card solto numa coluna com responsável (revisão do PR #622, decisão da PM): uma linha discreta no topo da lista da
- * coluna de destino, no lugar onde o card cai. Não é diálogo nem popover: um grupo com o nome, e os dois links. Confirmar
- * (o padrão, com o foco) começa; "Não iniciar ainda" só move; Esc desiste.
- */
-export function confirmacaoDeSoltar(c: ColunaDto, tarefa: string, titulo = "A tarefa"): Html {
-  const nome = c.responsavelNome ?? "o responsável";
-  return confiar(`<li class="qd-soltar" role="group" aria-label="${esc(`Mover ${titulo} para ${c.nome}`)}">` +
-    `<p class="qd-soltar-tit"><b>${esc(titulo)}</b> · ${esc(nome)} começa agora.</p>` +
-    `<p class="qd-pas-bts"><button type="button" class="qd-link qd-link-pri" data-act="col-soltar" data-coluna="${esc(c.id)}" data-tarefa="${esc(tarefa)}">Confirmar</button>` +
-    `<span aria-hidden="true">·</span><button type="button" class="qd-link" data-act="col-soltar-sem" data-coluna="${esc(c.id)}" data-tarefa="${esc(tarefa)}">Não iniciar ainda</button></p></li>`);
-}
-
-/**
- * O menu do "Mover para…" do card: as outras colunas. Escolher a de responsável que aciona (`acionaNaColuna`) abre a
- * mesma confirmação do card solto; as outras movem direto (como soltar). Precisa de você aparece desabilitada com o
+ * O menu do "Mover para…" do card: as outras colunas. Todas movem direto, como soltar (2026-11-10: sem a confirmação; a
+ * coluna com responsável que aciona diz quem começa, e o Desfazer do recibo é a rede). Precisa de você aparece desabilitada com o
  * porquê (o servidor recusa sem a pergunta, revisão 2 do PR #622).
  */
 export function menuDeMover(cs: readonly ColunaDto[], t: Pick<TarefaDto, "id" | "titulo" | "status">, nomeDoBot = "o bot"): Html {
@@ -169,16 +177,16 @@ export function menuDeMover(cs: readonly ColunaDto[], t: Pick<TarefaDto, "id" | 
 
 /**
  * O que vem depois do nome no cabeçalho: a passagem (com `agentes`, ADR-142), o ⋯ e, se aberto, o menu, o popover de
- * remover ou o da passagem (a confirmação do card solto fica na lista: `confirmacaoDeSoltar`).
+ * remover ou o da passagem.
  */
-export function aposDoCabecalho(cs: readonly ColunaDto[], c: ColunaDto, ed: EdicaoDeColuna | null, n: number, nomeDoBot: string, agentes?: readonly AgenteDaPassagem[]): Html {
+export function aposDoCabecalho(cs: readonly ColunaDto[], c: ColunaDto, ed: EdicaoDeColuna | null, n: number, nomeDoBot: string, agentes?: readonly AgenteDaPassagem[], avatarDe?: (agenteId: string) => Html | null): Html {
   const menuAberto = ed?.tipo === "menu" && ed.coluna === c.id;
   const passaAberta = ed?.tipo === "passagem" && ed.coluna === c.id;
   const bt = `<button type="button" class="qd-col-mais" data-act="col-menu" data-coluna="${esc(c.id)}" aria-label="${esc(`Opções de ${c.nome}`)}" aria-haspopup="menu" aria-expanded="${menuAberto}"${menuAberto ? ' aria-controls="qd-menu"' : ""}>${ICONE.mais}</button>`;
-  const passa = agentes ? passagemDoCabecalho(c, passaAberta) : "";
+  const passa = agentes ? passagemDoCabecalho(c, passaAberta, c.responsavel && avatarDe ? avatarDe(c.responsavel) : null) : "";
   const dentro = menuAberto ? menuDaColuna(cs, c, nomeDoBot)
     : ed?.tipo === "remover" && ed.coluna === c.id && !naFolha(ed) ? popoverDeRemover(cs, c, n)
-      : passaAberta && agentes ? popoverDePassagem(c, agentes)
+      : passaAberta && agentes ? popoverDePassagem(c, agentes, cs)
         : ed?.tipo === "trava" && ed.coluna === c.id ? popoverDeTrava(cs, c)
         : ed?.tipo === "prazo" && ed.coluna === c.id && !naFolha(ed) ? popoverDePrazo(c, ed.erro) : "";
   return confiar(passa + bt + dentro);

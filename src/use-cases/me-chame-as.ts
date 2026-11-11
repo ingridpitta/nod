@@ -108,9 +108,12 @@ export async function voltaMarcadaAoAssentar(deps: Deps, turno: Turno, concluiu:
  * a hora em que o comando terminou (a fila entrega na hora; a volta conta no teto de voltas seguidas como as marcadas e
  * passa pelo mesmo alarme de voltas sem novidade).
  */
-export async function enfileirarVolta(deps: DepsVolta, turno: Turno, v: { acordarEm: number; entradaTexto: string; motivo: string }): Promise<{ volta: Turno | null; events: RuntimeEvent[] } | null> {
+export async function enfileirarVolta(deps: DepsVolta, turno: Turno, v: { acordarEm: number; entradaTexto: string; motivo: string; daTarefa?: true }): Promise<{ volta: Turno | null; events: RuntimeEvent[] } | null> {
   const trabalho = turno.trabalhoId ? await deps.repos.trabalhos.buscar(turno.trabalhoId) : null;
-  if (trabalho && !trabalhoAberto(trabalho.estado)) return null;
+  // ADA-16 × ADA-232 (ADR-163): o reacionamento da tarefa (`daTarefa`) volta ao trabalho dela mesmo já terminado — ele
+  // acaba quando o turno conclui, e a retomada o reabre (quem chama sincroniza). Só o parado pela pessoa não volta.
+  const reabreDaTarefa = v.daTarefa === true && trabalho?.origem === "quadro" && trabalho.estado !== "parado";
+  if (trabalho && !trabalhoAberto(trabalho.estado) && !reabreDaTarefa) return null;
   const agora = deps.agora();
   const retomaTurnoId = origemDaVolta(turno);
   await deps.repos.turnos.travarRetomadas(retomaTurnoId);

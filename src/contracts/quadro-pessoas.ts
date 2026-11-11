@@ -10,10 +10,20 @@ import type { AutorLote } from "./quadro.ts";
  * dado de fora. `acionados`: os bots que o comentário acionou (abriu turno ou se juntou ao que já estava na fila).
  */
 /** Quem escreveu o comentário: a pessoa, um bot ou o Linear (NOD-422: trazido de lá; o nome de quem escreveu vem em autorNome). */
-export type AutorComentario = AutorLote | { tipo: "linear" };
+/** ADR-162: `sistema` = a explicação do próprio quadro (a espera que ele deixou com a pessoa); não aciona ninguém. */
+export type AutorComentario = AutorLote | { tipo: "linear" } | { tipo: "sistema" };
 export type ComentarioTarefa = { id: string; quadroId: string; tarefaId: string; autor: AutorComentario; texto: string; deFora: boolean; criadoEm: number; /** NOD-430: "Você, pela <bot>". */ pedidoPor?: string | null };
 /** `autorNome`: o nome do bot, ou de quem escreveu no Linear (autor `linear`, NOD-422). */
-export type ComentarioDto = ComentarioTarefa & { autorNome: string | null; acionados: string[] };
+export type ComentarioDto = ComentarioTarefa & {
+  autorNome: string | null;
+  acionados: string[];
+  /** 2026-11-10 (0159): a raiz da thread (null = é raiz), os turnos que ele abriu e a marca de editado/apagado. */
+  paiId?: string | null;
+  turnos?: string[];
+  editadoEm?: number | null;
+  /** Apagado com respostas: fica como marcador, texto vazio. */
+  apagado?: boolean;
+};
 
 /**
  * NOD-443 (revisão 3 do PR #628, achado 7): o aviso de "Com você" que a dona põe na conversa de quem participa. Só isto

@@ -1,4 +1,6 @@
+import type { Prioridade } from "../../src/contracts/quadro-opcoes.ts";
 import type { Time, TimeNaLista } from "../../src/contracts/time.ts";
+import type { ModoAcionar, PreviaComentarioDto, RunDaTarefa } from "../../src/contracts/quadro-comentarios.ts";
 import type { DetalheVersaoPerfil, ListaVersoesPerfil, VersaoPerfil } from "../../src/contracts/versoes-perfil.ts";
 import type { AtividadeDto, ContagemDaAtividade } from "../../src/contracts/atividade.ts";
 import type { DecisoesDto } from "../../src/contracts/decisoes-do-bot.ts";
@@ -44,6 +46,7 @@ import type { MembroSala, Sala } from "../../src/contracts/sala.ts";
 import type { FaixaParada, Turno } from "../../src/contracts/turno.ts";
 import type { ComentarioDto, ComentarioTarefa, EntradaHistoricoDto, GrupoColuna, LinhaMuralDto, LoteQuadro, ModoConversa, QuadroCompartilhadoDto, QuadroDaPessoaDto, QuadroDto, StatusTarefa, TarefaPorCodigoDto } from "../../src/contracts/quadro.ts";
 import type { FiltroImportacao, ImportacaoDto, PreviaDaTela } from "../../src/contracts/quadro-importacao.ts";
+import type { CamposDeLabel, CorLabel } from "../../src/contracts/quadro-labels.ts";
 import type { PreviaAssumir, ResultadoAssumir } from "../../src/contracts/quadro-assumir.ts";
 import type { EventoTrilhaQuadro } from "../../src/contracts/trilha-quadro.ts";
 import type { Projeto, QuadrosDoBotDto } from "../../src/contracts/quadros-do-bot.ts";
@@ -319,11 +322,15 @@ export function criarApi(escopo: Escopo) {
     criarQuadro: (agenteId: string, campos: { meta?: string | null; prazo?: string | null; nome?: string; projeto?: string | null }) => post<MutacaoQuadro>(`agentes/${encodeURIComponent(agenteId)}/quadro`, campos),
     editarQuadro: (agenteId: string, campos: { meta?: string | null; prazo?: string | null }) => patch<MutacaoQuadro>(`agentes/${encodeURIComponent(agenteId)}/quadro`, campos),
     removerQuadro: (agenteId: string) => del<MutacaoQuadro>(`agentes/${encodeURIComponent(agenteId)}/quadro`),
-    mudarTarefa: (agenteId: string, tarefaId: string, campos: { status?: StatusTarefa | string; agente?: string | null; titulo?: string; descricao?: string; sem_iniciar?: boolean }) =>
+    mudarTarefa: (agenteId: string, tarefaId: string, campos: { status?: StatusTarefa | string; agente?: string | null; titulo?: string; descricao?: string; sem_iniciar?: boolean; prioridade?: Prioridade } & CamposDeLabel) =>
       patch<MutacaoQuadro>(`agentes/${encodeURIComponent(agenteId)}/quadro/tarefas/${encodeURIComponent(tarefaId)}`, campos),
     /** NOD-416 (ADR-144): sem status, a tarefa cai no Backlog e ninguém começa. */
-    criarTarefa: (agenteId: string, campos: { titulo: string; descricao?: string; status?: string; agente?: string | null }) =>
+    criarTarefa: (agenteId: string, campos: { titulo: string; descricao?: string; status?: string; agente?: string | null; prioridade?: Prioridade; labels?: string[]; prazo_em?: string | null }) =>
       post<MutacaoQuadro>(`agentes/${encodeURIComponent(agenteId)}/quadro/tarefas`, campos),
+    /** 0159: o catálogo de labels do quadro (pôr e tirar label na tarefa é o mudarTarefa: labels, por_labels, tirar_labels). */
+    criarLabel: (agenteId: string, campos: { nome: string; cor?: CorLabel }) => post<MutacaoQuadro>(`agentes/${encodeURIComponent(agenteId)}/quadro/labels`, campos),
+    editarLabel: (agenteId: string, labelId: string, campos: { nome?: string; cor?: CorLabel }) => patch<MutacaoQuadro>(`agentes/${encodeURIComponent(agenteId)}/quadro/labels/${encodeURIComponent(labelId)}`, campos),
+    removerLabel: (agenteId: string, labelId: string) => del<MutacaoQuadro>(`agentes/${encodeURIComponent(agenteId)}/quadro/labels/${encodeURIComponent(labelId)}`),
     /** NOD-416: muda a tarefa para o quadro de outro bot (sem lote nem Desfazer; ninguém começa). */
     moverTarefa: (agenteId: string, tarefaId: string, quadro: string) =>
       post<MutacaoQuadro & { movida?: { tarefaId: string; codigo: string; codigoAntigo: string } }>(`agentes/${encodeURIComponent(agenteId)}/quadro/tarefas/${encodeURIComponent(tarefaId)}/mover`, { quadro }),
@@ -348,9 +355,17 @@ export function criarApi(escopo: Escopo) {
       post<MutacaoQuadro>(`agentes/${encodeURIComponent(agenteId)}/quadro/tarefas/${encodeURIComponent(tarefaId)}/resposta`, { resposta, ...(avancar ? { avancar: true } : {}) }),
     /** NOD-417: os comentários da tarefa; o da pessoa aciona o responsável e @nome aciona outro bot. */
     comentariosDaTarefa: (agenteId: string, tarefaId: string) =>
-      get<{ comentarios: ComentarioDto[]; atividade?: AtividadeTarefa[]; criadaPor?: string | null }>(`agentes/${encodeURIComponent(agenteId)}/quadro/tarefas/${encodeURIComponent(tarefaId)}/comentarios`),
-    comentarTarefa: (agenteId: string, tarefaId: string, texto: string) =>
-      post<MutacaoQuadro & { comentario: ComentarioTarefa }>(`agentes/${encodeURIComponent(agenteId)}/quadro/tarefas/${encodeURIComponent(tarefaId)}/comentarios`, { texto }),
+      get<{ comentarios: ComentarioDto[]; atividade?: AtividadeTarefa[]; criadaPor?: string | null; runs?: RunDaTarefa[] }>(`agentes/${encodeURIComponent(agenteId)}/quadro/tarefas/${encodeURIComponent(tarefaId)}/comentarios`),
+    /** 2026-11-10: responder_a (a thread) e a escolha de cada chip. */
+    comentarTarefa: (agenteId: string, tarefaId: string, texto: string, extra: { responderA?: string | null; acionar?: { agente: string; modo: ModoAcionar }[] } = {}) =>
+      post<MutacaoQuadro & { comentario: ComentarioTarefa }>(`agentes/${encodeURIComponent(agenteId)}/quadro/tarefas/${encodeURIComponent(tarefaId)}/comentarios`, { texto, ...(extra.responderA ? { responder_a: extra.responderA } : {}), ...(extra.acionar?.length ? { acionar: extra.acionar } : {}) }),
+    /** 2026-11-10: os chips antes de enviar (a mesma conta do servidor). */
+    previaComentario: (agenteId: string, tarefaId: string, texto: string, responderA: string | null) =>
+      get<PreviaComentarioDto>(`agentes/${encodeURIComponent(agenteId)}/quadro/tarefas/${encodeURIComponent(tarefaId)}/comentarios/previa?texto=${encodeURIComponent(texto)}${responderA ? `&responder_a=${encodeURIComponent(responderA)}` : ""}`),
+    editarComentario: (agenteId: string, tarefaId: string, comentarioId: string, texto: string) =>
+      patch<MutacaoQuadro>(`agentes/${encodeURIComponent(agenteId)}/quadro/tarefas/${encodeURIComponent(tarefaId)}/comentarios/${encodeURIComponent(comentarioId)}`, { texto }),
+    apagarComentario: (agenteId: string, tarefaId: string, comentarioId: string) =>
+      del<MutacaoQuadro>(`agentes/${encodeURIComponent(agenteId)}/quadro/tarefas/${encodeURIComponent(tarefaId)}/comentarios/${encodeURIComponent(comentarioId)}`),
     /** NOD-418: os trabalhos da tarefa aberta (o atual, os anteriores, os recados) e Repetir, Cancelar e o recado. */
     trabalhosDaTarefa: (agenteId: string, tarefaId: string) =>
       get<ExecucoesDaTarefa>(`agentes/${encodeURIComponent(agenteId)}/quadro/tarefas/${encodeURIComponent(tarefaId)}/trabalhos`),
@@ -382,7 +397,7 @@ export function criarApi(escopo: Escopo) {
     quadroPorId: (qid: string) => get<{ quadro: QuadroDto }>(`quadros/${encodeURIComponent(qid)}`),
     atividadeDoQuadro: (qid: string) => get<{ linhas: LinhaMuralDto[] }>(`quadros/${encodeURIComponent(qid)}/atividade`),
     criarTarefaNoQuadro: (qid: string, campos: { titulo: string; descricao?: string }) => post<MutacaoQuadro>(`quadros/${encodeURIComponent(qid)}/tarefas`, campos),
-    mudarTarefaNoQuadro: (qid: string, tarefaId: string, campos: { status?: string; titulo?: string; descricao?: string; excluir?: true }) =>
+    mudarTarefaNoQuadro: (qid: string, tarefaId: string, campos: { status?: string; titulo?: string; descricao?: string; excluir?: true } & CamposDeLabel) =>
       patch<MutacaoQuadro>(`quadros/${encodeURIComponent(qid)}/tarefas/${encodeURIComponent(tarefaId)}`, campos),
     responderNoQuadro: (qid: string, tarefaId: string, resposta: string) =>
       post<MutacaoQuadro>(`quadros/${encodeURIComponent(qid)}/tarefas/${encodeURIComponent(tarefaId)}/resposta`, { resposta }),
@@ -406,7 +421,7 @@ export function criarApi(escopo: Escopo) {
     desfazerMovimento: (agenteId: string, tarefaId: string, movimentoId: string) =>
       post<MutacaoQuadro>(`agentes/${encodeURIComponent(agenteId)}/quadro/tarefas/${encodeURIComponent(tarefaId)}/movimentos/${encodeURIComponent(movimentoId)}/desfazer`),
     /** ADR-142: a passagem da coluna (agente null tira; instrucoes null apaga). */
-    definirPassagem: (agenteId: string, coluna: string, p: { agente: string | null; instrucoes: string | null }) =>
+    definirPassagem: (agenteId: string, coluna: string, p: { agente: string | null; instrucoes: string | null; proxima?: string | null; volta_para?: string | null }) =>
       pedir<MutacaoQuadro>("PUT", `${base}/agentes/${encodeURIComponent(agenteId)}/quadro/colunas/${encodeURIComponent(coluna)}/passagem`, p),
     /** NOD-380: `ate` (o id de uma fala achada na busca) faz a janela crescer até ela, mesmo fora das 200 recentes. */
     conversa: (id: string, ate?: string) => get<ConversaDto>(`conversas/${id}/mensagens${ate ? `?ate=${encodeURIComponent(ate)}` : ""}`),
