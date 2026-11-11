@@ -41,7 +41,7 @@
   /* 2026-11-11 (auditoria de 44 px): a barra mínima no celular — o funil, a busca, a pílula de quem trabalha e as Opções. */
   .qm-barra .qm-icbt, .qm-barra .qm-ativos { min-width: 44px; min-height: 44px; }
   .qm-barra .qd-busca-in { min-width: 44px; min-height: 44px; }
-  /* ADA-302 (QA do #725): com o campo de 44 px, a busca não encolhe abaixo do conteúdo; a barra quebra linha em vez de rolar na horizontal. */
+  /* ADA-302 (QA do PR 725): com o campo de 44 px, a busca não encolhe abaixo do conteúdo; a barra quebra linha em vez de rolar na horizontal. */
   .qm-barra .qm-esq { flex-wrap: wrap; row-gap: 4px; }
   .qm-barra .qd-busca-l, .qm-barra .qd-busca { min-width: min-content; }
   .qm-barra .qd-busca { height: auto; min-height: 44px; }

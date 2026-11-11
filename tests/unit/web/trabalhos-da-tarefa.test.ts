@@ -41,13 +41,14 @@ describe("ADA-10: o número é a sessão do bot, com a etapa", () => {
       exec({ id: "b", numero: 3, sessao: 1, estado: "concluido", colunaNome: "Plano de engenharia" }),
       exec({ id: "a", numero: 1, sessao: 1, estado: "concluido", colunaNome: "Pronto para engenharia" }),
     ]) });
-    expect(h).toContain("#2 · Implementando · rodando");
+    // #725: o rótulo do estado é o dos runs ("trabalhando"); o número continua a sessão (ADA-10).
+    expect(h).toContain("#2 · Implementando · trabalhando");
     expect(h).toContain("#1 · Plano de engenharia · concluído");
     expect(h).toContain("#1 · Pronto para engenharia · concluído");
     // O gatilho (numero) não aparece mais como número do trabalho.
     expect(h).not.toContain("#4");
     expect(h).not.toContain("#3");
-    expect(anuncioDoTrabalho({ numero: 4, sessao: 2, estado: "rodando", esperando: false })).toBe("Trabalho #2: rodando");
+    expect(anuncioDoTrabalho({ numero: 4, sessao: 2, estado: "rodando", esperando: false })).toBe("Run #2: trabalhando");
   });
 
   it("o nome da etapa sai escapado; sem coluna (linha de antes da 0165) fica o formato de antes", () => {
@@ -57,7 +58,7 @@ describe("ADA-10: o número é a sessão do bot, com a etapa", () => {
 
   it("o DTO de um servidor de antes da 0165 (sem sessao) mostra o número do gatilho", () => {
     const { sessao: _s, ...antigo } = exec({ id: "a", numero: 3, estado: "fila" });
-    expect(anuncioDoTrabalho(antigo)).toBe("Trabalho #3: na fila");
+    expect(anuncioDoTrabalho(antigo)).toBe("Run #3: na fila");
   });
 });
 
