@@ -38,6 +38,32 @@ describe("redigirResumo (ADR-165): segredo não passa no resumo do passo", () =>
     for (const segredo of [SK, GHP, PAT, XOX, AKIA, GLPAT, BASE64, HEX, "abc.def-ghi_jkl123456", "abc123def", "hunter22", "minhasenha", "s3gr3d0", "chave-curta", ":segredo@", "=abc", "=xyz", "dozjgNryP4J3"]) expect(r).not.toContain(segredo);
   });
 
+  // Revisão do PR #16 (ADA-302): o nome com prefixo em snake_case/kebab-case, o `Authorization: token`, a chave da AWS
+  // com barra e a senha passada como opção da linha de comando passavam inteiros (o `\b` não separa `db_` de `password`).
+  // Montados por partes, como os de cima: a varredura do público barra o literal (gitleaks).
+  const AWS_SECRET = ["wJalrXUtnFEMI", "K7MDENG", "bPxRfiCYEXAMPLEKEY"].join("/");
+  const V1 = ["abcdef", "1234567890"].join("");
+  const V2 = ["abc123", "def456"].join("");
+  const V3 = ["ghx12345", "67890abcd"].join("");
+  const AUTH = ["Author", "ization"].join("");
+  it.each([
+    ["db_password=", "DB=1 db_password=hunter2xyz ./run", "hunter2xyz"],
+    ["github_token:", `github_${"token"}: ${V1}`, V1],
+    ["export openai_api_key=", `export openai_api_${"key"}=${V2}`, V2],
+    ["--db-password", "cli --db-password hunter2xyz", "hunter2xyz"],
+    ["Authorization: token", `curl -H "${AUTH}: ${"tok" + "en"} ${V3}" api`, V3],
+    ["aws_secret_access_key com barra", `aws configure set aws_secret_access_key ${AWS_SECRET}`, "bPxRfiCYEXAMPLEKEY"],
+    ["mysql -p", "mysql -u root -pS3cretPass123 db", "S3cretPass123"],
+    ["sshpass -p", "sshpass -p hunter2pass ssh x", "hunter2pass"],
+    ["redis-cli -a", "redis-cli -h h -a mypassword123 ping", "mypassword123"],
+    ["curl -u", `curl -u admin:${["Super", "Secret1"].join("")} https://x`, "SuperSecret1"],
+    ["Cookie:", 'curl -H "Cookie: session=abcd1234efgh" x', "abcd1234efgh"],
+  ])("%s", (_, texto, segredo) => {
+    const r = redigirResumo(texto, RESUMO_DO_PASSO_MAX);
+    expect(r).toContain("••••");
+    expect(r).not.toContain(segredo);
+  });
+
   it("o segredo sai ANTES do corte: a chave no limite não deixa o começo dela", () => {
     const r = redigirResumo(`${"a ".repeat(70)}${SK}`, 150);
     expect(r).not.toContain("sk-ant");

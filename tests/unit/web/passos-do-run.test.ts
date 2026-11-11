@@ -26,6 +26,30 @@ describe("passos do run (Passo 2: rota + frames por seq)", () => {
     expect(p.aoFrame({ tipo: "turno.atividade", dados: { turnoId: "outro", seq: 9, rotulo: "x" } })).toBeNull();
   });
 
+  // Revisão do PR #16: o run termina enquanto a primeira leitura ainda está no ar. A leitura velha não pode marcar o cache
+  // como carregado: a fala persistida do fim (que só a rota traz) tem de ser lida de novo.
+  it("o fim do run no meio da leitura relê os passos (a leitura velha não fecha o cache)", async () => {
+    let soltar: () => void = () => undefined;
+    const chamadas: number[] = [];
+    const api = {
+      passosDoRun: async () => {
+        chamadas.push(chamadas.length);
+        if (chamadas.length === 1) { await new Promise<void>((r) => { soltar = r; }); return { passos: [passo(1)], fim: true }; }
+        return { passos: [passo(1), passo(2, { tipo: "texto", classe: "texto", ferramenta: null, rotulo: "Feito: PR #3" })], fim: true };
+      },
+    };
+    const p = criarPassosDosRuns({ api: () => api, aoMudar: () => undefined });
+    p.ligar([{ turnoId: "raiz", turnoAtual: "raiz" }]);
+    p.carregar("ag", "t", "raiz");
+    p.aoFrame({ tipo: "turno.encerrado", dados: { turnoId: "raiz" } });
+    p.carregar("ag", "t", "raiz", true);
+    soltar();
+    for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0));
+    expect(chamadas.length).toBe(2);
+    expect(p.de("raiz")!.lista.map((x) => x.seq)).toEqual([1, 2]);
+    expect(p.de("raiz")!.carregado).toBe(true);
+  });
+
   it("o texto ao vivo vence como último passo até vir uma ferramenta; o n é o maior entre o servidor e o cache", () => {
     const v = vistaDosPassos({ passos: new Map([[1, passo(1)]]), texto: "pensando no plano", carregado: false }, 7);
     expect(v.ultimo).toBe("pensando no plano");

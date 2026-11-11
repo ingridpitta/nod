@@ -23,11 +23,20 @@ const URL_COM_CREDENCIAL = /\b([a-z][a-z0-9+.-]*:\/\/)[^\s/:@]+:[^\s/@]+@/gi;
 /** `Bearer <token>` (cabeçalho de autorização). */
 const BEARER = /\b(Bearer|Basic)(\s+)[A-Za-z0-9._~+/=-]{8,}/gi;
 /** `token=…`, `senha: …`, `"password": "…"`, `--api-key …`: o nome fica, o valor sai. */
-const NOME_DE_SEGREDO = "(?:token|senha|password|passwd|pwd|secret|segredo|api[_-]?key|apikey|access[_-]?key|private[_-]?key|client[_-]?secret|authorization|credential|credencial)";
-const ATRIBUICAO = new RegExp(`\\b(${NOME_DE_SEGREDO}["']?)(\\s*[:=]\\s*)(["']?)[^\\s"'&,;)]+`, "gi");
-const FLAG = new RegExp(`(--${NOME_DE_SEGREDO})([= ])(["']?)[^\\s"']+`, "gi");
-/** O nome sozinho seguido de um valor longo (`token abc…`), como o `redigir` da linha do tempo. */
-const NOME_E_VALOR_LONGO = /\b(token|senha|password|secret)(\s+)[A-Za-z0-9._~+/=-]{16,}/gi;
+const NOME_DE_SEGREDO = "(?:token|senha|password|passwd|pwd|secret|segredo|api[_-]?key|apikey|access[_-]?key|private[_-]?key|client[_-]?secret|authorization|credential|credencial|cookie)";
+/**
+ * O nome com prefixo e sufixo em snake_case/kebab-case (`db_password`, `github_token`, `aws_secret_access_key`). Revisão do
+ * PR #16: com `\b` antes do nome, `db_password` passava (o `_` é letra para o `\b`).
+ */
+const NOME_COMPOSTO = `(?<![A-Za-z0-9])(?:[A-Za-z0-9]+[_-])*${NOME_DE_SEGREDO}(?:[_-][A-Za-z0-9]+)*`;
+/** O valor de `Authorization: token x` / `Bearer x` / `Basic x`: o esquema e o valor saem juntos. */
+const VALOR = `(?:(?:bearer|basic|token)\\s+)?[^\\s"'&,;)]+`;
+const ATRIBUICAO = new RegExp(`(${NOME_COMPOSTO}["']?)(\\s*[:=]\\s*)(["']?)${VALOR}`, "gi");
+const FLAG = new RegExp(`(--(?:[a-z0-9]+-)*${NOME_DE_SEGREDO}(?:-[a-z0-9]+)*)([= ])(["']?)[^\\s"']+`, "gi");
+/** O nome sozinho seguido de um valor longo (`token abc…`, `aws_secret_access_key abc…`), como o `redigir` da linha do tempo. */
+const NOME_E_VALOR_LONGO = new RegExp(`(${NOME_COMPOSTO})(\\s+)[A-Za-z0-9._~+/=-]{16,}`, "gi");
+/** A senha como opção curta da linha de comando: `mysql -pX`, `sshpass -p X`, `redis-cli -a X`, `curl -u user:senha`. */
+const SENHA_NA_OPCAO = /(\bmysql(?:dump|admin)?\b[^|;&]*?\s-p)(\S+)|(\bsshpass\s+-p\s*)(\S+)|(\bredis-cli\b[^|;&]*?\s-a\s+)(\S+)|(\s(?:-u|--user)[= ]?\s*[^\s:]+:)(\S+)/g;
 /** `CHAVE=valor` de env (nome em maiúsculas, como `export OPENAI_API_KEY=…` ou `PGPASSWORD=… psql`). */
 const ENV = /\b([A-Z][A-Z0-9_]{2,})=("[^"]*"|'[^']*'|\S+)/g;
 /** Candidato a trecho longo de base64/hex; quem decide é `pareceSegredo` (um caminho comprido não é segredo). */
@@ -64,6 +73,7 @@ export function redigirResumo(texto: string, max: number): string {
     .replace(CHAVES_CONHECIDAS, TAPADO)
     .replace(JWT, TAPADO)
     .replace(BEARER, `$1$2${TAPADO}`)
+    .replace(SENHA_NA_OPCAO, (_m, a1, _v1, a2, _v2, a3, _v3, a4) => `${a1 ?? a2 ?? a3 ?? a4}${TAPADO}`)
     .replace(FLAG, `$1$2$3${TAPADO}`)
     .replace(ATRIBUICAO, `$1$2$3${TAPADO}`)
     .replace(NOME_E_VALOR_LONGO, `$1$2${TAPADO}`)

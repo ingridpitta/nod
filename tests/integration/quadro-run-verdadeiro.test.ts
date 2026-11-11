@@ -135,6 +135,49 @@ describeIntegracao("o run verdadeiro na tarefa aberta (Multica × nod)", () => {
     });
   });
 
+  // Revisão do PR #16 (ADA-302): o refazer mexe só no run do comentário editado.
+  it("refazer não cancela o trabalho principal da tarefa do mesmo responsável, só o run que o comentário abriu", async () => {
+    await withRollback(MARLON, async (trx) => {
+      const m = await montar(trx);
+      const inicio = await aplicarLoteQuadro(m.deps, { ...m.base, ops: [{ tipo: "mudar_tarefa", tarefa: "T", status: "afazer" }] });
+      if (!inicio.data.ok) throw new Error(inicio.data.detalhe);
+      const principal = inicio.data.comecaram[0]!.turnoId;
+      await m.rodar(principal);
+      // "depois": um run de comentário na fila, ao lado do trabalho principal que roda (o padrão seria o manda agora).
+      const c1 = await m.comentar("e o rodapé", { acionar: { [m.beto.agenteId]: "depois" } });
+      const doComentario = c1.comecaram[0]!.turnoId;
+      expect(doComentario).not.toBe(principal);
+      const r = await mudarComentario(m.deps, m.base, { tipo: "editar_comentario", tarefa: "T", comentario: c1.comentario!.id, texto: "e o cabeçalho", refazer: true });
+      expect(r.data.ok).toBe(true);
+      expect((await m.repos.turnos.buscar(principal))?.pararSolicitadoEm ?? null).toBeNull();
+      const execs = await m.repos.quadroExecucoes.daTarefa((await m.tarefa()).id);
+      expect(execs.find((e) => e.turnoId === principal)?.canceladaEm ?? null).toBeNull();
+    });
+  });
+
+  it("refazer de um comentário que se juntou ao run de outro não derruba o pedido do outro", async () => {
+    await withRollback(MARLON, async (trx) => {
+      const m = await montar(trx);
+      const c1 = await m.comentar("faz a tela");
+      const t1 = c1.comecaram[0]!.turnoId;
+      const c2 = await m.comentar("e o botão", { responder_a: c1.comentario!.id });
+      expect(c2.juntados).toBe(1);
+      const r = await mudarComentario(m.deps, m.base, { tipo: "editar_comentario", tarefa: "T", comentario: c2.comentario!.id, texto: "e o link", refazer: true });
+      expect(r.data.ok).toBe(true);
+      expect((await m.repos.turnos.buscar(t1))?.estado).toBe("pendente");
+    });
+  });
+
+  it("o bot não refaz o próprio comentário por conta dele (reacionaria sem o freio nem o limite da corrente)", async () => {
+    await withRollback(MARLON, async (trx) => {
+      const m = await montar(trx);
+      const doBot = { autor: { tipo: "agente" as const, agenteId: m.ana.agenteId } };
+      const c1 = await m.comentar("Beto, revisa", {}, doBot);
+      const r = await mudarComentario(m.deps, { ...m.base, ...doBot }, { tipo: "editar_comentario", tarefa: "T", comentario: c1.comentario!.id, texto: "Beto, revisa de novo", refazer: true });
+      expect(r.data).toMatchObject({ ok: false, erro: "nao_permitido" });
+    });
+  });
+
   it("a pergunta à pessoa é gravada como tal (0169): a tela não casa mais pelo texto", async () => {
     await withRollback(MARLON, async (trx) => {
       const m = await montar(trx);

@@ -384,8 +384,9 @@ export async function trabalhoVivoDaTarefa(deps: Deps, tarefaId: string): Promis
 }
 
 /** 2026-11-10 ("no lugar do atual"): cancela os trabalhos vivos da tarefa como o Cancelar (sem mexer nos recados). */
-export async function cancelarTrabalhosVivos(deps: Deps, p: PedidoLote, tarefaId: string): Promise<RuntimeEvent[]> {
-  const execs = await deps.repos.quadroExecucoes.daTarefa(tarefaId);
+export async function cancelarTrabalhosVivos(deps: Deps, p: PedidoLote, tarefaId: string, soOsTurnos?: readonly string[]): Promise<RuntimeEvent[]> {
+  // Revisão do PR #16: `soOsTurnos` = só os trabalhos destes turnos raiz (o refazer de um comentário não mata o principal).
+  const execs = (await deps.repos.quadroExecucoes.daTarefa(tarefaId)).filter((e) => !soOsTurnos || soOsTurnos.includes(e.turnoId));
   const vivos = vivosDe(execs, await desfechosDe(deps, execs));
   if (!vivos.length) return [];
   await cancelarVivos(deps, p, vivos);

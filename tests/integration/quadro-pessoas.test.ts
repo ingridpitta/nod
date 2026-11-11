@@ -21,6 +21,7 @@ import { INTERVALO_NOVA_TENTATIVA_MS } from "../../src/contracts/quadro-execucoe
 import { cuidarDasExecucoesDoQuadro, trabalhoDaTarefa } from "../../src/use-cases/quadro-execucoes.ts";
 import { muralDoQuadro, quadrosCompartilhados, verQuadroPorId } from "../../src/use-cases/quadro-pessoas.ts";
 import { aplicarLoteQuadro, montarQuadro } from "../../src/use-cases/quadro.ts";
+import { etapaPresaDoTurno } from "../../src/use-cases/etapa-presa.ts";
 import type { Deps } from "../../src/use-cases/tipos.ts";
 import { depsSobreTrx, executar } from "../helpers/deps-l6.ts";
 import { agenteComConversa } from "../helpers/fabricas.ts";
@@ -1246,6 +1247,22 @@ describeIntegracao("quadro com várias pessoas (NOD-443, ADR-143)", () => {
       const removeu = await lote(dd, m.ada.agenteId, [{ tipo: "remover_quadro" }]);
       expect(removeu.data).toMatchObject({ ok: true, removido: true });
       expect(removeu.events.find((e) => e.kind === "quadro_mudou")!.dados).toMatchObject({ quadroId: m.qid, removido: true, membros: ANA.id });
+    });
+  });
+
+  // Revisão do PR #16 (D1 da ADA-302): o nome no aviso da etapa movida é o de quem moveu de fato. A Ana move a tarefa da
+  // Ada (rodando) para Em revisão: o aviso e a recusa dizem "Ana", não o nome da dona (o escopo da porta).
+  it("D1: a tarefa movida por quem participa enquanto o bot trabalha: o aviso nomeia quem moveu", async () => {
+    await withRollback(DONA.escopo, async (trx) => {
+      const m = await montar(trx);
+      await porNaAna(m);
+      const r = await daTela(m.dd, m.qid, [{ tipo: "mudar_tarefa", tarefa: "T1", agente: m.adaNome, status: "afazer" }]);
+      if (!r.data.ok) throw new Error(r.data.detalhe);
+      const turno = r.data.comecaram[0]!.turnoId;
+      await trx`update turnos set estado = 'despachando', despachado_em = clock_timestamp() where id = ${turno}`;
+      expect((await daTela(await como(trx, ANA.escopo), m.qid, [{ tipo: "mudar_tarefa", tarefa: "T1", status: "revisao" }])).data).toMatchObject({ ok: true });
+      const presa = await etapaPresaDoTurno(await como(trx, DONA.escopo), turno, m.ada.agenteId);
+      expect(presa?.quem).toBe(ANA.nome.split(/\s+/)[0]);
     });
   });
 });

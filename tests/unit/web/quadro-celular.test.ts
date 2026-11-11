@@ -318,4 +318,12 @@ describe("2026-11-11: o celular com o aviso do Backlog e a prioridade do computa
     expect(css).toMatch(/\.qd-cl-pri \.qm-pri-bt \{ width: 44px; height: 44px;/);
     expect(css).toContain(".qd-cl.qd-cl-com-pri { grid-template-columns: minmax(0, 1fr) auto auto;");
   });
+
+  // Revisão do PR #16 (auditoria de 44 px): o "ir até o run"/"Parar" do popover do chip do topo e o "mostrar N anteriores"
+  // dos passos também são alvos no celular.
+  it("o CSS do celular dá 44 px ao popover do run no topo e ao mostrar anteriores dos passos", () => {
+    const css = readFileSync("web/quadro-celular.css", "utf8");
+    expect(css).toContain(".qd-tarefa-cel .ta-pop-ac .qd-link");
+    expect(css).toContain(".qd-tarefa-cel .ta-passo-mais .qd-link");
+  });
 });

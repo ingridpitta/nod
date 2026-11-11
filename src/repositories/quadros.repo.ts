@@ -935,13 +935,15 @@ export function quadrosRepo(conn: Conn, escopo: Escopo) {
     },
     /** O histórico da tarefa, mais antigo primeiro (até 200 linhas, as mais recentes). */
     /** `quadroId` = o quadro em que a mudança foi registrada (no mover, o destino; a origem vai em `de` da linha `quadro`). */
-    async historico(tarefaId: string): Promise<{ id: string; quadroId: string; campo: CampoHistorico; de: string | null; para: string | null; autor: "pessoa" | "agente" | "regra"; autorAgenteId: string | null; criadoEm: number }[]> {
-      const ls = await conn<{ id: string; quadro_id: string; campo: CampoHistorico; de: string | null; para: string | null; autor: "pessoa" | "agente" | "regra"; autor_agente_id: string | null; criado_em: Date }[]>`
-        select * from (
-          select id, quadro_id, campo, de, para, autor, autor_agente_id, criado_em from quadro_tarefa_historico
+    /** `pedidoPor`: quem pediu o lote da mudança (quem participa do quadro, NOD-443); null = a dona ou sem lote. */
+    async historico(tarefaId: string): Promise<{ id: string; quadroId: string; campo: CampoHistorico; de: string | null; para: string | null; autor: "pessoa" | "agente" | "regra"; autorAgenteId: string | null; criadoEm: number; pedidoPor: string | null }[]> {
+      const ls = await conn<{ id: string; quadro_id: string; campo: CampoHistorico; de: string | null; para: string | null; autor: "pessoa" | "agente" | "regra"; autor_agente_id: string | null; criado_em: Date; pedido_por: string | null }[]>`
+        select h.*, l.pedido_por from (
+          select id, quadro_id, campo, de, para, autor, autor_agente_id, criado_em, lote_id from quadro_tarefa_historico
           where ${dona()} and tarefa_id = ${tarefaId} order by criado_em desc, id desc limit 200
-        ) h order by criado_em, id`;
-      return ls.map((l) => ({ id: l.id, quadroId: l.quadro_id, campo: l.campo, de: l.de, para: l.para, autor: l.autor, autorAgenteId: l.autor_agente_id, criadoEm: ms(l.criado_em) }));
+        ) h left join quadro_lotes l on l.tenant_id = ${escopo.tenantId} and l.owner_id = ${escopo.pessoaId} and l.id = h.lote_id
+        order by h.criado_em, h.id`;
+      return ls.map((l) => ({ id: l.id, quadroId: l.quadro_id, campo: l.campo, de: l.de, para: l.para, autor: l.autor, autorAgenteId: l.autor_agente_id, criadoEm: ms(l.criado_em), pedidoPor: l.pedido_por }));
     },
     /* NOD-443 (ADR-143): as pessoas do quadro, o modo, o mural e os comentários. */
 

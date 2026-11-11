@@ -17,10 +17,15 @@ export async function etapaPresaDoTurno(deps: Pick<Deps, "repos" | "escopo">, tu
   const m = mudancaQuePrende({ etapa: e.etapa, statusAgora: t.status, desde: e.criadoEm, agenteId, historico: await deps.repos.quadros.historico(t.id) });
   if (!m) return null;
   const q = await deps.repos.quadros.buscar(t.quadroId);
-  const coluna = (q ? colunasDe(q) : []).find((c) => c.id === t.status)?.nome ?? t.status;
+  const destino = (q ? colunasDe(q) : []).find((c) => c.id === t.status);
+  // Revisão do PR #16: a etapa nova é do mesmo responsável (a passagem dela nomeia este agente) e ele segue na tarefa:
+  // ninguém começa, porque o turno vivo cobre a etapa (regraDeComecar). Prendê-lo deixaria a etapa sem quem a faça.
+  if (destino?.responsavel === agenteId && t.agenteId === agenteId) return null;
+  const coluna = destino?.nome ?? t.status;
   const quem = m.autor === "agente" && m.autorAgenteId
     ? (await deps.repos.agentes.buscar(m.autorAgenteId))?.nome ?? "outro bot"
-    : (await deps.repos.pessoas.buscar(deps.escopo.pessoaId))?.nome?.split(/\s+/)[0] ?? "a pessoa";
+    // D1 (revisão do PR #16): quem moveu de fato — quem participa e pediu o lote, senão a dona.
+    : (await deps.repos.pessoas.buscar(m.pedidoPor ?? deps.escopo.pessoaId))?.nome?.split(/\s+/)[0] ?? "a pessoa";
   return { tarefaId: t.id, titulo: t.titulo, quem, coluna, execucaoId: e.id };
 }
 

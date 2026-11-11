@@ -14,7 +14,8 @@ export interface ApiDosPassos {
   passosDoRun?(agenteId: string, tarefaId: string, turnoId: string, depois?: number | null): Promise<PassosDoRunDto>;
 }
 
-type Cache = { passos: Map<number, PassoNaTela>; texto: string | null; carregado: boolean; lendo: boolean; semSeq: number };
+/** `reler`: o run mudou (o fim) com uma leitura no ar; ela não fecha o cache e outra sai logo depois (revisão do PR #16). */
+type Cache = { passos: Map<number, PassoNaTela>; texto: string | null; carregado: boolean; lendo: boolean; reler: boolean; semSeq: number };
 const PAGINAS_MAX = 10;
 const CLASSES = new Set(["comando", "arquivo", "busca", "app", "texto", "erro", "outro"]);
 const str = (v: unknown, max: number): string | null => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null);
@@ -58,7 +59,7 @@ export function criarPassosDosRuns(o: { api: () => ApiDosPassos | null; aoMudar:
   const agora = () => (o.agora ? o.agora() : Date.now());
   const cache = (raiz: string): Cache => {
     let c = caches.get(raiz);
-    if (!c) { c = { passos: new Map(), texto: null, carregado: false, lendo: false, semSeq: 1e15 }; caches.set(raiz, c); }
+    if (!c) { c = { passos: new Map(), texto: null, carregado: false, lendo: false, reler: false, semSeq: 1e15 }; caches.set(raiz, c); }
     return c;
   };
 
@@ -76,8 +77,9 @@ export function criarPassosDosRuns(o: { api: () => ApiDosPassos | null; aoMudar:
         depois = r.passos.at(-1)?.seq ?? depois;
         if (r.fim || !r.passos.length) break;
       }
-      c.carregado = true;
+      c.carregado = !c.reler;
     } catch { /* fica com o que os frames trouxeram; o próximo abrir tenta de novo */ } finally { c.lendo = false; }
+    if (c.reler) { c.reler = false; await carregar(agenteId, tarefaId, raiz); return; }
     o.aoMudar(raiz);
   }
 
@@ -88,7 +90,8 @@ export function criarPassosDosRuns(o: { api: () => ApiDosPassos | null; aoMudar:
     /** Lê os passos persistidos do run (uma vez; a próxima só se a anterior falhou). */
     carregar(agenteId: string, tarefaId: string, raiz: string, forcar = false): void {
       const c = cache(raiz);
-      if ((c.carregado && !forcar) || c.lendo) return;
+      if (c.lendo) { if (forcar) c.reler = true; return; }
+      if (c.carregado && !forcar) return;
       void carregar(agenteId, tarefaId, raiz);
     },
     de(raiz: string, nPersistidos = 0): PassosDoRun | null {
@@ -123,6 +126,7 @@ export function criarPassosDosRuns(o: { api: () => ApiDosPassos | null; aoMudar:
         for (const [seq, p] of c.passos) if (p.aberto) c.passos.set(seq, { ...p, aberto: false });
         c.texto = null;
         c.carregado = false;
+        if (c.lendo) c.reler = true;
         return raiz;
       }
       return null;

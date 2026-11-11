@@ -583,6 +583,18 @@ export async function pararTurno(deps: Deps, p: PedidoLote, turnoId: string): Pr
 }
 
 /**
+ * Revisão do PR #16: para os trabalhos vivos do agente `agenteId` na tarefa (menos os de comentário e os `manter`). O
+ * turno que seguiu na etapa (ADR-142, `seguemNaEtapa`) não está mais em `tarefa.turnoId`: sem isto, a tarefa que volta ao
+ * mesmo agente abria um segundo turno dele com o primeiro ainda rodando.
+ */
+async function pararOutrosDoAgente(deps: Deps, p: PedidoLote, tarefaId: string, agenteId: string, manter: readonly (string | null | undefined)[]): Promise<void> {
+  for (const e of await deps.repos.quadroExecucoes.daTarefa(tarefaId)) {
+    if (e.agenteId !== agenteId || e.origem === "comentario" || e.canceladaEm !== null || e.desfecho !== null || manter.includes(e.turnoId)) continue;
+    await pararTurno(deps, p, e.turnoId);
+  }
+}
+
+/**
  * ADR-162 (fluxo Multica): a pergunta à pessoa é um COMENTÁRIO na tarefa, com a @menção de quem decide; o card fica na
  * coluna. `autor` agente = o bot que perguntou (texto de bot: de fora, ADR-047); `sistema` = a espera que o próprio quadro
  * deixou com a pessoa (o bot parou sem saída, o freio, o agente da etapa que sumiu), que não aciona ninguém.
@@ -1379,6 +1391,9 @@ async function aplicarNoQuadro(deps: Deps, p: PedidoLote, qSemPrefixo: Quadro, a
     // (não confiável, sob a procuração de quem pediu, contaminado, manual); abre o turno dela pelo caminho de sempre.
     let naFila = p.pedidoPor ? null : await deps.repos.quadroComentarios.turnoNaFila(id, agente.id, t.turnoId);
     if (naFila && !(await podeJuntarNoTurno(deps, naFila.id, autorAgenteId))) naFila = null;
+    // Revisão do PR #16 (ADR-142): o turno que seguiu na etapa de antes saiu de `tarefa.turnoId`; quando a tarefa volta a
+    // este agente, o velho dele para aqui (o mesmo agente não roda em dobro). O de comentário segue (NOD-417).
+    await pararOutrosDoAgente(deps, p, id, agente.id, [t.turnoId, naFila?.id ?? null]);
     // Juntar num turno de comentário (não o da própria tarefa): a menção pedia para não mexer no status; agora pode.
     const junto = naFila && naFila.id !== t.turnoId ? `${TAREFA_PASSOU_A_VOCE}\n\n${texto(t)}` : texto(t);
     const juntada = naFila ? await deps.repos.turnos.juntarEntrada(naFila.id, junto, [], { profundidade: proximaProfundidade(p.profundidade ?? 0) }) : null;

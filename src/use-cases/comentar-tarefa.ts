@@ -283,6 +283,11 @@ export async function mudarComentario(deps: Deps, p: PedidoLote, op: Extract<OpQ
   const meu = (p.autor.tipo === "agente" && c.autor.tipo === "agente" && c.autor.agenteId === p.autor.agenteId)
     || ((p.autor.tipo === "pessoa" || pedidoDaPessoa(p)) && daPessoa);
   if (!meu) return falha("nao_permitido", "só quem escreveu edita ou apaga o comentário");
+  // Revisão do PR #16: o refazer (reacionar com o texto novo) é da pessoa — pela tela ou pelo bot a pedido dela. O bot por
+  // conta própria reacionaria colegas sem o freio da hora nem o limite da corrente (ADR-063) que o comentário dele passa.
+  if (op.tipo === "editar_comentario" && op.refazer && !(p.autor.tipo === "pessoa" || pedidoDaPessoa(p))) {
+    return falha("nao_permitido", "refazer o run do comentário é da pessoa: edite sem refazer, ou comente de novo");
+  }
   // O "Mandar como run novo" do recibo é o refazer com o mesmo texto: não marca "editado".
   const mesmoTexto = op.tipo === "editar_comentario" && op.texto.trim() === c.texto.trim();
   const ok = op.tipo === "editar_comentario" ? (mesmoTexto && op.refazer ? true : await deps.repos.quadroComentarios.editar(c.id, op.texto)) : await deps.repos.quadroComentarios.apagar(c.id);
@@ -309,12 +314,17 @@ async function refazerComentario(deps: Deps, p: PedidoLote, q: { id: string }, t
   const comecaram: Comecou[] = [];
   const estados = await deps.repos.quadros.estadosDosTurnos(c.turnos);
   const alvos = new Set<string>();
+  // Revisão do PR #16: o turno em que outro comentário também se juntou (turnoNaFilaDaThread) leva o pedido dele: segue
+  // vivo, e o texto novo vai num run à parte.
+  const deOutros = new Set((await deps.repos.quadroComentarios.daTarefa(tarefa.id)).filter((x) => x.id !== c.id).flatMap((x) => x.turnos ?? []));
   for (const id of c.turnos) {
     if (!["pendente", "despachando"].includes(estados.get(id) ?? "")) continue;
     const t = await deps.repos.turnos.buscar(id);
     if (!t) continue;
     alvos.add(t.agenteId);
-    if (t.agenteId === tarefa.agenteId) events.push(...(await cancelarTrabalhosVivos(deps, p, tarefa.id)));
+    if (deOutros.has(id)) continue;
+    // Só o trabalho deste turno (o principal da tarefa, de outro gatilho, segue).
+    if (t.agenteId === tarefa.agenteId) events.push(...(await cancelarTrabalhosVivos(deps, p, tarefa.id, [id])));
     await pararTurno(deps, p, id);
   }
   // O recado do "manda agora" deste comentário que ainda não foi lido sai da fila; o recibo "não entrou" vira run.

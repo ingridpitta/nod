@@ -6,7 +6,8 @@
  */
 import type { IdColuna } from "../contracts/quadro.ts";
 
-export type MudancaDeColuna = { campo: string; para: string | null; autor: "pessoa" | "agente" | "regra"; autorAgenteId: string | null; criadoEm: number };
+/** `pedidoPor`: quem pediu o lote (quem participa do quadro); null/ausente = a dona (D1: o aviso nomeia quem moveu). */
+export type MudancaDeColuna = { campo: string; para: string | null; autor: "pessoa" | "agente" | "regra"; autorAgenteId: string | null; criadoEm: number; pedidoPor?: string | null };
 
 /**
  * A mudança que deixou o trabalho fora da etapa dele, ou null. Preso = a tarefa não está mais na coluna em que o trabalho

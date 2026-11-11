@@ -115,6 +115,8 @@
   /* 2026-11-11 (auditoria de 44 px): Repetir, Parar e Ver o trabalho do bloco do run. */
   .qd-tarefa-cel .ta-trans-busca { min-height: var(--cel-alvo, 44px); font-size: 16px; }
   .qd-tarefa-cel .ta-dialogo-cab .qd-link { min-height: var(--cel-alvo, 44px); min-width: var(--cel-alvo, 44px); }
+  /* Revisão do PR #16 (auditoria de 44 px): o popover do run no topo e o "mostrar N anteriores" dos passos. */
+  .qd-tarefa-cel .ta-pop-ac .qd-link, .qd-tarefa-cel .ta-passo-mais .qd-link { display: inline-flex; align-items: center; min-height: var(--cel-alvo, 44px); min-width: var(--cel-alvo, 44px); }
   .qd-tarefa-cel .ta-run-ac { display: inline-flex; align-items: center; justify-content: center; min-height: var(--cel-alvo, 44px); min-width: var(--cel-alvo, 44px); }
   .qd-tarefa-cel .ta-pe { position: sticky; bottom: 0; z-index: 2; padding: 8px 0 calc(env(safe-area-inset-bottom) + 8px); background: var(--surface); }
   .qd-tarefa-cel .ta-enviar { min-height: var(--cel-alvo, 44px); min-width: var(--cel-alvo, 44px); justify-content: center; }

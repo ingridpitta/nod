@@ -18,7 +18,7 @@ import { withRollback } from "../helpers/with-rollback.ts";
  */
 const MARLON = { tenantId: TENANT_PADRAO, pessoaId: PESSOA_MARLON };
 
-async function montar(trx: Tx) {
+async function montar(trx: Tx, o: { revisor?: "ze" | "dev" } = {}) {
   const s = Math.random().toString(36).slice(2, 7);
   const dono = await agenteComConversa(trx, MARLON, { nome: `Eng ${s}` });
   const dev = await agenteComConversa(trx, MARLON, { nome: `Dev ${s}` });
@@ -29,7 +29,7 @@ async function montar(trx: Tx) {
   const base = await lote({ autor: { tipo: "agente", agenteId: dono.agenteId }, limite: "total", ops: [
     { tipo: "criar_quadro", meta: null },
     { tipo: "definir_passagem", coluna: "A fazer", agente: `Dev ${s}`, instrucoes: "implementa" },
-    { tipo: "definir_passagem", coluna: "Em revisão", agente: `Ze ${s}`, instrucoes: "revisa" },
+    { tipo: "definir_passagem", coluna: "Em revisão", agente: o.revisor === "dev" ? `Dev ${s}` : `Ze ${s}`, instrucoes: "revisa" },
     { tipo: "criar_tarefa", titulo: "Escrever um haiku" },
   ] });
   if (!base.data.ok) throw new Error(base.data.detalhe);
@@ -93,6 +93,37 @@ describeIntegracao("o turno anterior não é cortado: fica preso à etapa (2026-
       const r = await m.lote({ ops: [{ tipo: "mudar_tarefa", tarefa: m.tid, status: "backlog" }] });
       if (!r.data.ok) throw new Error(r.data.detalhe);
       expect((await m.repos.turnos.buscar(m.turnoDev))?.pararSolicitadoEm).not.toBeNull();
+    });
+  });
+
+  // Revisão do PR #16 (ADA-302): o turno que seguiu na etapa sai do `tarefa.turnoId` (fica o do Ze). Quando a tarefa volta
+  // ao Dev, o turno novo dele não pode rodar junto com o velho (dois do mesmo agente na mesma tarefa, nenhum preso).
+  it("a tarefa volta ao mesmo agente que seguiu na etapa: o turno velho dele para antes do novo", async () => {
+    await withRollback(MARLON, async (trx) => {
+      const m = await montar(trx);
+      const r = await m.lote({ ops: [{ tipo: "mudar_tarefa", tarefa: m.tid, status: "revisao" }] });
+      if (!r.data.ok) throw new Error(r.data.detalhe);
+      expect(r.data.seguemNaEtapa).toEqual([{ tarefaId: m.tid, agenteNome: m.devNome }]);
+      const volta = await m.lote({ ops: [{ tipo: "mudar_tarefa", tarefa: m.tid, status: "afazer" }] });
+      if (!volta.data.ok) throw new Error(volta.data.detalhe);
+      const novo = volta.data.comecaram.find((c) => c.agenteId === m.dev.agenteId)?.turnoId;
+      expect(novo).toBeTruthy();
+      expect(novo).not.toBe(m.turnoDev);
+      expect((await m.repos.turnos.buscar(m.turnoDev))?.pararSolicitadoEm).not.toBeNull();
+    });
+  });
+
+  // Revisão do PR #16: a etapa nova é do MESMO responsável e o turno dele está vivo: ninguém começa (o que roda cobre a
+  // etapa, regraDeComecar). Então ele não pode ficar preso à etapa de antes, senão a revisão nunca roda.
+  it("a passagem para o mesmo responsável com turno vivo: ele cobre a etapa nova e não fica preso", async () => {
+    await withRollback(MARLON, async (trx) => {
+      const m = await montar(trx, { revisor: "dev" });
+      const r = await m.lote({ ops: [{ tipo: "mudar_tarefa", tarefa: m.tid, status: "revisao" }] });
+      if (!r.data.ok) throw new Error(r.data.detalhe);
+      expect(r.data.comecaram).toEqual([]);
+      expect(await avisoDaEtapaNaSessao(m.deps, m.turnoDev)).toBeNull();
+      const terminei = await m.doDev([{ tipo: "terminei" }]);
+      expect(terminei.data, JSON.stringify(terminei.data)).toMatchObject({ ok: true });
     });
   });
 
