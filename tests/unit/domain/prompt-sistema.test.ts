@@ -254,6 +254,32 @@ describe("montarPromptSistema", () => {
       expect(conexoes(p)[0]).toEqual({ slug: "gmail", habilitado: true, concedidas_a_voce: ["GMAIL_FETCH_EMAILS"], outras_do_app: ["GMAIL_LIST_LABELS"] });
       expect(p).not.toContain("rótulos");
     });
+
+    const muitas = Array.from({ length: 20 }, (_, i) => doConector(`GMAIL_CAP_${i}`));
+    const lista = (p: string) => {
+      const linha = p.split("\n").find((l) => l.startsWith("As únicas ferramentas disponíveis são"))!;
+      return { linha, lista: linha.slice(0, linha.indexOf(".")) }; // nome de ferramenta não tem ponto
+    };
+
+    it("com concedidas de sobra, elas não se repetem em \"As únicas ferramentas\": lá fica só a regra do nome", () => {
+      const p = montarPromptSistema({ agente, memorias: [], ferramentas: [f("pedir_acesso"), ...muitas], pessoaNome: "M", modo: "conversa", conectores: [gmail] });
+      expect(lista(p).lista).toContain("mcp__nod__pedir_acesso");
+      expect(lista(p).lista).not.toContain("gmail");
+      expect(lista(p).linha).toContain("mcp__nod__<slug>__<capacidade>");
+      expect(conexoes(p)[0]?.concedidas_a_voce).toContain("GMAIL_CAP_0");
+    });
+
+    it("com poucas concedidas a regra custaria mais que os nomes: a lista segue inteira, sem regressão", () => {
+      const p = montarPromptSistema({ agente, memorias: [], ferramentas: [f("pedir_acesso"), doConector("GMAIL_FETCH_EMAILS")], pessoaNome: "M", modo: "conversa", conectores: [gmail] });
+      expect(lista(p).lista).toContain("mcp__nod__gmail__GMAIL_FETCH_EMAILS");
+      expect(lista(p).linha).not.toContain("mcp__nod__<slug>__<capacidade>");
+    });
+
+    it("na rotina não há bloco de conexões (ADR-044), então a lista de ferramentas segue inteira", () => {
+      const p = montarPromptSistema({ agente, memorias: [], ferramentas: [f("pedir_acesso"), ...muitas], pessoaNome: "M", modo: "rotina", conectores: [gmail] });
+      expect(p).not.toContain("Conexões cadastradas");
+      expect(lista(p).lista).toContain("mcp__nod__gmail__GMAIL_CAP_0");
+    });
   });
 });
 
