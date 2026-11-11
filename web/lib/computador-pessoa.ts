@@ -372,7 +372,7 @@ function htmlAvisoSemContato(titulo: string): string {
 }
 
 /** O download do app (o DMG do Mac). A lista, não `latest`: até a 1.0.0 toda release sai como pré-release (processo-de-release.md). */
-export const URL_ATUALIZAR_APP = "https://github.com/gamefik/nod/releases";
+export const URL_ATUALIZAR_APP = "https://github.com/marlonwlv/nod/releases";
 /**
  * NOD-407: o app conectado está abaixo do piso do computador. No Mac, o link Atualizar app; no motor Linux (instalado
  * pelo script), não há DMG: a frase pede para atualizar o nod naquela máquina.

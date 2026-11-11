@@ -120,7 +120,7 @@ substituído ao arrastar (**Substituir**).
 
 ## H1. Atualizar a partir da última preview publicada
 
-Com a última preview instalada e conectada (a mais recente da [lista de releases](https://github.com/gamefik/nod/releases), sem assinatura), instalar o DMG novo por cima
+Com a última preview instalada e conectada (a mais recente da [lista de releases](https://github.com/marlonwlv/nod/releases), sem assinatura), instalar o DMG novo por cima
 (arrastar para **Aplicativos** e **Substituir**). A preview e o app assinado têm o mesmo `appId` (`app.nod.desktop`) e
 a mesma pasta `Application Support/nod`; a assinatura nova é que pode mudar o acesso ao item do Keychain.
 

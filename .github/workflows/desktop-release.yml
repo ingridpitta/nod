@@ -1,0 +1,514 @@
+# Release do app desktop (Mac arm64/x64 e Windows x64). Portado do gamefik/nod em 2026-11-11 (NOD-485, ADR-161).
+# Repo público, então:
+#   - Só roda por tag v* empurrada aqui ou por workflow_dispatch; nenhum gatilho de PR (nem pull_request_target).
+#     Todo job exige github.repository == 'marlonwlv/nod' (um fork que copie a tag não roda nada).
+#   - Só runners hospedados do GitHub (macos-15, macos-15-intel, ubuntu-24.04[-arm], ubuntu-latest, windows-latest).
+#   - Token sem permissão no topo; cada job pede só o que usa. Os jobs que leem APPLE_*, WIN_CSC_* e o WIF rodam no
+#     environment `release`, que só aceita a main e as tags v* (deployment branch policy). Os secrets moram nele.
+#   - Modo seco: workflow_dispatch com publicar=false (o padrão) builda e testa tudo, assina e notariza só se os secrets
+#     Apple estiverem no environment, e não cria rascunho nem sobe nada no bucket. publicar=true só publica numa tag v*.
+#   - O bucket dos downloads (job `downloads`) só recebe a pasta da versão (v<versão>/), nunca os nomes estáveis da
+#     raiz que o site serve (/download/mac, /download/windows): esses mudam à mão depois do aceite nos dois Macs.
+# Actions pinadas por SHA imutável (as mesmas do ci.yml e do deploy.yml):
+#   actions/checkout v4.2.2                    = 11bd71901bbe5b1630ceea73d27597364c9af683
+#   actions/setup-node v4.4.0                  = 49933ea5288caeca8642d1e84afbd3f7d6820020
+#   actions/upload-artifact                    = ea165f8d65b6e75b540449e92b4886f43607fa02
+#   actions/download-artifact                  = d3f86a106a0bac45b974a628896c90dbdf5c8093
+#   actions/cache v4.2.3                       = 5a3ec84eff668545956fd18022155c47e93e2684
+#   google-github-actions/auth v3.0.0          = 7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+#   google-github-actions/setup-gcloud v3.0.1  = aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+name: desktop-release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      publicar:
+        description: "Publicar (rascunho da release + bucket). Só vale numa tag v*; desligado = modo seco."
+        type: boolean
+        default: false
+permissions: {}
+env:
+  # true na tag empurrada; no dispatch, o que a pessoa marcou. O rascunho ainda exige que a ref seja uma tag v*.
+  PUBLICAR: ${{ github.event_name == 'push' || inputs.publicar == true }}
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  # definido em 2026-11-05: o verify repetia o `npm run check` inteiro, em série, num runner de 2 vCPU (36 min na
+  # rc.3) e caiu em duas das seis releases vermelhas desde a rc.1 por diferenças do checkout de tag (a catraca de
+  # paridade sem a main e sem o pai do commit, 28/10 e 4/11). O `ci.yml` já roda os mesmos testes em paralelo em
+  # ~6 min para cada commit da main. Então a tag só sobe se o commit dela tem um run verde do `ci` (é o que o
+  # docs/processo-de-release.md já pede antes da tag); aqui ficam só os builds que o release precisa.
+  verify:
+    if: github.repository == 'marlonwlv/nod'
+    runs-on: ubuntu-latest
+    # Ler os runs do ci.yml pela API exige `actions: read`; o padrão do workflow (contents: read) dava HTTP 403
+    # ("Resource not accessible by integration", run 41950972119, 2026-11-05).
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: O commit da tag passou na CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          N=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&status=success&per_page=1" --jq '.total_count')
+          if [ "$N" != "0" ]; then echo "ci verde para $GITHUB_SHA"; exit 0; fi
+          # A execução manual em modo seco não cria release: avisa e segue. Numa tag (ou dispatch que publica), reprova.
+          if [ "$PUBLICAR" != true ]; then echo "::warning::o commit $GITHUB_SHA não tem run verde do ci.yml (execução manual: segue sem o gate)"; exit 0; fi
+          echo "::error::o commit $GITHUB_SHA não tem run verde do ci.yml. Faça o merge na main, espere o ci passar e só então crie a tag. Se o ci da main caiu num teste instável, rode-o de novo: a tag não precisa mudar."
+          exit 1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.19.0'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run desktop:build
+  mac:
+    # NOD-93 (ADR-123 nota ADR-100): com NOD_VM_LOCAL=1, o app leva o sha256 do disco que o job vm-local construiu,
+    # então espera por ele; sem a variável o vm-local é pulado e o Mac segue como antes.
+    needs: [verify, vm-local]
+    if: ${{ !cancelled() && github.repository == 'marlonwlv/nod' && needs.verify.result == 'success' && (needs.vm-local.result == 'success' || needs.vm-local.result == 'skipped') }}
+    environment: release
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            vmarch: arm64
+            runner: macos-15
+          - arch: x64
+            vmarch: amd64
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
+    # Os secrets Apple entram só no env dos passos que assinam ou conferem (preflight, modo de assinatura, empacotar,
+    # notarizar o DMG e verificar): o npm ci, o build e o smoke rodam código de dependência e não os veem.
+    env:
+      # NOD-203: o endereço do servidor embutido no app (ADR-069). Variável de repositório, não secret: aparece no app.
+      NOD_SERVIDOR_PADRAO: ${{ vars.NOD_SERVIDOR_PADRAO }}
+      ARCH: ${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.19.0'
+          cache: npm
+      # Antes do npm ci: falta de secret ou da variável falha aqui, listando tudo de uma vez. No modo seco a falta vira
+      # aviso (o run mostra o que ainda falta cadastrar) e o app sai sem assinatura.
+      - name: Preflight da release
+        env:
+          NOD_RELEASE_SECO: ${{ env.PUBLICAR != 'true' && '1' || '' }}
+          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: node scripts/desktop/release-preflight.mjs
+      # Assina e notariza só com os cinco secrets Apple. Publicar sem eles já reprovou no preflight.
+      - name: Modo de assinatura
+        env:
+          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -n "$CSC_LINK" ] && [ -n "$CSC_KEY_PASSWORD" ] && [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
+            echo "ASSINAR=1" >> "$GITHUB_ENV"; echo "assinatura e notarização ligadas"
+          else
+            echo "ASSINAR=0" >> "$GITHUB_ENV"; echo "::warning::sem os secrets Apple no environment release: o app sai sem assinatura nem notarização (modo seco)"
+          fi
+      - run: npm ci
+      # NOD-93 (ADR-123, ADR-127): o Lima da VM local, fixados e conferidos por sha256. Desligado, o app sai sem eles.
+      - name: Binários da VM local
+        if: vars.NOD_VM_LOCAL == '1'
+        run: node scripts/desktop/vm-local-binarios.ts --arch "$ARCH"
+      - name: sha256 do disco da VM (embutido no app)
+        if: vars.NOD_VM_LOCAL == '1'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: vm-sha-${{ matrix.vmarch }}
+          path: vm-sha
+      # Depois dos binários (que recriam dist/vm-local/<arch>): o hash vai para Contents/Resources/vm-local/disco.sha256.
+      - name: Gravar o sha256 do disco no app
+        if: vars.NOD_VM_LOCAL == '1'
+        run: |
+          set -euo pipefail
+          VERSAO=$(node -p "require('./package.json').version")
+          node scripts/vm-local/digest-do-disco.ts --arch "$ARCH" --versao "$VERSAO" --sha "vm-sha/nod-vm-$VERSAO-${{ matrix.vmarch }}.img.zst.sha256"
+      - run: npm run desktop:build
+      # NOD-187: antes do empacotamento, para falhar cedo sem gastar assinatura e notarização.
+      # Sem prazo, um Electron travado (GPU/viz sob carga) prenderia o job até o limite de 6 h do runner.
+      - name: Smoke da janela
+        timeout-minutes: 5
+        run: npx electron scripts/desktop/smoke-window.mjs
+      # NOD-133: o alvo explícito (`dmg`) faz a CLI mandar na arquitetura. Só com `--arm64`, o `arch: [arm64, x64]` do
+      # electron-builder.yml vence (app-builder-lib targetFactory) e cada job empacotava, assinava e notarizava as duas.
+      - name: Empacotar, assinar e notarizar o .app
+        env:
+          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          # 5/11/2026: o @electron/notarize grampeia o .app e o CloudKit da Apple caiu 4× seguidas no runner Intel
+          # (scripts/desktop/stapler.sh). Repetir o empacotamento re-assina e re-notariza (~5 min), e resolve.
+          if [ "$ASSINAR" = 1 ]; then
+            ASSINATURA=(--config.forceCodeSigning=true)
+          else
+            # Modo seco sem certificado: nada de identidade, notarização nem DMG assinado.
+            unset CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+            ASSINATURA=(--config.mac.identity=null --config.mac.notarize=false --config.dmg.sign=false)
+          fi
+          for tentativa in 1 2 3; do
+            if npx electron-builder --mac dmg zip --"$ARCH" --publish never "${ASSINATURA[@]}"; then break; fi
+            if [ "$tentativa" -eq 3 ]; then exit 1; fi
+            echo "::warning::electron-builder falhou (tentativa $tentativa de 3); limpando release/ e repetindo em 30 s"
+            rm -rf release; sleep 30
+          done
+          shopt -s nullglob
+          apps=(release/*/nod.app)
+          dmgs=(release/*.dmg)
+          zips=(release/nod-*-mac-"$ARCH".zip)
+          if [ "${#apps[@]}" -ne 1 ] || [ "${#dmgs[@]}" -ne 1 ] || [ "${#zips[@]}" -ne 1 ]; then echo "::error::esperava só o app, o DMG e o ZIP $ARCH, veio: ${apps[*]} ${dmgs[*]} ${zips[*]}"; exit 1; fi
+      # NOD-203: o electron-builder notariza só o .app; o DMG é notarizado e grampeado aqui. O `--wait` sai com 0
+      # mesmo com status Invalid, então o status é conferido pelo verificador. A senha só passa pela expansão do env.
+      - name: Notarizar e grampear o DMG
+        if: env.ASSINAR == '1'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          dmgs=(release/nod-*-mac-"$ARCH".dmg)
+          if [ "${#dmgs[@]}" -ne 1 ]; then echo "::error::esperava 1 DMG release/nod-*-mac-$ARCH.dmg, veio ${#dmgs[@]}"; exit 1; fi
+          DMG="${dmgs[0]}"
+          xcrun notarytool submit "$DMG" --apple-id "$APPLE_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait --output-format json > "$RUNNER_TEMP/notarizacao.json" || true
+          if ID=$(node scripts/desktop/verificar-pacote-mac.mjs notarizacao "$RUNNER_TEMP/notarizacao.json"); then
+            scripts/desktop/stapler.sh staple "$DMG"
+          else
+            if [ -n "$ID" ]; then xcrun notarytool log "$ID" --apple-id "$APPLE_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" --team-id "$APPLE_TEAM_ID" || true; fi
+            exit 1
+          fi
+      - name: Verificar arquitetura, proxy e (com assinatura) assinatura e notarização
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          if [ "$ARCH" = arm64 ]; then APP=release/mac-arm64/nod.app; LIPO=arm64; else APP=release/mac/nod.app; LIPO=x86_64; fi
+          test -d "$APP"
+          # NOD-133: o app testado é o da arquitetura do job, nativo deste runner (nada de Rosetta).
+          VEIO=$(lipo -archs "$APP/Contents/MacOS/nod")
+          if [ "$VEIO" != "$LIPO" ] || [ "$(uname -m)" != "$LIPO" ]; then echo "::error::$APP é $VEIO, o job é $LIPO e o runner é $(uname -m)"; exit 1; fi
+          node scripts/desktop/smoke-proxy.mjs "$APP/Contents/MacOS/nod" "$APP/Contents/Resources/app.asar.unpacked/dist/desktop/proxy.mjs"
+          if [ "$ASSINAR" = 1 ]; then node scripts/desktop/verificar-pacote-mac.mjs pacote "$APP" release/nod-*-mac-"$ARCH".dmg; fi
+      # NOD-132 (ADR-149): o ZIP é o que o Squirrel.Mac baixa e instala sem perguntar. O .app de dentro passa pela mesma
+      # verificação de assinatura, grampo e Gatekeeper antes de subir.
+      - name: Verificar o .app do ZIP da atualização
+        if: env.ASSINAR == '1'
+        run: |
+          set -euo pipefail
+          ZIP=$(ls release/nod-*-mac-"$ARCH".zip)
+          DIR=$(mktemp -d)
+          ditto -x -k "$ZIP" "$DIR"
+          test -d "$DIR/nod.app"
+          codesign --verify --deep --strict --verbose=2 "$DIR/nod.app"
+          scripts/desktop/stapler.sh validate "$DIR/nod.app"
+          spctl -a -vv -t exec "$DIR/nod.app"
+          rm -rf "$DIR"
+      - name: Diagnóstico do pacote
+        if: failure()
+        run: |
+          APP=$(find release -maxdepth 2 -name nod.app -type d)
+          for A in $APP; do
+            echo "== $A"
+            lipo -archs "$A/Contents/MacOS/nod" || true
+            codesign -d --entitlements - "$A" || true
+            spctl -a -vv "$A" || true
+          done
+          ls -la release || true
+      # Depois do grampo e da verificação: o hash publicado é o do DMG e do ZIP finais.
+      - name: SHA-256 do DMG e do ZIP
+        run: shasum -a 256 release/nod-*-mac-"$ARCH".dmg release/nod-*-mac-"$ARCH".zip > "release/SHA256-${ARCH}.txt"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: nod-mac-${{ matrix.arch }}
+          path: |
+            release/*.dmg
+            release/nod-*-mac-*.zip
+            release/SHA256-*.txt
+          if-no-files-found: error
+  # NOD-93 (ADR-127): o disco da VM local do Mac, um por arquitetura, com o computador da ADR-122 instalado pelo mesmo
+  # blocoDoComputador do Linux (infra/vm-local/construir-disco.sh), sem docker. Cada disco nasce num runner da própria arquitetura: o virt-customize roda o
+  # apt do convidado. Atrás da variável de repositório NOD_VM_LOCAL=1, como o app (a flag de mesmo nome): sem ela o
+  # release segue só com os DMGs.
+  vm-local:
+    needs: verify
+    if: github.repository == 'marlonwlv/nod' && vars.NOD_VM_LOCAL == '1'
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+          - arch: amd64
+            runner: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    env:
+      ARCH: ${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.19.0'
+          cache: npm
+      - run: npm ci
+      - name: Origem do disco (motor e computador.sh)
+        run: |
+          set -euo pipefail
+          VERSAO=$(node -p "require('./package.json').version")
+          echo "VERSAO=$VERSAO" >> "$GITHUB_ENV"
+          node scripts/motor/build.mjs
+          node scripts/vm-local/origem-do-disco.ts --saida dist/vm-local/origem
+      # definido em 2026-11-05: o disco só muda quando muda o que entra nele (a origem: computador-*.mjs, computador.sh
+      # e a versão do node; e infra/vm-local: base Debian, arquivos do convidado e o script). A versão do app fica só
+      # no NOME do arquivo. Então o disco é guardado no cache do Actions pela hash desses insumos e, quando nada
+      # mudou, o job renomeia o disco guardado em vez de montar outro: o arm64 levava 53 min (sem /dev/kvm no
+      # runner, o apt do convidado roda em emulação; o runner arm64 do Blacksmith também não tem KVM, sonda #674).
+      - name: Hash dos insumos do disco
+        id: insumos
+        run: |
+          set -euo pipefail
+          HASH=$( (find dist/vm-local/origem infra/vm-local -type f | sort | xargs sha256sum) | sha256sum | cut -c1-16)
+          echo "chave=vm-disco-$ARCH-$HASH" >> "$GITHUB_OUTPUT"
+          echo "chave do disco $ARCH: vm-disco-$ARCH-$HASH"
+      - name: Disco guardado
+        id: guardado
+        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684
+        with:
+          path: cache-disco
+          key: ${{ steps.insumos.outputs.chave }}
+      - name: Reaproveitar o disco guardado
+        if: steps.guardado.outputs.cache-hit == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          cp cache-disco/disco.img.zst "release/nod-vm-$VERSAO-$ARCH.img.zst"
+          (cd release && sha256sum "nod-vm-$VERSAO-$ARCH.img.zst" > "nod-vm-$VERSAO-$ARCH.img.zst.sha256")
+          echo "disco $ARCH reaproveitado do cache (${{ steps.insumos.outputs.chave }})"
+      - name: Ferramentas do disco
+        if: steps.guardado.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libguestfs-tools qemu-utils zstd
+          # No arm64: firmware UEFI (AAVMF) e o ROM da virtio-net (ipxe-qemu) para o appliance do libguestfs subir.
+          if [ "$ARCH" = arm64 ]; then sudo apt-get install -y --no-install-recommends qemu-efi-aarch64 ipxe-qemu; fi
+          # O runner arm64 não tem /dev/kvm: o appliance roda em TCG (mais lento).
+          if [ ! -c /dev/kvm ]; then echo "LIBGUESTFS_BACKEND_SETTINGS=force_tcg" >> "$GITHUB_ENV"; fi
+          # O libguestfs do Ubuntu lê o kernel do host para montar o appliance; ele vem 0600.
+          sudo chmod 0644 /boot/vmlinuz-*
+          # Como root, o passt troca para nobody e não grava o pid na pasta 0700 do libguestfs ("passt exited with
+          # status 1" no virt-customize --network). Sem o passt, o libguestfs usa a rede SLIRP do qemu, que o
+          # construir-disco.sh configura no appliance (REDE_DO_APPLIANCE).
+          if [ -x /usr/bin/passt ]; then sudo mv /usr/bin/passt /usr/bin/passt.desligado; fi
+      - name: Disco da VM
+        if: steps.guardado.outputs.cache-hit != 'true'
+        run: sudo -E bash infra/vm-local/construir-disco.sh "$ARCH" "$VERSAO" dist/vm-local/origem release
+      - name: Diagnóstico do libguestfs
+        if: failure() && steps.guardado.outputs.cache-hit != 'true'
+        run: sudo libguestfs-test-tool 2>&1 | tail -120 || true
+      - name: Guardar o disco para a próxima release
+        if: steps.guardado.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p cache-disco
+          cp "release/nod-vm-$VERSAO-$ARCH.img.zst" cache-disco/disco.img.zst
+      - if: steps.guardado.outputs.cache-hit != 'true'
+        uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684
+        with:
+          path: cache-disco
+          key: ${{ steps.insumos.outputs.chave }}
+      - name: Conferir o disco
+        run: |
+          set -euo pipefail
+          cd release
+          sha256sum -c "nod-vm-$VERSAO-$ARCH.img.zst.sha256"
+          zstd -t "nod-vm-$VERSAO-$ARCH.img.zst"
+          ls -la
+          # ADR-127 §1: o disco comprimido deve ficar abaixo de 1,5 GB; acima, avisa no log sem falhar o release.
+          TAMANHO=$(stat -c %s "nod-vm-$VERSAO-$ARCH.img.zst")
+          if [ "$TAMANHO" -gt 1610612736 ]; then echo "::warning::disco $ARCH com $((TAMANHO / 1048576)) MiB comprimido, acima de 1,5 GB"; fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: nod-vm-${{ matrix.arch }}
+          path: |
+            release/nod-vm-*.img.zst
+            release/nod-vm-*.img.zst.sha256
+          if-no-files-found: error
+          compression-level: 0
+      # Só o .sha256, pequeno, para o job mac embutir no app (o nome fora de nod-* não entra no rascunho duas vezes).
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: vm-sha-${{ matrix.arch }}
+          path: release/nod-vm-*.img.zst.sha256
+          if-no-files-found: error
+  # ADA-229 (ADR-152): o app desktop do Windows (Electron, a mesma base do Mac), em NSIS de 1 clique por usuário.
+  # Sai como nod-<v>-win-x64.exe (o feed da atualização) e como nod-windows-x64.exe (o nome estável do /download/windows),
+  # testado aqui como na CI (instala, abre, desinstala) antes de subir.
+  # Assinatura (NOD-471): desligada; só com vars.NOD_WINDOWS_ASSINAR == '1' o certificado entra. Sem ele, o SmartScreen
+  # pede "Mais informações > Executar assim mesmo".
+  windows:
+    needs: verify
+    if: github.repository == 'marlonwlv/nod'
+    environment: release
+    permissions:
+      contents: read
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      NOD_SERVIDOR_PADRAO: ${{ vars.NOD_SERVIDOR_PADRAO }}
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.19.0'
+          cache: npm
+      - run: npm ci
+      - name: Montar o app
+        shell: pwsh
+        env:
+          NOD_WINDOWS_ASSINAR: ${{ vars.NOD_WINDOWS_ASSINAR }}
+          # Só neste passo (o npm ci acima não vê o certificado), e só com a flag ligada.
+          WIN_CSC_LINK: ${{ vars.NOD_WINDOWS_ASSINAR == '1' && secrets.WIN_CSC_LINK || '' }}
+          WIN_CSC_KEY_PASSWORD: ${{ vars.NOD_WINDOWS_ASSINAR == '1' && secrets.WIN_CSC_KEY_PASSWORD || '' }}
+        run: |
+          # Flag ligada sem o certificado não sai sem assinar calada: falha aqui, e o electron-builder força a assinatura.
+          if ($env:NOD_WINDOWS_ASSINAR -eq '1') {
+            if (-not $env:WIN_CSC_LINK) { throw "NOD_WINDOWS_ASSINAR == '1' sem o secret WIN_CSC_LINK" }
+            npm run desktop:windows -- -c.forceCodeSigning=true
+          } else {
+            npm run desktop:windows
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'desktop:windows falhou' }
+          $v = (node -p "require('./package.json').version" | Out-String).Trim()
+          $exe = "release\nod-$v-win-x64.exe"
+          if (-not (Test-Path -LiteralPath $exe)) { throw "sem $exe" }
+          Copy-Item -LiteralPath $exe -Destination release\nod-windows-x64.exe
+          $h = (Get-FileHash -Algorithm SHA256 -LiteralPath $exe).Hash.ToLower()
+          Set-Content -LiteralPath release\SHA256-win-x64.txt -Value "$h  nod-$v-win-x64.exe" -Encoding ascii
+          Set-Content -LiteralPath release\nod-windows-x64.exe.sha256 -Value "$h  nod-windows-x64.exe" -Encoding ascii -NoNewline
+      - name: Testar o app
+        shell: powershell
+        run: .\scripts\windows\testar-app.ps1 -Exe release\nod-windows-x64.exe -Prints "$env:RUNNER_TEMP\prints-app"
+      - if: success() || failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: prints-windows-app
+          path: ${{ runner.temp }}/prints-app/*.png
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: nod-windows-x64
+          path: |
+            release/nod-windows-x64.exe
+            release/nod-windows-x64.exe.sha256
+            release/nod-*-win-x64.exe
+            release/SHA256-win-x64.txt
+          if-no-files-found: error
+  draft:
+    # O vm-local pulado (sem NOD_VM_LOCAL) não segura o rascunho; falho, segura.
+    # Só publica: tag empurrada aqui, ou dispatch numa tag com publicar=true. O modo seco para antes.
+    if: ${{ !cancelled() && github.repository == 'marlonwlv/nod' && (github.event_name == 'push' || inputs.publicar == true) && startsWith(github.ref, 'refs/tags/v') && needs.mac.result == 'success' && needs.windows.result == 'success' && (needs.vm-local.result == 'success' || needs.vm-local.result == 'skipped') }}
+    needs: [mac, windows, vm-local]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: nod-*
+          path: release
+          merge-multiple: true
+      - name: Criar release em rascunho para aceite nos dois Macs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          arquivos=(release/*.dmg release/nod-*-mac-*.zip release/SHA256-*.txt release/nod-vm-*.img.zst release/nod-vm-*.img.zst.sha256 release/nod-windows-x64.exe release/nod-windows-x64.exe.sha256 release/nod-*-win-x64.exe)
+          gh release create "$TAG" "${arquivos[@]}" --verify-tag --draft --title "nod $TAG" --notes-file desktop/release-notes.md
+  # O bucket público dos downloads (vars.NOD_DOWNLOADS_BUCKET), pela Workload Identity Federation: nenhuma chave da GCP
+  # mora no GitHub. Atrás de vars.NOD_RELEASE_BUCKET == '1' (sem ela, os arquivos sobem à mão como antes). Só a pasta da
+  # versão (v<versão>/, onde o app baixa o disco da VM: URL_DISCO_PADRAO em desktop/vm-local/origem.ts), com
+  # --no-clobber: nunca sobrescreve. Os nomes estáveis da raiz (nod-mac-arm64.dmg, nod-mac-x64.dmg, nod-windows-x64.exe,
+  # os do site/_redirects) não mudam aqui: trocam à mão depois do aceite nos dois Macs. O pool WIF deste job é outro que
+  # o do deploy (a conta dele só cria objetos neste bucket), e aceita só tag v* no environment release.
+  downloads:
+    needs: draft
+    if: ${{ !cancelled() && github.repository == 'marlonwlv/nod' && needs.draft.result == 'success' && vars.NOD_RELEASE_BUCKET == '1' }}
+    runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      TAG: ${{ github.ref_name }}
+      BUCKET: ${{ vars.NOD_DOWNLOADS_BUCKET }}
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: nod-*
+          path: release
+          merge-multiple: true
+      # Confere os hashes do build antes de qualquer credencial: o que sobe é o que foi verificado no rascunho.
+      - name: Conferir os arquivos
+        run: |
+          set -euo pipefail
+          [[ "$BUCKET" =~ ^[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]$ ]] || { echo "::error::vars.NOD_DOWNLOADS_BUCKET ausente ou inválida"; exit 1; }
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]] || { echo "::error::tag fora de vX.Y.Z[-rc.N]: $TAG"; exit 1; }
+          shopt -s nullglob
+          for f in release/SHA256-arm64.txt release/SHA256-x64.txt; do sha256sum -c "$f"; done
+          (cd release && tr -d '\r' < SHA256-win-x64.txt | sha256sum -c && tr -d '\r' < nod-windows-x64.exe.sha256 | sha256sum -c)
+          for f in release/nod-vm-*.img.zst.sha256; do (cd release && sha256sum -c "$(basename "$f")"); done
+          ls -la release
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ secrets.GCP_RELEASE_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_RELEASE_SA }}
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+      - name: Subir a versão no bucket
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          arquivos=(release/*.dmg release/nod-*-mac-*.zip release/SHA256-*.txt release/nod-vm-*.img.zst release/nod-vm-*.img.zst.sha256 release/nod-windows-x64.exe release/nod-windows-x64.exe.sha256 release/nod-*-win-x64.exe)
+          gcloud storage cp --no-clobber "${arquivos[@]}" "gs://$BUCKET/$TAG/"
+          gcloud storage ls -l "gs://$BUCKET/$TAG/"

@@ -101,6 +101,8 @@ describe("gaveta e tela cheia", () => {
     const app = htmlGavetaTela(pc({ estado: "dormindo", appDesatualizado: { atual: "1.0.0-rc.1", minima: "1.0.0-rc.2", plataforma: "darwin" } }), BOTS[0] as never, "Atualize o app do nod para usar o computador.");
     expect(app).toContain("Seu app está na versão 1.0.0-rc.1; o computador precisa da 1.0.0-rc.2.");
     expect(app).toContain(`href="${URL_ATUALIZAR_APP}"`);
+    // NOD-485: as releases do app saem do repo público (desktop-release.yml); o privado dá 404 para quem não é membro.
+    expect(URL_ATUALIZAR_APP).toBe("https://github.com/marlonwlv/nod/releases");
     expect(app).toContain("Atualizar app");
     expect(app).not.toContain("Atualize a página");
     expect(app.match(/cb-aviso"/g)).toHaveLength(1);

@@ -1,0 +1,44 @@
+# Aviso de release pendente do app desktop (scripts/desktop/release-pendente.mjs). Quando a versão do package.json da
+# main não tem release publicada, abre uma issue atribuída ao dono do repo com o passo a dar (a tag v<versão>). Quando a
+# release sai, a mesma lógica fecha a issue. Só lê a main e escreve issues: não builda nem publica nada.
+# Portado do gamefik/nod em 2026-11-11 (NOD-485, ADR-161). Repo público: runner hospedado do GitHub (lá era um
+# self-hosted), nenhum gatilho de PR, guarda do repo (um fork não abre issue em lugar nenhum) e token só com issues: write.
+# Actions pinadas por SHA imutável (as mesmas do ci.yml):
+#   actions/checkout v4.2.2   = 11bd71901bbe5b1630ceea73d27597364c9af683
+#   actions/setup-node v4.4.0 = 49933ea5288caeca8642d1e84afbd3f7d6820020
+name: release-pendente
+on:
+  push:
+    branches: [main]
+    paths: [package.json]
+  release:
+    types: [published, unpublished, deleted]
+  workflow_dispatch:
+
+concurrency:
+  group: release-pendente
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  aviso:
+    if: github.repository == 'marlonwlv/nod'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      # Sempre a main: no evento de release o ref padrão seria a tag, e a versão que importa é a da main.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24.19.0"
+      - run: node scripts/desktop/release-pendente.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESPONSAVEL: ${{ github.repository_owner }}

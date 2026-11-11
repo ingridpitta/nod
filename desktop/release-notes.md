@@ -1,6 +1,6 @@
 # nod 1.0.0-rc.7
 
-Sétima candidata da 1.0.0, só com uma correção crítica: **o turno não para mais com "o histórico enche de novo logo depois de resumido"** no Opus de 1M. Macs: DMGs assinados (Developer ID) e notarizados; quem está numa rc anterior recebe pelo atualizador automático quando a versão for anunciada, ou instala o DMG por cima. Windows: instalador `.exe` de 1 clique, por usuário, ainda sem assinatura (o SmartScreen pede "Mais informações > Executar assim mesmo", NOD-471). Instalação, requisitos e atualização: [guia do desktop](https://github.com/gamefik/nod/blob/v1.0.0-rc.7/docs/release-desktop.md).
+Sétima candidata da 1.0.0, só com uma correção crítica: **o turno não para mais com "o histórico enche de novo logo depois de resumido"** no Opus de 1M. Macs: DMGs assinados (Developer ID) e notarizados; quem está numa rc anterior recebe pelo atualizador automático quando a versão for anunciada, ou instala o DMG por cima. Windows: instalador `.exe` de 1 clique, por usuário, ainda sem assinatura (o SmartScreen pede "Mais informações > Executar assim mesmo", NOD-471). Downloads e versões anteriores: [releases](https://github.com/marlonwlv/nod/releases).
 
 ## O que entra nesta versão (desde a rc.6, 8/11)
 

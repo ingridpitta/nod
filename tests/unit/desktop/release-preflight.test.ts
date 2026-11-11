@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { SECRETS_DE_RELEASE, validarPreflight } from "../../../scripts/desktop/release-preflight.mjs";
+import { relatorioPreflight, SECRETS_DE_RELEASE, validarPreflight } from "../../../scripts/desktop/release-preflight.mjs";
 import { FORMATO_SERVIDOR_PADRAO } from "../../../scripts/desktop/servidor-padrao.mjs";
 
 /** NOD-203: o preflight do job `mac` cita o nome que se cadastra no GitHub e exige o servidor embutido. */
@@ -30,7 +30,7 @@ describe("release-preflight.mjs (NOD-203)", () => {
     ["APPLE_TEAM_ID", "APPLE_TEAM_ID"],
   ])("sem %s, cita o secret %s no GitHub", (variavel, secret) => {
     const erros = validar({ ...completo, [variavel]: undefined });
-    expect(erros).toEqual([expect.stringContaining(`Configure o secret ${secret} em Settings › Secrets and variables › Actions`)]);
+    expect(erros).toEqual([expect.stringContaining(`Configure o secret ${secret} em Settings › Environments › release (secrets do environment)`)]);
   });
 
   it("string vazia (o que o GitHub passa quando o secret não existe) conta como ausente", () => {
@@ -87,5 +87,25 @@ describe("release-preflight.mjs (NOD-203)", () => {
   it("executado direto, com tudo certo, sai com 0", () => {
     const r = spawnSync(process.execPath, ["scripts/desktop/release-preflight.mjs"], { encoding: "utf8", env: { PATH: process.env.PATH, ...completo } });
     expect(r.status).toBe(0);
+  });
+
+  it("modo seco (dispatch com publicar=false): as faltas viram aviso e o CLI sai 0, listando o que falta cadastrar", () => {
+    const env = { PATH: process.env.PATH, GITHUB_REF: "refs/heads/main", NOD_RELEASE_SECO: "1", GITHUB_ACTIONS: "true" };
+    const r = spawnSync(process.execPath, ["scripts/desktop/release-preflight.mjs"], { encoding: "utf8", env });
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("modo seco (6 pendência(s)");
+    expect(r.stdout).toContain("::warning::Configure o secret APPLE_CERTIFICATE_P12");
+    expect(r.stdout).not.toContain("::error::");
+  });
+
+  it("só NOD_RELEASE_SECO=1 liga o modo seco: outro valor reprova como publicação", () => {
+    const r = spawnSync(process.execPath, ["scripts/desktop/release-preflight.mjs"], { encoding: "utf8", env: { PATH: process.env.PATH, NOD_RELEASE_SECO: "true" } });
+    expect(r.status).toBe(1);
+  });
+
+  it("relatorioPreflight: publicando, erro reprova com ::error:: no Actions; sem erro passa nos dois modos", () => {
+    expect(relatorioPreflight({ erros: ["x"], seco: false, actions: true })).toEqual({ codigo: 1, saida: "", erro: "Preflight da release reprovado (1):\n::error::x\n" });
+    expect(relatorioPreflight({ erros: ["x"], seco: true, actions: false }).codigo).toBe(0);
+    for (const seco of [true, false]) expect(relatorioPreflight({ erros: [], seco, actions: true }).codigo).toBe(0);
   });
 });
