@@ -87,7 +87,7 @@ export type SuaVezDto = {
 export type DecisaoDto = { decisao: Decisao; itens: ItemAprovacao[] };
 /** `bloqueio` (definido em 2026-09-24, emenda da ADR-044): parada por falta de conexão ou acesso, com o card aberto; null = roda. */
 /** `resumo` (definido em 2026-09-30): o cron em palavras, com o fuso — "dias úteis às 08:00 (America/Sao_Paulo)"; a gaveta do bot mostra. `ondeRoda` (NOD-89): ausente no modo local e nas rotinas de outra pessoa. */
-export type RotinaDto = { rotina: Rotina; proximaExecucao: EpochMs; bloqueio: BloqueioRotina | null; resumo: string; espera: EsperaRotinaDto | null; perguntaPendente?: PerguntaPendenteDaRotina; esperaDaCota?: { ia: string; voltaEm: EpochMs }; ondeRoda?: OndeRodaDto; webhook?: WebhookDaRotinaDto } & JanelasPuladasDaRotina;
+export type RotinaDto = { rotina: Rotina; proximaExecucao: EpochMs; bloqueio: BloqueioRotina | null; resumo: string; espera: EsperaRotinaDto | null; /** NOD-412: a pausada com data — quando volta e o texto ("seg 09:00"). */ retomada?: { em: EpochMs; texto: string }; perguntaPendente?: PerguntaPendenteDaRotina; esperaDaCota?: { ia: string; voltaEm: EpochMs }; ondeRoda?: OndeRodaDto; webhook?: WebhookDaRotinaDto } & JanelasPuladasDaRotina;
 /** NOD-84: o card e a gaveta da rotina webhook (só a dona); o endereço inteiro só sai por GET rotinas/:id/endereco. */ export type WebhookDaRotinaDto = { prefixo: string | null; provedor: string | null; eventos: string[]; chamadasHoje: number; recusadasHoje: number; recusaPendente: boolean; ultimas: ChamadaWebhook[] };
 
 export type MetodoHttp = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";

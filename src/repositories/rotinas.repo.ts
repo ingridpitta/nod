@@ -26,10 +26,11 @@ interface Linha {
   gatilho: GatilhoRotina;
   provedor: string | null;
   eventos: string[] | null;
+  retomar_em: Date | null;
 }
 
 const COLUNAS =
-  "tenant_id, id, owner_id, agente_id, conversa_id, cron, fuso_iana, instrucao, fonte, entregavel, limites_aprovacao, politica_sem_dado, exige_aprovacao, case when exists (select 1 from agentes a where a.tenant_id = rotinas.tenant_id and a.id = rotinas.agente_id and a.geracao_execucao = rotinas.geracao_execucao and a.excluido_em is null) then estado else 'pausada'::estado_rotina end as estado, proxima_execucao, criado_em, excluido_em, acessos, gatilho, provedor, eventos";
+  "tenant_id, id, owner_id, agente_id, conversa_id, cron, fuso_iana, instrucao, fonte, entregavel, limites_aprovacao, politica_sem_dado, exige_aprovacao, case when exists (select 1 from agentes a where a.tenant_id = rotinas.tenant_id and a.id = rotinas.agente_id and a.geracao_execucao = rotinas.geracao_execucao and a.excluido_em is null) then estado else 'pausada'::estado_rotina end as estado, proxima_execucao, criado_em, excluido_em, acessos, gatilho, provedor, eventos, retomar_em";
 
 const paraRotina = (l: Linha): Rotina => ({
   tenantId: l.tenant_id,
@@ -53,6 +54,7 @@ const paraRotina = (l: Linha): Rotina => ({
   gatilho: l.gatilho,
   provedor: l.provedor,
   eventos: l.eventos,
+  retomarEm: l.retomar_em ? ms(l.retomar_em) : null,
 });
 
 export type NovaRotina = {
@@ -133,10 +135,38 @@ export function rotinasRepo(conn: Conn, escopo: Escopo) {
       return linhas.map(paraRotina);
     },
 
-    async atualizarEstado(id: string, estado: EstadoRotina): Promise<Rotina | null> {
-      const [l] = await conn<Linha[]>`update rotinas set estado = ${estado} where tenant_id = ${escopo.tenantId} and owner_id = ${escopo.pessoaId} and id = ${id} returning ${conn.unsafe(COLUNAS)}`;
+    /**
+     * NOD-412 (0167): `retomarEm` só vale na pausa (o instante em que o agendador a reativa); ativar sempre limpa — o
+     * CHECK rotinas_retomar_so_pausada recusa ativa com data.
+     */
+    async atualizarEstado(id: string, estado: EstadoRotina, retomarEm: number | null = null): Promise<Rotina | null> {
+      const retomar = estado === "pausada" && retomarEm !== null ? data(retomarEm) : null;
+      const [l] = await conn<Linha[]>`update rotinas set estado = ${estado}, retomar_em = ${retomar} where tenant_id = ${escopo.tenantId} and owner_id = ${escopo.pessoaId} and id = ${id} returning ${conn.unsafe(COLUNAS)}`;
       return l ? paraRotina(l) : null;
     },
+
+    /** NOD-412: as pausadas da pessoa cuja data de retomada já chegou (o tick as reativa antes de procurar as vencidas). */
+    async pausadasParaRetomar(agora: number): Promise<Rotina[]> {
+      const linhas = await conn<Linha[]>`
+        select ${conn.unsafe(COLUNAS)} from rotinas
+        where tenant_id = ${escopo.tenantId} and owner_id = ${escopo.pessoaId} and estado = 'pausada' and retomar_em is not null and retomar_em <= ${data(agora)} and excluido_em is null
+          and exists (select 1 from agentes a where a.tenant_id = rotinas.tenant_id and a.id = rotinas.agente_id and a.excluido_em is null and a.geracao_execucao = rotinas.geracao_execucao)
+        order by retomar_em`;
+      return linhas.map(paraRotina);
+    },
+
+    /**
+     * NOD-412: a data que chegou numa rotina que não pode voltar (bot excluído, geração antiga do bot, rotina excluída)
+     * é apagada — a rotina continua pausada, e o tick não a tenta de novo a cada 30 s. Devolve quantas.
+     */
+    async limparRetomadasSemVolta(agora: number): Promise<number> {
+      const r = await conn`
+        update rotinas set retomar_em = null
+        where tenant_id = ${escopo.tenantId} and owner_id = ${escopo.pessoaId} and retomar_em is not null and retomar_em <= ${data(agora)}
+          and (excluido_em is not null or not exists (select 1 from agentes a where a.tenant_id = rotinas.tenant_id and a.id = rotinas.agente_id and a.excluido_em is null and a.geracao_execucao = rotinas.geracao_execucao))`;
+      return r.count;
+    },
+
 
     /**
      * Aplica a atualização JÁ NORMALIZADA do payload da proposta (E7.1). Campo ausente fica como

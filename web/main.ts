@@ -6671,7 +6671,14 @@ const ACOES: Record<string, (el: HTMLElement) => Promise<void> | void> = {
   "dispensar-incidente": (el) => agir(async () => void (await api!.dispensarIncidente(el.dataset.id ?? ""), dispatch({ tipo: "invalidar", quais: ["sua-vez"] }))),
   // definido em 2026-09-24 (ADR-044): o grupo (app · nível) do painel sai inteiro, com um registro só.
   "revogar-acessos": (el) => agir(async () => void (await api!.revogarAcessos(el.dataset.agente ?? "", (el.dataset.ids ?? "").split(",").filter(Boolean)), dispatch({ tipo: "invalidar", quais: [`concessoes:${el.dataset.agente ?? ""}`, "frota"] }))),
-  "pausar-rotina": (el) => agir(async () => void (await api!.pausarRotina(el.dataset.id ?? ""), dispatch({ tipo: "invalidar", quais: ["rotinas"] }))),
+  "pausar-rotina": (el) => agir(async () => void (await api!.pausarRotina(el.dataset.id ?? "", el.dataset.ate || undefined), dispatch({ tipo: "invalidar", quais: ["rotinas"] }))),
+  // NOD-412: "Pausar até…" com data e hora escolhidas no campo ao lado (hora local, no fuso da rotina).
+  "pausar-rotina-escolhida": (el) => {
+    const campo = el.parentElement?.querySelector<HTMLInputElement>("input[data-ate-rotina]");
+    const ate = campo?.value ?? "";
+    if (!ate) { campo?.focus(); return; }
+    agir(async () => void (await api!.pausarRotina(el.dataset.id ?? "", ate.slice(0, 16)), dispatch({ tipo: "invalidar", quais: ["rotinas"] })));
+  },
   "ativar-rotina": (el) => agir(async () => void (await api!.ativarRotina(el.dataset.id ?? ""), dispatch({ tipo: "invalidar", quais: ["rotinas"] }))),
   "ver-execucoes": (el) => {
     const id = el.dataset.id ?? "";

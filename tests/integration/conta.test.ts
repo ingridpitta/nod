@@ -320,6 +320,34 @@ describeIntegracao("conta (NOD-345): provisório, cadastro, escolha, recuperaç�
     });
   });
 
+  it("NOD-412 (QA do PR #13): importar não leva nem deixa pausa com data — nenhum dos lados volta sozinho", async () => {
+    await withRollback(MARLON, async (trx) => {
+      const m = mundo(trx);
+      const dono = await comConta(m);
+      const q = await provisorio(m, "Provisório");
+      const o = q.escopo!;
+      await vincularEscopo(trx, o);
+      const dp = depsSobreTrx(trx, o);
+      const bot = (await executar(dp, criarAgente, { dono: "pessoa" })).data;
+      await vincularEscopo(trx, o);
+      // Pausada "até amanhã" na origem: sem limpar, o agendador a religaria no espaço levado (que ninguém mais vê) e a
+      // cópia no destino voltaria sozinha, sem a pessoa religar.
+      await trx`insert into rotinas (tenant_id, owner_id, agente_id, conversa_id, cron, fuso_iana, instrucao, fonte, entregavel, limites_aprovacao, politica_sem_dado, proxima_execucao, estado, retomar_em)
+        values (${o.tenantId}, ${o.pessoaId}, ${bot.agente.id}, ${bot.conversa.id}, '0 8 * * *', 'America/Sao_Paulo', 'i', 'f', 'e', 'l', 'p', now(), 'pausada', now() + interval '1 day')`;
+
+      expect((await m.s.entrar(q, { email: dono.email, senha: SENHA })).resultado).toBe("escolher");
+      const r = await m.s.importar(q);
+      if (r.resultado !== "importado") throw new Error(`não importou: ${r.resultado}`);
+      expect(r.contagem.rotinas).toBe(1);
+
+      const d = dono.escopo!;
+      await vincularEscopo(trx, d);
+      expect(await trx`select estado, retomar_em from rotinas where tenant_id = ${d.tenantId} and owner_id = ${d.pessoaId} and instrucao = 'i'`).toEqual([{ estado: "pausada", retomar_em: null }]);
+      await vincularEscopo(trx, o);
+      expect(await trx`select estado, retomar_em from rotinas where tenant_id = ${o.tenantId} and owner_id = ${o.pessoaId}`).toEqual([{ estado: "pausada", retomar_em: null }]);
+    });
+  });
+
   it("importar: a resposta se perdeu (sessão de origem já revogada); o retry devolve a mesma contagem e uma sessão no destino", async () => {
     await withRollback(MARLON, async (trx) => {
       const m = mundo(trx);

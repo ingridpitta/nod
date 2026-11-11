@@ -6,6 +6,7 @@ import type { CasoNod, ContextoFerramenta } from "../contracts/servicos.ts";
 import { ehErroDeDominio, ErroDeDominio } from "../domain/erro.ts";
 import { nomeDoApp } from "../domain/pedido-acesso.ts";
 import { mesmosAcessos } from "../domain/rotina-acessos.ts";
+import { instanteLocal, textoRetomada } from "../domain/rotina-retomada.ts";
 import { ehWebhook, validarAtualizacaoRotina, quandoDaRotina } from "../domain/rotina-texto.ts";
 import type { PlanoTurno } from "../contracts/plano-turno.ts";
 import { agenteVisivel, assertUuid, autoriaAgente, carimbo, evento, PRAZO_DECISAO_MS } from "./apoio-l7.ts";
@@ -50,14 +51,17 @@ export const listarRotinasDoAgente: CasoNod<Deps, "listar_rotinas"> = async (dep
  * do modelo, e sem esse filtro um agente mexeria na rotina de qualquer outro dentro do mesmo tenant
  * (rotinas.buscar é tenant-wide, por RLS de leitura).
  */
-async function alternar(deps: Deps, input: { agenteId: string; rotinaId: string; plano?: PlanoTurno }, estado: EstadoRotina) {
+async function alternar(deps: Deps, input: { agenteId: string; rotinaId: string; plano?: PlanoTurno; ate?: string }, estado: EstadoRotina) {
   try {
     const { rotina: atual, quem } = await rotinaAlternavel(deps, input);
-    const jaEstava = atual.estado === estado;
+    // NOD-412: `ate` é hora local no fuso DA ROTINA (a pessoa fala do horário dela); vira instante aqui, e o executor valida.
+    const retomarEm = estado === "pausada" && input.ate !== undefined ? instanteLocal(input.ate, atual.fusoIana) : null;
+    const jaEstava = atual.estado === estado && (estado === "ativa" || retomarEm === null || retomarEm === (atual.retomarEm ?? null));
     // Na conversa do colega fica dito quem pausou e a pedido de quem: a pessoa abre a Nina e entende.
-    const texto = quem && estado === "pausada" ? `${quem} pausou esta rotina a seu pedido: nada será disparado até você reativar.` : undefined;
-    const { data } = await pausarRotina(deps, { rotinaId: input.rotinaId, estado, autoria: autoriaAgente(input.agenteId, deps.escopo.pessoaId), ...(texto ? { texto } : {}) });
-    return { data: { rotina_id: data.rotina.id, estado: data.rotina.estado, ja_estava: jaEstava, proxima_execucao: data.rotina.estado === "ativa" ? data.rotina.proximaExecucao : null } };
+    const ate = retomarEm !== null ? ` até ${textoRetomada(retomarEm, atual.fusoIana, deps.agora())}: volta sozinha.` : ": nada será disparado até você reativar.";
+    const texto = quem && estado === "pausada" ? `${quem} pausou esta rotina a seu pedido${ate}` : undefined;
+    const { data } = await pausarRotina(deps, { rotinaId: input.rotinaId, estado, retomarEm, autoria: autoriaAgente(input.agenteId, deps.escopo.pessoaId), ...(texto ? { texto } : {}) });
+    return { data: { rotina_id: data.rotina.id, estado: data.rotina.estado, ja_estava: jaEstava, proxima_execucao: data.rotina.estado === "ativa" ? data.rotina.proximaExecucao : null, retomar_em: data.rotina.estado === "pausada" ? data.rotina.retomarEm ?? null : null } };
   } catch (e) {
     if (ehErroDeDominio(e)) return { data: { erro: e.codigo } };
     throw e;
@@ -65,7 +69,7 @@ async function alternar(deps: Deps, input: { agenteId: string; rotinaId: string;
 }
 
 export const pausarRotinaPeloAgente: CasoNod<Deps, "pausar_rotina"> = (deps, input) =>
-  alternar(deps, { agenteId: input.agenteId, rotinaId: input.rotina_id, plano: input.plano }, "pausada");
+  alternar(deps, { agenteId: input.agenteId, rotinaId: input.rotina_id, plano: input.plano, ...(input.ate !== undefined ? { ate: input.ate } : {}) }, "pausada");
 
 export const reativarRotinaPeloAgente: CasoNod<Deps, "reativar_rotina"> = (deps, input) =>
   alternar(deps, { agenteId: input.agenteId, rotinaId: input.rotina_id, plano: input.plano }, "ativa");

@@ -2553,11 +2553,20 @@ function reposSobre(b: BancoMemoria, escopo: Escopo): Repos {
       async ativasVencidas(em) {
         return doTenant(b.rotinas).filter((r) => r.ownerId === escopo.pessoaId && r.estado === "ativa" && r.excluidoEm === null && r.proximaExecucao <= em);
       },
-      async atualizarEstado(id, estado) {
+      async atualizarEstado(id, estado, retomarEm = null) {
         const r = doTenant(b.rotinas).find((x) => x.id === id);
         if (!r) return null;
         r.estado = estado;
+        r.retomarEm = estado === "pausada" ? retomarEm : null;
         return r;
+      },
+      async pausadasParaRetomar(em) {
+        return doTenant(b.rotinas).filter((r) => r.ownerId === escopo.pessoaId && r.estado === "pausada" && r.excluidoEm === null && r.retomarEm != null && r.retomarEm <= em);
+      },
+      async limparRetomadasSemVolta(em) {
+        let n = 0;
+        for (const r of doTenant(b.rotinas)) if (r.ownerId === escopo.pessoaId && r.excluidoEm !== null && r.retomarEm != null && r.retomarEm <= em) { r.retomarEm = null; n++; }
+        return n;
       },
       async atualizar(id, campos) {
         // Espelha o SQL: só a dona, nunca excluída, e campo ausente fica como está.

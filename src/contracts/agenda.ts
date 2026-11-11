@@ -28,6 +28,8 @@ export type RotinaNaAgenda = {
   resumo: string;
   fusoIana: string;
   estado: EstadoRotina;
+  /** NOD-412: a pausada com data — quando volta sozinha (a agenda prevê as janelas dali em diante). null = sem data. */
+  retomarEm?: EpochMs | null;
   /**
    * A execução guardada mais antiga quando a poda já cortou o resto (há 20 guardadas): antes dela a tela diz "sem
    * registro". null = o registro está inteiro.

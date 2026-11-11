@@ -10,6 +10,7 @@ import { ENTRADA_DA_VOLTA_DA_COTA } from "../domain/cota-da-ia.ts";
 import { iaDaVoltaDaCota } from "../domain/espera-da-cota.ts";
 import { avisoDeJanelasPuladas, janelasPuladas } from "../domain/janelas-puladas.ts";
 import { ondeRodaDaRotina, type MaquinaViva } from "../domain/onde-roda.ts";
+import { textoRetomada } from "../domain/rotina-retomada.ts";
 import { quandoDaRotina, ehWebhook } from "../domain/rotina-texto.ts";
 import { EXECUCOES_GUARDADAS } from "../shared/constantes.ts";
 import { exigir } from "./apoio-l7.ts";
@@ -58,7 +59,9 @@ export const listarRotinas: CasoDeUso<Record<string, never>, { rotinas: RotinaDt
       if (ehWebhook(rotina)) webhook = await webhookDaRotina(deps, rotina, prefixos.get(rotina.id) ?? null, pendentes.has(rotina.id));
     }
     const puladas = await puladasDe(deps, rotina);
-    dtos.push({ rotina, proximaExecucao: rotina.proximaExecucao, bloqueio, resumo: resumoDe(rotina), espera, ...(perguntaPendente ? { perguntaPendente } : {}), ...(esperaDaCota ? { esperaDaCota } : {}), ...(ondeRoda ? { ondeRoda } : {}), ...(webhook ? { webhook } : {}), ...(puladas !== null ? { janelasPuladas: puladas } : {}) });
+    // NOD-412: a pausada com data diz quando volta ("seg 09:00"), na hora da rotina.
+    const retomada = rotina.estado === "pausada" && rotina.retomarEm ? { em: rotina.retomarEm, texto: textoRetomada(rotina.retomarEm, rotina.fusoIana, deps.agora()) } : undefined;
+    dtos.push({ rotina, proximaExecucao: rotina.proximaExecucao, bloqueio, resumo: resumoDe(rotina), espera, ...(retomada ? { retomada } : {}), ...(perguntaPendente ? { perguntaPendente } : {}), ...(esperaDaCota ? { esperaDaCota } : {}), ...(ondeRoda ? { ondeRoda } : {}), ...(webhook ? { webhook } : {}), ...(puladas !== null ? { janelasPuladas: puladas } : {}) });
   }
   return { data: { rotinas: dtos } };
 };

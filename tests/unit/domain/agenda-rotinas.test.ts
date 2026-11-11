@@ -128,3 +128,21 @@ describe("projetarAgenda (NOD-85)", () => {
     expect(diaNoFuso(Date.parse("2026-10-30T02:00Z"), "UTC")).toBe("2026-10-30");
   });
 });
+
+describe("pausada com data (NOD-412)", () => {
+  const previstas = (p: ReturnType<typeof projetar>, id: string) => p.itens.filter((i) => i.tipo === "prevista" && i.rotinaId === id).map((i) => i.instante);
+
+  it("prevê as janelas só a partir da retomada; sem data, nenhuma; ativa, a partir de agora", () => {
+    const retomarEm = Date.parse("2026-10-31T03:00Z"); // sáb 31/10 00:00 em SP
+    const comData: RotinaParaAgenda = { ...rotina("p", "0 9 * * *", "pausada"), retomarEm };
+    const p = projetar([comData, rotina("s", "0 9 * * *", "pausada"), rotina("a", "0 9 * * *")]);
+    expect(previstas(p, "p")).toEqual([Date.parse("2026-10-31T12:00Z"), Date.parse("2026-11-01T12:00Z")]);
+    expect(previstas(p, "s")).toEqual([]);
+    expect(previstas(p, "a")[0]).toBe(Date.parse("2026-10-29T12:00Z") + DIA);
+  });
+
+  it("retomada que já passou (o tick ainda não rodou) prevê a partir de agora", () => {
+    const p = projetar([{ ...rotina("p", "0 9 * * *", "pausada"), retomarEm: agora - H }]);
+    expect(previstas(p, "p")[0]).toBe(Date.parse("2026-10-30T12:00Z"));
+  });
+});

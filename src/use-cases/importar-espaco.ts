@@ -28,7 +28,8 @@ const SOLTAR: Record<string, readonly string[]> = {
   mensagens: ["turno_id", "machine_id", "id_envio"],
   // NOD-323: a mídia do bot aponta para o turno e a máquina da origem (que não vêm); o caminho só vale naquela máquina.
   anexos: ["turno_id", "machine_id", "caminho_relativo"],
-  rotinas: ["acessos", "excluido_em"],
+  // NOD-412 (QA do PR #13): a cópia chega pausada SEM data — a pessoa religa no destino; com a data, voltava sozinha.
+  rotinas: ["acessos", "excluido_em", "retomar_em"],
   artefato_versoes: [],
   artefato_estados: [],
   artefatos: [],
@@ -169,7 +170,8 @@ export async function importarEspaco(trx: Tx, origem: Escopo, destino: Escopo): 
   };
   // As rotinas do espaço de origem param: ninguém mais o vê, e as cópias (pausadas) são as que a pessoa religa.
   await vincularEscopo(trx, origem);
-  await trx`update rotinas set estado = 'pausada' where tenant_id = ${origem.tenantId} and owner_id = ${origem.pessoaId} and estado = 'ativa'`;
+  // NOD-412 (QA do PR #13): a pausa com data também perde a data, senão o agendador a religaria no espaço levado.
+  await trx`update rotinas set estado = 'pausada', retomar_em = null where tenant_id = ${origem.tenantId} and owner_id = ${origem.pessoaId} and (estado = 'ativa' or retomar_em is not null)`;
   // ADR-124 §3: o espaço levado fica sem acesso. As chaves de máquina emitidas para ele (o app pede uma por abertura)
   // morrem aqui; as sessões, no chamador (contas.repo).
   await trx`update maquina_tokens set revogado_em = clock_timestamp() where tenant_id = ${origem.tenantId} and owner_id = ${origem.pessoaId} and revogado_em is null`;

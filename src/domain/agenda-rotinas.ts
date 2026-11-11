@@ -30,7 +30,14 @@ const COM_PROBLEMA: ReadonlySet<DesfechoRotina> = new Set(DESFECHOS_COM_PROBLEMA
 export const temProblema = (d: DesfechoRotina): boolean => COM_PROBLEMA.has(d);
 
 /** `gatilho` webhook (NOD-84): só o passado (as execuções guardadas); o cron dela é sentinela, não há janela prevista. */
-export type RotinaParaAgenda = { id: string; cron: string; fusoIana: string; estado: EstadoRotina; gatilho?: "horario" | "webhook" };
+/** NOD-412: `retomarEm` (só na pausada) = a pausa com data; a agenda prevê as janelas a partir dela. */
+export type RotinaParaAgenda = { id: string; cron: string; fusoIana: string; estado: EstadoRotina; gatilho?: "horario" | "webhook"; retomarEm?: number | null };
+
+/** De quando a agenda prevê as janelas da rotina: agora (ativa), a retomada (pausada com data) ou nunca (pausada sem data). */
+export function inicioDasPrevistas(r: Pick<RotinaParaAgenda, "estado" | "retomarEm">, agora: number): number | null {
+  if (r.estado === "ativa") return agora;
+  return r.retomarEm != null ? Math.max(agora, r.retomarEm) : null;
+}
 
 const formatadores = new Map<string, Intl.DateTimeFormat>();
 /** AAAA-MM-DD do instante no fuso (en-CA formata assim). */
@@ -93,12 +100,14 @@ export function projetarAgenda(entrada: {
     const doIntervalo = todas.filter((e) => e.instanteAgendado >= de && e.instanteAgendado < ate);
     const jaTem = new Set(doIntervalo.map((e) => e.instanteAgendado));
     let previstas: number[] = [];
-    if (r.estado === "ativa" && r.gatilho !== "webhook" && Math.max(de, agora) < ate) {
+    const desde = inicioDasPrevistas(r, agora);
+    if (desde !== null && r.gatilho !== "webhook" && Math.max(de, desde) < ate) {
       try {
-        const chave = `${r.cron}\u0000${r.fusoIana}`;
+        // NOD-412: a pausada com data não divide o cache com a ativa do mesmo cron (as janelas começam em outro instante).
+        const chave = `${r.cron}\u0000${r.fusoIana}\u0000${desde === agora ? "" : desde}`;
         let j = projecoes.get(chave);
         if (!j && projecoes.size < TETO_PROJECOES_POR_PEDIDO) {
-          j = janelasEntre({ cron: r.cron, fusoIana: r.fusoIana, de: Math.max(de, agora), ate, teto: Math.min(TETO_JANELAS_AGENDA, orcamento) });
+          j = janelasEntre({ cron: r.cron, fusoIana: r.fusoIana, de: Math.max(de, desde), ate, teto: Math.min(TETO_JANELAS_AGENDA, orcamento) });
           projecoes.set(chave, j);
         }
         if (!j) { cortado.add(r.id); } else {

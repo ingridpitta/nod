@@ -88,8 +88,11 @@ export const FERRAMENTAS_ROTINA = {
   },
   pausar_rotina: {
     type: "object",
-    description: "Pausa uma rotina existente: ela para de executar até ser reativada. Use o id exato do inventário; a rotina de um colega (id de ver_colegas) só quando a pessoa pedir.",
-    properties: { rotina_id: ROTINA_ID },
+    description: "Pausa uma rotina existente: ela para de executar até ser reativada. Com `ate`, ela volta sozinha nessa data, sem a pessoa pedir (\"pausa até segunda\"). Use o id exato do inventário; a rotina de um colega (id de ver_colegas) só quando a pessoa pedir. Para pausar várias, chame uma vez por rotina.",
+    properties: {
+      rotina_id: ROTINA_ID,
+      ate: { type: "string", description: "Opcional: quando a rotina volta sozinha, na hora LOCAL do fuso da rotina: AAAA-MM-DD (00:00 desse dia; \"até segunda\" = a próxima segunda) ou AAAA-MM-DDTHH:MM. De 1 minuto a 366 dias à frente. Omitido = pausa até a pessoa reativar. Numa rotina já pausada, troca a data.", minLength: 10, maxLength: 16 },
+    },
     required: ["rotina_id"],
     additionalProperties: false,
   },
@@ -151,7 +154,8 @@ export type ArgsCriarRotina = {
 };
 /** Sem argumentos: o agente só pode listar as rotinas DELE, que vêm do contexto do turno. */
 export type ArgsListarRotinas = object;
-export type ArgsPausarRotina = { rotina_id: string };
+/** NOD-412: `ate` = a data/hora local (no fuso da rotina) em que ela volta sozinha. */
+export type ArgsPausarRotina = { rotina_id: string; ate?: string };
 /** NOD-85: a mini-agenda. `dia` relativo (hoje, amanha, ontem, ultimos_7) ou AAAA-MM-DD no fuso da pessoa; `dias` de 1 a 7. */
 export type ArgsVerAgenda = { dia?: string; dias?: number; so_problema?: boolean };
 /**
@@ -165,7 +169,8 @@ export type ArgsReativarRotina = { rotina_id: string };
 export type RotinaListada = { id: string; quando: string; estado: "ativa" | "pausada"; instrucao: string };
 export type ResultadoListarRotinas = { rotinas: RotinaListada[] };
 /** `ja_estava` distingue "pausei agora" de "já estava pausada": o modelo não deve anunciar mudança que não houve. */
-export type ResultadoAlternarRotina = { rotina_id: string; estado: "ativa" | "pausada"; ja_estava: boolean; proxima_execucao: number | null } | { erro: CodigoErro };
+/** NOD-412: `retomar_em` = quando a pausada volta sozinha (ms); null = pausa sem data, ou ativa. */
+export type ResultadoAlternarRotina = { rotina_id: string; estado: "ativa" | "pausada"; ja_estava: boolean; proxima_execucao: number | null; retomar_em: number | null } | { erro: CodigoErro };
 
 export type ArgsAtualizarRotina = {
   rotina_id: string;

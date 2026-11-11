@@ -244,6 +244,17 @@ describe("6: alvos de 44 px, inclusive os interruptores das rotinas e Nova rotin
     expect(h).toContain('class="pfc-chave" role="switch" aria-checked="true" data-act="pausar-rotina" data-id="r1"');
     expect(h).toContain('class="pfc-chave" role="switch" aria-checked="false" data-act="ativar-rotina" data-id="r2"');
   });
+  it("NOD-412 (QA do PR #13): a pausada com data diz até quando na lista do celular e na gaveta da rotina; sem data, só Pausada", () => {
+    const comData = rotina("r2", "pausada", { retomada: { em: 1, texto: "seg 09:00" } });
+    const semData = rotina("r3", "pausada");
+    const lista = renderPerfilCelular(nivel(com(nina(), carregadas([comData, semData])), { tipo: "rotinas" }));
+    expect(lista).toContain("Pausada até seg 09:00");
+    expect(lista.match(/Pausada até/g)).toHaveLength(1);
+    const gaveta = (r: RotinaDto) => renderDetalhes({ ...nivel(com(nina(), carregadas([r])), { tipo: "rotina", id: r.rotina.id }), detalhesAbertos: true } as Estado);
+    expect(gaveta(comData)).toContain("Pausada até seg 09:00: volta sozinha");
+    expect(gaveta(semData)).not.toContain("Pausada até");
+    expect(gaveta(semData)).toContain("Pausada");
+  });
 });
 
 describe("7: nada de descrições longas em cinza no perfil", () => {

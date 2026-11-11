@@ -442,7 +442,7 @@ function nivelRotina(estado: Estado, a: Bot, id: string): Nivel {
   const corpo = `${parada}
     <section class="gv-bloco"><h3>Instrução</h3><p class="gv-texto">${esc(r.instrucao)}</p></section>
     <section class="gv-bloco"><h3>Quando executar</h3><p class="gv-quando">${ICONE.relogio}<span>${esc(resumo ? capitalizar(resumo) : `${r.cron} (${r.fusoIana})`)}</span></p>
-      <small class="gv-proxima">${ativa ? `Próxima: ${esc(dataHora(proximaExecucao, r.fusoIana))} · ${esc(interpolar(proximaExecucao, estado.agora))}` : "Pausada"}</small>${linhaOndeRoda(ondeRoda, { comAtalho: !atalhoNaExecucao })}</section>
+      <small class="gv-proxima">${ativa ? `Próxima: ${esc(dataHora(proximaExecucao, r.fusoIana))} · ${esc(interpolar(proximaExecucao, estado.agora))}` : esc(dto.retomada ? `Pausada até ${dto.retomada.texto}: volta sozinha` : "Pausada")}</small>${linhaOndeRoda(ondeRoda, { comAtalho: !atalhoNaExecucao })}</section>
     <section class="gv-bloco"><h3>Últimas execuções</h3>${execucoes}</section>
     <section class="gv-bloco"><h3>Combinado</h3><dl class="gv-dl">${detalhe("Fonte", r.fonte)}${detalhe("Resultado", r.entregavel)}${detalhe("Antes de agir fora do nod", r.limitesAprovacao)}${detalhe("Se faltar informação", r.politicaSemDado)}</dl></section>`;
   // definido em 2026-09-30: quem muda a instrução ou o horário é o bot (ADR-043); "Ajustar" só escreve o pedido no campo.

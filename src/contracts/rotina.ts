@@ -45,6 +45,11 @@ export type Rotina = {
   /** Só no webhook: quem chama ("Stripe", "GitHub") e os eventos aceitos (vazio = todos). */
   provedor: string | null;
   eventos: string[] | null;
+  /**
+   * definido em 2026-11-11 (NOD-412, migração 0167): só na pausada — o instante em que o agendador a reativa sozinho.
+   * null (ou ausente nas fixtures antigas) = pausa sem data, a de sempre.
+   */
+  retomarEm?: EpochMs | null;
 };
 
 /**

@@ -45,7 +45,7 @@ async function agendaDe(deps: Deps, input: EntradaAgenda, todas: readonly Rotina
       de, ate, agora, fuso,
       rotinas: rotinas.map((r) => ({
         id: r.id, agenteId: r.agenteId, conversaId: r.conversaId, instrucao: r.instrucao, resumo: resumoDe(r),
-        fusoIana: r.fusoIana, estado: r.estado, registroDesde: p.registroDesde.get(r.id) ?? null, cortado: p.cortado.has(r.id), minha: r.ownerId === deps.escopo.pessoaId,
+        fusoIana: r.fusoIana, estado: r.estado, retomarEm: r.estado === "pausada" ? r.retomarEm ?? null : null, registroDesde: p.registroDesde.get(r.id) ?? null, cortado: p.cortado.has(r.id), minha: r.ownerId === deps.escopo.pessoaId,
       })),
       itens: p.itens,
     },

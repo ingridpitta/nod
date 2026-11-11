@@ -4,7 +4,9 @@ import { passoDoAgendador, type RelogioDoAgendador } from "../../domain/presenca
 import { log } from "../../obs/log.ts";
 import { criarRepos } from "../../repositories/index.ts";
 import type { Db, Escopo, Relogio, Transacao } from "../../shared/types.ts";
+import { autoriaPessoa } from "../../use-cases/apoio-l7.ts";
 import { dispararRotina } from "../../use-cases/disparar-rotina.ts";
+import { pausarRotina } from "../../use-cases/pausar-rotina.ts";
 import type { Deps, Services, UseCasesNod } from "../../use-cases/tipos.ts";
 import { logarTickLento, paraCadaPessoa, type OpcoesLaco } from "./escopos-de-fundo.ts";
 
@@ -43,6 +45,8 @@ export type ResultadoTick = { disparadas: string[]; deOutroProcesso: string[]; a
 export async function tickPessoa(escopo: Escopo, tx: Transacao, opcoes: OpcoesTick): Promise<ResultadoTick> {
   const agora = opcoes.agora();
   const resultado: ResultadoTick = { disparadas: [], deOutroProcesso: [], adiadas: [], bloqueadas: [], falhas: [] };
+  // NOD-412: a pausa com data que chegou volta antes de procurar as vencidas.
+  await retomarRotinasMarcadas(escopo, tx, opcoes);
   const vencidas = await tx(async (trx) => criarRepos(trx, escopo).rotinas.ativasVencidas(agora));
   for (const rotina of vencidas) {
     const inicioTx = Date.now();
@@ -88,6 +92,54 @@ export async function tickPessoa(escopo: Escopo, tx: Transacao, opcoes: OpcoesTi
     }
   }
   return resultado;
+}
+
+/**
+ * NOD-412 (definido em 2026-11-11): a pausa com data volta sozinha. Roda no tick do agendador, ANTES de procurar as
+ * vencidas, para a primeira janela depois da retomada já entrar no mesmo tick. Cada rotina na SUA tx, pelo mesmo
+ * executor da tela e do chat (`pausarRotina` com estado ativa): a próxima execução é recalculada a partir de agora e as
+ * janelas perdidas na pausa não são repostas (a regra de reativar desde 2026-09-16). Uma rotina que falha não derruba as
+ * outras. A que não pode voltar (bot excluído, geração antiga, rotina excluída) perde a data e segue pausada.
+ *
+ * Dois processos no mesmo tick, ou a pessoa mexendo na rotina entre a busca e a volta: a tx de cada rotina trava a linha
+ * (FOR UPDATE) e relê; só volta a que segue pausada com a data já chegada (revisão do PR #13).
+ */
+export async function retomarRotinasMarcadas(
+  escopo: Escopo,
+  tx: Transacao,
+  opcoes: { services: Services; useCases: UseCasesNod; agora: () => number },
+): Promise<{ retomadas: string[]; semVolta: number; falhas: string[] }> {
+  const agora = opcoes.agora();
+  const { aRetomar, semVolta } = await tx(async (trx) => {
+    const repos = criarRepos(trx, escopo);
+    const n = await repos.rotinas.limparRetomadasSemVolta(agora);
+    return { aRetomar: await repos.rotinas.pausadasParaRetomar(agora), semVolta: n };
+  });
+  if (semVolta > 0) log("aviso", "rotina_retomada_sem_volta", { quantas: semVolta });
+  const retomadas: string[] = [];
+  const falhas: string[] = [];
+  for (const rotina of aRetomar) {
+    try {
+      const voltou = await tx(async (trx) => {
+        const repos = criarRepos(trx, escopo);
+        // A lista acima é de outra tx: trava a linha e relê. A pessoa pode ter trocado a data, ativado e pausado sem data,
+        // ou outro processo já a ter retomado; nesses casos a volta marcada não vale mais.
+        const travada = await repos.rotinas.buscarParaAtualizar(rotina.id);
+        if (!travada || travada.estado !== "pausada" || travada.retomarEm == null || travada.retomarEm > agora) return false;
+        const deps: Deps = { repos, services: opcoes.services, useCases: opcoes.useCases, tx, escopo, agora: opcoes.agora };
+        const r = await pausarRotina(deps, { rotinaId: rotina.id, estado: "ativa", retomadaAutomatica: true, autoria: autoriaPessoa(escopo.pessoaId, "regra:retomar") });
+        await repos.events.gravarComOutbox(r.events ?? []);
+        return true;
+      });
+      if (!voltou) continue;
+      retomadas.push(rotina.id);
+      log("info", "rotina_retomada", { rotina_id: rotina.id, retomar_em: rotina.retomarEm ?? null, atraso_ms: agora - (rotina.retomarEm ?? agora) });
+    } catch (e) {
+      falhas.push(rotina.id);
+      log("erro", "rotina_retomada_falhou", { rotina_id: rotina.id, erro: ehErroDeDominio(e) ? e.codigo : e instanceof Error ? e.name : "desconhecido" });
+    }
+  }
+  return { retomadas, semVolta, falhas };
 }
 
 /** Um tick para todas as pessoas (paraCadaPessoa: uma tx real por pessoa; escopo obrigatório). NOD-385: bate entre pessoas. */

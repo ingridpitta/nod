@@ -9,7 +9,7 @@ import {
   type BotDaAgenda, type LinhaAgenda,
 } from "../../../web/lib/agenda.ts";
 import { textoFormatado } from "../../../web/lib/texto-formatado.ts";
-import { diaParaFocarNoMes, fraseDoFiltroVazio, renderAgendaRotinas, tituloDaAgendaCelular, valorDaAgenda } from "../../../web/telas/agenda-rotinas.ts";
+import { datasDePausa, diaParaFocarNoMes, fraseDoFiltroVazio, renderAgendaRotinas, tituloDaAgendaCelular, valorDaAgenda } from "../../../web/telas/agenda-rotinas.ts";
 import { SECOES_ESPACO } from "../../../web/telas/espaco.ts";
 
 /** NOD-85: a agenda das rotinas. As datas são do fuso local (o do navegador), por isso tudo sai de `new Date(a, m, d, h, min)`. */
@@ -295,6 +295,36 @@ describe("a tela da agenda", () => {
     expect(agora).toBeGreaterThan(-1);
     expect(h.indexOf("Falta conectar o Slack")).toBeGreaterThan(agora);
     expect(h.indexOf('data-act="ativar-rotina"')).toBeGreaterThan(agora);
+  });
+
+  it("NOD-412: a pausada com data diz até quando; a linha aberta da ativa oferece pausar até amanhã, segunda ou uma data", () => {
+    const pausada = { ...rotinaDto("r2", "b-ada"), retomada: { em: AGORA + 86_400_000, texto: "seg 09:00" }, rotina: { id: "r2", agenteId: "b-ada", ownerId: "p", estado: "pausada", instrucao: "Pausada aqui" } } as unknown as RotinaDto;
+    const h = renderAgendaRotinas(com({ dto: BASE_DTO }, { rotinas: [pausada] }));
+    expect(h).toContain("Pausada até seg 09:00");
+    const sem = { ...pausada, retomada: undefined } as unknown as RotinaDto;
+    const h2 = renderAgendaRotinas(com({ dto: BASE_DTO }, { rotinas: [sem] }));
+    expect(h2).not.toContain("Pausada até");
+    const aberta = renderAgendaRotinas(com({ dto: BASE_DTO, ui: { aberto: `execucao:r1:${em(HOJE, 9)}` } }));
+    // Hoje é quinta 29/10 (no fuso da rotina, São Paulo): amanhã = 30/10, segunda = 02/11.
+    expect(aberta).toMatch(/data-act="pausar-rotina"[^>]*data-ate="2026-10-30"[^>]*>Pausar até amanhã</);
+    expect(aberta).toMatch(/data-act="pausar-rotina"[^>]*data-ate="2026-11-02"[^>]*>Pausar até segunda</);
+    expect(aberta).toContain('data-act="pausar-rotina-escolhida"');
+    expect(aberta).toContain('type="datetime-local"');
+  });
+
+  it("NOD-412 (QA do PR #13): no celular a pausada com data também diz até quando (o desfecho solto da nota fica escondido)", () => {
+    const pausada = { ...rotinaDto("r2", "b-ada"), retomada: { em: AGORA + 86_400_000, texto: "seg 09:00" }, rotina: { id: "r2", agenteId: "b-ada", ownerId: "p", estado: "pausada", instrucao: "Pausada aqui" } } as unknown as RotinaDto;
+    const cel = renderAgendaRotinas(com({ dto: BASE_DTO }, { rotinas: [pausada] }), true);
+    // Embaixo do nome, como o "Prevista" das outras linhas do celular: fora do alcance do `.ag-cel .ag-nota .ag-linha > .ag-desf`.
+    expect(cel).toMatch(/<span class="ag-txt"><span class="ag-nome">Pausada aqui<\/span><span class="ag-desf">[^]*?Pausada até seg 09:00<\/span><\/span>/);
+    const css = readFileSync(new URL("../../../web/agenda.css", import.meta.url), "utf8");
+    expect(css).toContain(".ag-cel .ag-nota .ag-linha > .ag-desf { display: none; }");
+    expect(css).not.toContain(".ag-cel .ag-nota .ag-desf { display: none; }");
+  });
+
+  it("NOD-412: domingo não repete \"segunda\" (amanhã já é segunda)", () => {
+    expect(datasDePausa("America/Sao_Paulo", Date.parse("2026-11-01T15:00:00Z")).map((d) => d.ate)).toEqual(["2026-11-02"]);
+    expect(datasDePausa("America/Sao_Paulo", Date.parse("2026-11-02T15:00:00Z")).map((d) => d.ate)).toEqual(["2026-11-03", "2026-11-09"]);
   });
 
   it("parada e pausada de outra pessoa (equipe) não aparecem com Ativar nem Conectar (revisão 2 do PR 595)", () => {

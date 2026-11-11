@@ -2,6 +2,7 @@ import type { Autoria, RuntimeEvent } from "../contracts/evento.ts";
 import { proximaDaRotina } from "../domain/rotina-texto.ts";
 import type { EstadoRotina, Rotina } from "../contracts/rotina.ts";
 import { ErroDeDominio } from "../domain/erro.ts";
+import { instanteLocal, textoRetomada, validarRetomada } from "../domain/rotina-retomada.ts";
 import { autoriaPessoa, evento, eventoDeRotina, exigir, textoRotinaAtiva } from "./apoio-l7.ts";
 import { registrarDesfechoRotina } from "./disparar-rotina.ts";
 import { invalidarCardDeRitmo } from "./ritmo-card.ts";
@@ -19,15 +20,29 @@ import type { CasoDeUso } from "./tipos.ts";
  * `texto` (definido em 2026-09-24, emenda da ADR-044): quem pausa por regra diz POR QUÊ — o varredor,
  * quando ninguém liberou o acesso da rotina no prazo. Ausente, a linha de sempre.
  */
-export const pausarRotina: CasoDeUso<{ rotinaId: string; estado: EstadoRotina; autoria?: Autoria; texto?: string; semLinha?: true }, { rotina: Rotina; corte?: { cortados: number; rodando: boolean } }> = async (deps, input) => {
+/**
+ * NOD-412 (definido em 2026-11-11): `retomarEm` ou `ate` (hora local no fuso da rotina; só na pausa) é o instante em que o agendador a reativa sozinho; validado
+ * aqui (de agora + 1 min a 366 dias), para a tela e o chat recusarem igual. Pausar a já pausada com OUTRA data troca só a
+ * data (sem corte de fila, que já foi feito); com a mesma data, ou sem data numa pausada, segue sem efeito como sempre.
+ */
+export const pausarRotina: CasoDeUso<{ rotinaId: string; estado: EstadoRotina; retomarEm?: number | null; ate?: string; retomadaAutomatica?: true; autoria?: Autoria; texto?: string; semLinha?: true }, { rotina: Rotina; corte?: { cortados: number; rodando: boolean } }> = async (deps, input) => {
   const atual = exigir(await deps.repos.rotinas.buscar(input.rotinaId), "nao_encontrado", "rotina");
-  if (atual.estado === input.estado) return { data: { rotina: atual } };
   const agora = deps.agora();
+  // `ate` (a tela manda a hora local, como o chat) vira instante no fuso DA ROTINA; `retomarEm` já é o instante.
+  const retomarEm = input.estado !== "pausada" ? null : input.ate !== undefined ? instanteLocal(input.ate, atual.fusoIana) : input.retomarEm ?? null;
+  if (retomarEm !== null) validarRetomada(retomarEm, agora);
+  if (atual.estado === input.estado) {
+    if (input.estado === "ativa" || retomarEm === null || retomarEm === (atual.retomarEm ?? null)) return { data: { rotina: atual } };
+    return trocarRetomada(deps, atual, retomarEm, input);
+  }
   if (input.estado === "ativa") {
-    const proxima = proximaDaRotina(atual, agora);
+    // Na volta marcada, a próxima conta a partir do instante da volta (inclusive): a janela de "seg 09:00" numa pausa
+    // "até seg 09:00" roda, como a agenda prevê; o tick chega segundos depois e a pegaria só no dia seguinte.
+    const desde = input.retomadaAutomatica && atual.retomarEm != null ? Math.min(agora, atual.retomarEm - 1) : agora;
+    const proxima = proximaDaRotina(atual, desde);
     exigir(await deps.repos.rotinas.reagendar(atual.id, proxima), "nao_encontrado", "rotina (não é a dona)");
   }
-  const rotina = await deps.repos.rotinas.atualizarEstado(atual.id, input.estado);
+  const rotina = await deps.repos.rotinas.atualizarEstado(atual.id, input.estado, retomarEm);
   if (!rotina) throw new ErroDeDominio("nao_permitido", { cause: "só a dona pausa/ativa" });
   const corte = rotina.estado === "pausada" ? await cortarFila(deps, rotina.id) : { events: [], cortados: 0, rodando: false };
   // NOD-313 (2026-10-23): o card de ritmo é a própria linha da pausa ("✓ … pausada · desfazer"); quem o fecha escreve a
@@ -43,7 +58,7 @@ export const pausarRotina: CasoDeUso<{ rotinaId: string; estado: EstadoRotina; a
     // esconde o que foi cancelado — a frase do corte vem depois dele.
     texto: input.texto
       ? [input.texto, fraseDoCorte(corte)].filter(Boolean).join(" ")
-      : rotina.estado === "ativa" ? textoRotinaAtiva(rotina, agora) : textoPausada(corte),
+      : rotina.estado === "ativa" ? `${input.retomadaAutomatica ? "Rotina retomada sozinha, como marcado na pausa. " : ""}${textoRotinaAtiva(rotina, agora)}` : textoPausada(corte, rotina, agora),
     payload: eventoDeRotina(rotina, rotina.estado === "ativa" ? "ativada" : "pausada"),
     confianca: "confiavel",
   });
@@ -51,8 +66,30 @@ export const pausarRotina: CasoDeUso<{ rotinaId: string; estado: EstadoRotina; a
 };
 
 /** definido em 2026-10-16 (NOD-272): quem segura a fila entra na mensagem — o que foi cancelado e o que ainda termina. */
-export function textoPausada(corte: { cortados: number; rodando: boolean }): string {
-  return ["Rotina pausada: nada será disparado até você reativar.", fraseDoCorte(corte)].filter(Boolean).join(" ");
+export function textoPausada(corte: { cortados: number; rodando: boolean }, rotina?: Pick<Rotina, "fusoIana" | "retomarEm">, agora?: number): string {
+  return [fraseDaPausa(rotina, agora), fraseDoCorte(corte)].filter(Boolean).join(" ");
+}
+
+/** NOD-412: "Rotina pausada até seg 09:00: volta sozinha." com data; sem data, a frase de sempre. */
+export function fraseDaPausa(rotina?: Pick<Rotina, "fusoIana" | "retomarEm">, agora?: number): string {
+  if (!rotina?.retomarEm || agora === undefined) return "Rotina pausada: nada será disparado até você reativar.";
+  return `Rotina pausada até ${textoRetomada(rotina.retomarEm, rotina.fusoIana, agora)}: volta sozinha. Execuções perdidas na pausa não são repostas.`;
+}
+
+/** A já pausada ganha outra data: só a data muda, com a linha no chat (o corte de fila já foi feito na pausa). */
+async function trocarRetomada(deps: Parameters<typeof pausarRotina>[0], atual: Rotina, retomarEm: number, input: Parameters<typeof pausarRotina>[1]) {
+  const rotina = await deps.repos.rotinas.atualizarEstado(atual.id, "pausada", retomarEm);
+  if (!rotina) throw new ErroDeDominio("nao_permitido", { cause: "só a dona pausa/ativa" });
+  if (input.semLinha) return { data: { rotina } };
+  await deps.repos.mensagens.criar({
+    conversaId: rotina.conversaId,
+    autoria: input.autoria ?? autoriaPessoa(deps.escopo.pessoaId),
+    kind: "sistema",
+    texto: input.texto ?? fraseDaPausa(rotina, deps.agora()),
+    payload: eventoDeRotina(rotina, "pausada"),
+    confianca: "confiavel",
+  });
+  return { data: { rotina } };
 }
 
 /** O que a pausa cancelou e o que ainda termina; vazio quando não havia nada aberto. */

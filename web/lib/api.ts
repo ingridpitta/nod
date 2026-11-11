@@ -533,7 +533,8 @@ export function criarApi(escopo: Escopo) {
     /** NOD-85: a agenda das rotinas entre `de` e `ate` (epoch ms, `ate` exclusivo), com os dias no fuso do navegador. */
     agenda: (de: number, ate: number, fuso: string) => get<AgendaDto>(`rotinas/agenda?de=${de}&ate=${ate}&fuso=${encodeURIComponent(fuso)}`),
     execucoes: (rotinaId: string) => get<{ execucoes: ExecucaoRotina[] }>(`rotinas/${rotinaId}/execucoes`),
-    pausarRotina: (id: string) => post<RespostaMutacao>(`rotinas/${id}/pausar`),
+    /** NOD-412: `ate` = AAAA-MM-DD ou AAAA-MM-DDTHH:MM no fuso da rotina; omitido = pausa sem data. */
+    pausarRotina: (id: string, ate?: string) => post<RespostaMutacao>(`rotinas/${id}/pausar`, ate ? { ate } : undefined),
     /** NOD-84: o endereço inteiro e o segredo do GitHub, só para o Copiar (no-store; nunca vai ao estado da tela). */
     enderecoWebhook: (id: string) => get<{ caminho: string; segredo: string; prefixo: string }>(`rotinas/${id}/endereco`),
     gerarEnderecoWebhook: (id: string) => post<RespostaMutacao>(`rotinas/${id}/endereco`),

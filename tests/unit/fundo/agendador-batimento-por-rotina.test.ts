@@ -13,16 +13,20 @@ vi.mock("../../../src/db/tx.ts", async (original) => {
   const real = await original<typeof import("../../../src/db/tx.ts")>();
   return {
     ...real,
-    // A 1ª tx da pessoa é a listagem das vencidas; cada tx seguinte é UMA rotina (não executa o fn: o disparo real é do
-    // teste de integração). Só o tempo de cada tx e a falha interessam aqui.
+    // NOD-412: a 1ª tx da pessoa procura as pausadas cuja data de volta chegou (aqui, nenhuma); a 2ª é a listagem das
+    // vencidas; cada tx seguinte é UMA rotina (não executa o fn: o disparo real é do teste de integração). Só o tempo de
+    // cada tx e a falha interessam aqui.
     abrirTxEscopada: (_db: unknown, escopo: { pessoaId: string }) => {
       const r = roteiros.get(escopo.pessoaId);
       if (!r) throw new Error("pessoa sem roteiro");
       let chamada = 0;
       return async () => {
-        const i = chamada++;
+        const k = chamada++;
+        // A demora da listagem (listarMs) vale para a 1ª tx da pessoa, qualquer que seja.
+        if (k === 0 && r.listarMs) await new Promise((ok) => setTimeout(ok, r.listarMs));
+        if (k === 0) return { aRetomar: [], semVolta: 0 };
+        const i = k - 1;
         if (i === 0) {
-          if (r.listarMs) await new Promise((ok) => setTimeout(ok, r.listarMs));
           return Array.from({ length: r.rotinas }, (_, k) => ({ id: `${escopo.pessoaId}-r${k}`, proximaExecucao: 0 }));
         }
         const ms = r.rotinaMs?.(i - 1) ?? 0;

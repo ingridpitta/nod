@@ -171,15 +171,22 @@ function abaixoDoAgora(ctx: Ctx): string {
   const botDe = (r: RotinaDto) => ctx.estado.frota?.agentes.find((a) => a.id === r.rotina.agenteId) ?? null;
   const paradas = ctx.estado.rotinas.filter((r) => r.bloqueio && r.rotina.estado === "ativa" && passa(r));
   const pausadas = ctx.ui.soProblema ? [] : ctx.estado.rotinas.filter((r) => r.rotina.estado === "pausada" && passa(r));
-  const nota = (r: RotinaDto, desf: string, tom: string, acao: string) =>
-    `<li class="ag-item ag-nota"><div class="ag-linha ag-linha-muda"><span class="ag-hora ag-hora-ic" aria-hidden="true">${ICONE.relogioMini}</span>${mascote(botDe(r))}<span class="ag-nome">${esc(tituloDaRotina(r.rotina.instrucao))}</span><span class="ag-desf">${ponto(tom)}${esc(desf)}</span>${acao}</div></li>`;
+  // QA do PR #13 (NOD-412): no celular o desfecho solto da nota some (falta espaço ao lado do Ativar); a pausada com data
+  // leva o "Pausada até …" embaixo do nome, como o "Prevista" das outras linhas — senão o celular não diz quando volta.
+  const nota = (r: RotinaDto, desf: string, tom: string, acao: string, sobNome = false) => {
+    const nome = `<span class="ag-nome">${esc(tituloDaRotina(r.rotina.instrucao))}</span>`;
+    const d = `<span class="ag-desf">${ponto(tom)}${esc(desf)}</span>`;
+    const meio = sobNome && ctx.celular ? `<span class="ag-txt">${nome}${d}</span>` : `${nome}${d}`;
+    return `<li class="ag-item ag-nota"><div class="ag-linha ag-linha-muda"><span class="ag-hora ag-hora-ic" aria-hidden="true">${ICONE.relogioMini}</span>${mascote(botDe(r))}${meio}${acao}</div></li>`;
+  };
   const linhasParadas = paradas.map((r) => {
     const b = r.bloqueio!;
     const falta = `${b.motivo === "sem_conexao" ? `Falta conectar o ${b.app}` : `Falta acesso ao ${b.app}`} ${desdeDaParada(b, ctx.estado.agora)}`;
     return nota(r, falta, "atencao", botaoDaParada(b, "ag-link"));
   });
   const ativar = (r: RotinaDto) => link("ativar-rotina", "Ativar", { id: r.rotina.id }, `Ativar a rotina ${tituloDaRotina(r.rotina.instrucao)}`);
-  let linhasPausadas = pausadas.map((r) => nota(r, "Pausada", "neutro", ativar(r)));
+  // NOD-412: a pausada com data diz quando volta sozinha.
+  let linhasPausadas = pausadas.map((r) => nota(r, r.retomada ? `Pausada até ${r.retomada.texto}` : "Pausada", "neutro", ativar(r), r.retomada !== undefined));
   if (pausadas.length > MAX_PAUSADAS_SOLTAS) {
     const aberto = ctx.ui.pausadasAbertas;
     const cab = `<li class="ag-item"><button type="button" class="ag-linha ag-pausadas" data-act="agenda-pausadas" aria-expanded="${aberto}"><span class="ag-hora ag-hora-ic" aria-hidden="true">${ICONE.relogioMini}</span><span class="ag-nome">${pausadas.length} rotinas pausadas</span>${SETA_BAIXO}</button></li>`;
@@ -242,7 +249,29 @@ function acoesDaRotina(ctx: Ctx, r: RotinaNaAgenda): { act: string; rotulo: stri
     conversa,
     ...(ctx.estado.ocupado ? [] : [{ act: "executar-rotina", rotulo: "Testar agora", dados: { id: r.id, agente: r.agenteId } }]),
     { act: pausada ? "ativar-rotina" : "pausar-rotina", rotulo: pausada ? "Ativar" : ctx.celular ? "Pausar a rotina" : "Pausar", dados: { id: r.id } },
+    // NOD-412: pausar com volta marcada, no fuso da rotina; "Pausar até…" abre o campo de data e hora.
+    ...(pausada ? [] : datasDePausa(r.fusoIana, ctx.estado.agora).map((d) => ({ act: "pausar-rotina", rotulo: d.rotulo, dados: { id: r.id, ate: d.ate } }))),
   ];
+}
+
+/** NOD-412: "Pausar até amanhã" e "Pausar até segunda" (00:00 no fuso da rotina; segunda = a próxima, nunca hoje). */
+export function datasDePausa(fusoIana: string, agora: number): { rotulo: string; ate: string }[] {
+  let hoje: string;
+  try { hoje = new Intl.DateTimeFormat("en-CA", { timeZone: fusoIana, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(agora)); } catch { return []; }
+  const [y, m, d] = hoje.split("-").map(Number);
+  const base = Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1);
+  const dia = (n: number) => new Date(base + n * 86_400_000).toISOString().slice(0, 10);
+  const semana = new Date(base).getUTCDay();
+  const ateSegunda = ((8 - semana) % 7) || 7;
+  const datas = [{ rotulo: "Pausar até amanhã", ate: dia(1) }];
+  if (ateSegunda > 1) datas.push({ rotulo: "Pausar até segunda", ate: dia(ateSegunda) });
+  return datas;
+}
+
+/** NOD-412: o campo "Pausar até…" com data e hora (hora local da rotina); o botão manda o valor para o servidor. */
+function pausarAteEscolhida(r: RotinaNaAgenda, agora: number): string {
+  const min = datasDePausa(r.fusoIana, agora)[0]?.ate ?? "";
+  return `<span class="ag-pausar-ate"><input type="datetime-local" data-ate-rotina="${esc(r.id)}" min="${esc(min)}T00:00" aria-label="${esc(`Data e hora em que a rotina ${r.instrucao} volta sozinha (${r.fusoIana})`)}">${link("pausar-rotina-escolhida", "Pausar até…", { id: r.id })}</span>`;
 }
 
 function bloqueioDe(ctx: Ctx, rotinaId: string) {
@@ -253,7 +282,8 @@ function detalhe(ctx: Ctx, l: LinhaAgenda): string {
   const { frase, meta } = textosDoDetalhe(ctx, l);
   const b = bloqueioDe(ctx, l.rotina.id);
   const acoes = acoesDaRotina(ctx, l.rotina).map((a) => link(a.act, a.rotulo, a.dados)).join("");
-  return `<p class="ag-frase">${esc(frase)}</p><p class="ag-meta">${meta.map(esc).join("<br>")}</p><p class="ag-acoes">${b ? botaoDaParada(b, "ag-link") : ""}${acoes}</p>`;
+  const escolher = l.rotina.minha && l.rotina.estado === "ativa" ? pausarAteEscolhida(l.rotina, ctx.estado.agora) : "";
+  return `<p class="ag-frase">${esc(frase)}</p><p class="ag-meta">${meta.map(esc).join("<br>")}</p><p class="ag-acoes">${b ? botaoDaParada(b, "ag-link") : ""}${acoes}${escolher}</p>`;
 }
 
 /* ---------- Celular ---------- */

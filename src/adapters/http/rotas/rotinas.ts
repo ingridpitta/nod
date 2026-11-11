@@ -6,11 +6,10 @@ import type { Escopo, Relogio, Transacao, Tx } from "../../../shared/types.ts";
 import { assertUuid } from "../../../use-cases/apoio-l7.ts";
 import { criarRotinaPelaPessoa } from "../../../use-cases/criar-rotina.ts";
 import { listarExecucoes, listarRotinas } from "../../../use-cases/listar-rotinas.ts";
-import { pausarRotina } from "../../../use-cases/pausar-rotina.ts";
+import { EXECUTORES_ROTINAS } from "../../../use-cases/acoes/rotinas.ts";
 import { decidirRitmoRotina } from "../../../use-cases/ritmo-rotina.ts";
 import type { CasoDeUso, Deps, Services, UseCasesNod } from "../../../use-cases/tipos.ts";
 import type { Rota } from "../roteador.ts";
-import { EXECUTORES_ROTINAS } from "../../../use-cases/acoes/rotinas.ts";
 import { verAgenda } from "../../../use-cases/ver-agenda.ts";
 import type { Executor } from "../../../contracts/evento.ts";
 
@@ -134,7 +133,14 @@ export function criarRotasRotinas(deps: DepsRotasL7): Rota[] {
       metodo: "POST", acao: "rotinas.pausar",
       padrao: /^\/rotinas\/(?<id>[^/]+)\/pausar$/,
       async handler(ctx) {
-        const { rotina } = await executar(deps, ctx.escopo, pausarRotina, { rotinaId: uuid(ctx.params.id, "id"), estado: "pausada" });
+        // NOD-412: corpo opcional { ate: "AAAA-MM-DD[THH:MM]" } (hora local no fuso da rotina, como a ferramenta) ou
+        // { retomar_em: ms }; sem corpo, a pausa de sempre.
+        const corpo = (await ctx.corpo()) as { ate?: unknown; retomar_em?: unknown } | null;
+        const ate = corpo && typeof corpo === "object" ? corpo.ate : undefined;
+        const bruto = corpo && typeof corpo === "object" ? corpo.retomar_em : undefined;
+        if (ate !== undefined && ate !== null && (typeof ate !== "string" || ate.length > 16)) throw new ErroDeDominio("entrada_invalida", { cause: "campo ate" });
+        if (bruto !== undefined && bruto !== null && (typeof bruto !== "number" || !Number.isFinite(bruto))) throw new ErroDeDominio("entrada_invalida", { cause: "campo retomar_em" });
+        const { rotina } = await executar(deps, ctx.escopo, EXECUTORES_ROTINAS["rotinas.pausar"], { rotinaId: uuid(ctx.params.id, "id"), retomarEm: typeof bruto === "number" ? bruto : null, ...(typeof ate === "string" ? { ate } : {}) });
         const resposta: RespostaMutacao = { ok: true, ids: { rotinaId: rotina.id } };
         ctx.json(200, resposta);
       },
@@ -143,7 +149,7 @@ export function criarRotasRotinas(deps: DepsRotasL7): Rota[] {
       metodo: "POST", acao: "rotinas.ativar",
       padrao: /^\/rotinas\/(?<id>[^/]+)\/ativar$/,
       async handler(ctx) {
-        const { rotina } = await executar(deps, ctx.escopo, pausarRotina, { rotinaId: uuid(ctx.params.id, "id"), estado: "ativa" });
+        const { rotina } = await executar(deps, ctx.escopo, EXECUTORES_ROTINAS["rotinas.ativar"], { rotinaId: uuid(ctx.params.id, "id") });
         const resposta: RespostaMutacao = { ok: true, ids: { rotinaId: rotina.id } };
         ctx.json(200, resposta);
       },

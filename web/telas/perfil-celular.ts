@@ -227,7 +227,7 @@ function telaRotinas(estado: Estado, a: Bot, dona: boolean): string {
     const ativa = r.estado === "ativa";
     // NOD-84: a rotina por webhook não tem "próxima" (o cron é sentinela); o "quando" e o "!" são os do desktop.
     const wh = ehRotinaWebhook(dto) ? quandoNaLista(dto) : null;
-    const quando = bloqueio ? fraseDaParada(bloqueio) : wh ? [wh.quando, ativa ? "" : "Pausada"].filter(Boolean).join(" · ") : [resumo ? capitalizar(semFuso(resumo)) : "", ativa ? `próxima ${interpolar(proximaExecucao, estado.agora)}` : "Pausada"].filter(Boolean).join(" · ");
+    const quando = bloqueio ? fraseDaParada(bloqueio) : wh ? [wh.quando, ativa ? "" : "Pausada"].filter(Boolean).join(" · ") : [resumo ? capitalizar(semFuso(resumo)) : "", ativa ? `próxima ${interpolar(proximaExecucao, estado.agora)}` : dto.retomada ? `Pausada até ${dto.retomada.texto}` : "Pausada"].filter(Boolean).join(" · ");
     const chave = dona ? chaveCelular(ativa, ativa ? "pausar-rotina" : "ativar-rotina", r.id, `Rotina ${r.instrucao}`) : "";
     // A rotina parada mantém o conserto de um toque (Conectar / Permitir), como no desktop.
     const conserto = dona && bloqueio ? `<li class="pfc-rotina-conserto">${botaoDaParada(bloqueio, "pfc-contorno")}</li>` : "";

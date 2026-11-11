@@ -52,7 +52,7 @@ describeIntegracao("ferramentas de ciclo de vida de rotina (listar/pausar/reativ
     await withRollback(MARLON, async (trx) => {
       const { agenteId, conversaId, deps, repos, rotinaId } = await rotinaAtiva(trx, "Vera");
       const pausa = await pausarRotinaPeloAgente(deps, { ...contexto(agenteId, conversaId), rotina_id: rotinaId });
-      expect(pausa.data).toEqual({ rotina_id: rotinaId, estado: "pausada", ja_estava: false, proxima_execucao: null });
+      expect(pausa.data).toEqual({ rotina_id: rotinaId, estado: "pausada", ja_estava: false, proxima_execucao: null, retomar_em: null });
       expect((await repos.rotinas.buscar(rotinaId))?.estado).toBe("pausada");
       // Pausada não entra no tick do scheduler.
       expect(await repos.rotinas.ativasVencidas(AGORA + 7 * 24 * 3600_000)).toEqual([]);
