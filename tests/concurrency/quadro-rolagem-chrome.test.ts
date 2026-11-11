@@ -952,6 +952,127 @@ descrever("ADA-7: a atualização do quadro preserva a rolagem (Chrome real)", (
     expect(await avaliar<number>(cdp, `${grade}.scrollLeft`), "scrollLeft da grade depois de 30 atualizações").toBe(400);
   }, 60_000);
 
+  // NOD-469: abrir a tarefa troca a vista (a grade some) e fechar a desenha de novo com scrollLeft 0. Antes da correção o
+  // Esc e o X voltavam com a grade em 0 (o foco no card só a trazia até o card, quando trazia). O desktop não tem "clique
+  // fora": a tarefa aberta ocupa a vista inteira; os dois caminhos de fechar são o Esc e o X (voltar-ao-quadro).
+  for (const como of ["Esc", "X"] as const) {
+    it(`1440×900: NOD-469 — fechar a tarefa com ${como} devolve a grade ao scrollLeft e ao scrollTop de antes`, async () => {
+      await montar(1440, 900, false);
+      const grade = `[...document.querySelectorAll("#quadro .qd-grade")].find((e) => e.offsetParent)`;
+      await avaliar(cdp, `(() => { ${grade}.scrollLeft = 400; const v = document.getElementById("quadro"); v.scrollTop = Math.min(120, v.scrollHeight - v.clientHeight); })()`);
+      await esperar(150);
+      const antes = JSON.parse(await avaliar<string>(cdp, `JSON.stringify({ left: ${grade}.scrollLeft, top: document.getElementById("quadro").scrollTop })`)) as { left: number; top: number };
+      expect(antes.left, "a grade rolou").toBe(400);
+      expect(antes.top, "o quadro rolou para baixo").toBeGreaterThan(0);
+      // O card visível com a grade em 400 (o t3 pode estar fora da vista; vale qualquer card à vista).
+      await avaliar(cdp, `(() => { const g = ${grade}; const r = g.getBoundingClientRect();
+        const c = [...g.querySelectorAll("[data-act='abrir-tarefa']")].find((e) => { const b = e.getBoundingClientRect(); return b.left >= r.left && b.right <= r.right && b.top >= 0 && b.bottom <= innerHeight; });
+        c.click(); })()`);
+      await ate(`document.getElementById("qd-t-tit")`);
+      await esperar(300);
+      if (como === "Esc") await avaliar(cdp, `document.getElementById("qd-t-tit").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }))`);
+      else await avaliar(cdp, `document.querySelector("#quadro [data-act='voltar-ao-quadro']").click()`);
+      await ate(`!document.getElementById("qd-t-tit") && ${grade}`);
+      await esperar(300);
+      const depois = JSON.parse(await avaliar<string>(cdp, `JSON.stringify({ left: ${grade}.scrollLeft, top: document.getElementById("quadro").scrollTop })`)) as { left: number; top: number };
+      expect(Math.abs(depois.left - antes.left), `scrollLeft da grade ${antes.left} → ${depois.left} (${como})`).toBeLessThanOrEqual(1);
+      expect(Math.abs(depois.top - antes.top), `scrollTop do quadro ${antes.top} → ${depois.top} (${como})`).toBeLessThanOrEqual(1);
+      // Um frame ao vivo depois de fechar não a leva de volta a 0.
+      await atualizar();
+      expect(Math.abs((await avaliar<number>(cdp, `${grade}.scrollLeft`)) - antes.left), "scrollLeft depois do frame ao vivo").toBeLessThanOrEqual(1);
+    }, 60_000);
+  }
+
+  // NOD-469 (revisão): a tarefa aberta pelo link não tem rolagem guardada; o Esc devolve o foco ao card dela, e o card que
+  // estava fora da grade (uma coluna à direita) vem até a vista. Com o foco que não rola, o foco ficava num card invisível.
+  it("1440×900: NOD-469 — Esc na tarefa aberta pelo link traz à vista o card focado que estava fora da grade", async () => {
+    await montar(1440, 900, false);
+    const grade = `[...document.querySelectorAll("#quadro .qd-grade")].find((e) => e.offsetParent)`;
+    const id = await avaliar<string>(cdp, `(() => { const g = ${grade}; g.scrollLeft = 0; const r = g.getBoundingClientRect();
+      const c = [...g.querySelectorAll("[data-act='abrir-tarefa']")].find((e) => e.getBoundingClientRect().left >= r.right);
+      return c ? c.dataset.id : ""; })()`);
+    expect(id, "um card fora da grade, à direita, para o teste valer").not.toBe("");
+    await avaliar(cdp, `window.__q.abrirTarefa("a", ${JSON.stringify(id)})`);
+    await ate(`document.getElementById("qd-t-tit")`);
+    await esperar(300);
+    await avaliar(cdp, `document.getElementById("qd-t-tit").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }))`);
+    await ate(`!document.getElementById("qd-t-tit") && ${grade}`);
+    await esperar(300);
+    const r = JSON.parse(await avaliar<string>(cdp, `(() => { const a = document.activeElement; const g = ${grade}.getBoundingClientRect(); const b = a.getBoundingClientRect();
+      return JSON.stringify({ id: a.dataset?.id ?? "", dentro: b.right > g.left && b.left < g.right && b.bottom > 0 && b.top < innerHeight }); })()`)) as { id: string; dentro: boolean };
+    expect(r.id, "o foco volta ao card da tarefa fechada").toBe(id);
+    expect(r.dentro, "o card focado está à vista").toBe(true);
+  }, 60_000);
+
+  // NOD-469 (revisão): a rolagem guardada é do quadro de quem a guardou. Abrir no quadro de A, trocar para a conversa de B e
+  // abrir pelo código no chat (com a conversa à vista) não leva o quadro de B ao scrollLeft que A tinha.
+  it("1440×900: NOD-469 — a rolagem guardada no quadro de um bot não vai para o quadro de outro", async () => {
+    await montar(1440, 900, false);
+    const grade = `[...document.querySelectorAll("#quadro .qd-grade")].find((e) => e.offsetParent)`;
+    await avaliar(cdp, `${grade}.scrollLeft = 400`);
+    await esperar(150);
+    await avaliar(cdp, `(() => { const g = ${grade}; const r = g.getBoundingClientRect();
+      [...g.querySelectorAll("[data-act='abrir-tarefa']")].find((e) => { const b = e.getBoundingClientRect(); return b.left >= r.left && b.right <= r.right && b.top >= 0 && b.bottom <= innerHeight; }).click(); })()`);
+    await ate(`document.getElementById("qd-t-tit")`);
+    await avaliar(cdp, `window.__q.trocar("conversa")`);
+    await esperar(400);
+    await avaliar(cdp, `window.__q.sincronizar({ chave: "c2", nome: "Bia", agenteId: "b" })`);
+    await esperar(300);
+    await avaliar(cdp, `window.__q.abrirTarefaDe("b", "t3")`);
+    await ate(`document.getElementById("qd-t-tit")`);
+    await esperar(400);
+    await avaliar(cdp, `document.getElementById("qd-t-tit").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }))`);
+    await ate(`!document.getElementById("qd-t-tit") && ${grade}`);
+    await esperar(300);
+    expect(await avaliar<number>(cdp, `${grade}.scrollLeft`), "o quadro de B nunca rolou").toBe(0);
+  }, 60_000);
+
+  // QA do PR #10 (NOD-469): o card aberto que estava cortado na borda direita da grade recebe o foco no Esc sem rolar
+  // (focarSemRolar); o focus() comum o trazia inteiro e a grade saía do scrollLeft devolvido.
+  it("1440×900: NOD-469 — Esc na tarefa aberta por um card cortado na borda da grade não rola a grade até ele", async () => {
+    await montar(1440, 900, false);
+    const grade = `[...document.querySelectorAll("#quadro .qd-grade")].find((e) => e.offsetParent)`;
+    // A rolagem em que um card fica cortado na borda direita (parte à vista, parte fora).
+    const achou = await avaliar<number>(cdp, `(() => { const g = ${grade};
+      for (let x = 100; x <= g.scrollWidth - g.clientWidth; x += 20) { g.scrollLeft = x; const r = g.getBoundingClientRect();
+        const c = [...g.querySelectorAll("[data-act='abrir-tarefa']")].find((e) => { const b = e.getBoundingClientRect(); return b.left < r.right - 40 && b.right > r.right + 40 && b.top >= 0 && b.bottom <= innerHeight; });
+        if (c) { c.dataset.cortado = "1"; return g.scrollLeft; } }
+      return -1; })()`);
+    expect(achou, "um card cortado na borda direita, para o teste valer").toBeGreaterThan(0);
+    await esperar(150);
+    await avaliar(cdp, `${grade}.querySelector("[data-cortado='1']").click()`);
+    await ate(`document.getElementById("qd-t-tit")`);
+    await esperar(300);
+    await avaliar(cdp, `document.getElementById("qd-t-tit").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }))`);
+    await ate(`!document.getElementById("qd-t-tit") && ${grade}`);
+    await esperar(300);
+    expect(await avaliar<string>(cdp, `document.activeElement?.dataset?.act ?? ""`), "o foco volta ao card").toBe("abrir-tarefa");
+    expect(Math.abs((await avaliar<number>(cdp, `${grade}.scrollLeft`)) - achou), `scrollLeft da grade (era ${achou})`).toBeLessThanOrEqual(1);
+  }, 60_000);
+
+  // QA do PR #10 (NOD-469): de uma tarefa para outra (o link de outra tarefa com a primeira aberta), o Esc ainda devolve a
+  // rolagem do quadro de antes da primeira; guardar de novo guardaria a vista da tarefa, que nunca bate com a do quadro.
+  it("1440×900: NOD-469 — abrir outra tarefa com uma aberta e fechar com Esc devolve a rolagem de antes da primeira", async () => {
+    await montar(1440, 900, false);
+    const grade = `[...document.querySelectorAll("#quadro .qd-grade")].find((e) => e.offsetParent)`;
+    await avaliar(cdp, `${grade}.scrollLeft = 400`);
+    await esperar(150);
+    const ids = JSON.parse(await avaliar<string>(cdp, `(() => { const g = ${grade}; const r = g.getBoundingClientRect();
+      const cs = [...g.querySelectorAll("[data-act='abrir-tarefa']")].filter((e) => { const b = e.getBoundingClientRect(); return b.left >= r.left && b.right <= r.right && b.top >= 0 && b.bottom <= innerHeight; });
+      return JSON.stringify(cs.map((e) => e.dataset.id)); })()`)) as string[];
+    expect(ids.length, "dois cards à vista").toBeGreaterThanOrEqual(2);
+    await avaliar(cdp, `${grade}.querySelector(${JSON.stringify(`[data-act='abrir-tarefa'][data-id='${ids[0]}']`)}).click()`);
+    await ate(`document.getElementById("qd-t-tit")`);
+    await esperar(300);
+    await avaliar(cdp, `window.__q.abrirTarefa("a", ${JSON.stringify(ids[ids.length - 1])})`);
+    await esperar(400);
+    await avaliar(cdp, `document.getElementById("qd-t-tit").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }))`);
+    await ate(`!document.getElementById("qd-t-tit") && ${grade}`);
+    await esperar(300);
+    expect(await avaliar<string>(cdp, `document.activeElement?.dataset?.id ?? ""`), "o foco volta ao card da segunda tarefa").toBe(ids[ids.length - 1]);
+    expect(Math.abs((await avaliar<number>(cdp, `${grade}.scrollLeft`)) - 400), "scrollLeft da grade de antes da primeira tarefa").toBeLessThanOrEqual(1);
+  }, 60_000);
+
   it("390×844 (toque): ADA-12 revisão 1 — o conteúdo que só volta depois de 3 s (o trabalho novo de log vazio) não leva a tela, com a reserva de verdade", async () => {
     await montar(390, 844, true, RESERVA_MS);
     await semAncora();
