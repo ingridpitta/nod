@@ -252,17 +252,17 @@ describe("revisão 3 do PR #622: se tomar a tarefa não destrava a trava", () =>
   const fora = { colunas, autor: ADA.id, origemConfiavel: false } as const;
 
   it("no mesmo lote: se atribuir e depois terminei ou status não passa", () => {
-    expect(planejar([{ tipo: "mudar_tarefa", tarefa: TID, agente: ADA.nome }, { tipo: "terminei", tarefa: TID }], fora)).toMatchObject({ erro: expect.stringContaining("turno limpo") });
-    expect(planejar([{ tipo: "mudar_tarefa", tarefa: TID, agente: ADA.nome }, { tipo: "mudar_tarefa", tarefa: TID, status: "revisao" }], fora)).toMatchObject({ erro: expect.stringContaining("turno limpo") });
+    expect(planejar([{ tipo: "mudar_tarefa", tarefa: TID, agente: ADA.nome }, { tipo: "terminei", tarefa: TID }], fora)).toMatchObject({ erro: expect.stringContaining("a pedido da pessoa") });
+    expect(planejar([{ tipo: "mudar_tarefa", tarefa: TID, agente: ADA.nome }, { tipo: "mudar_tarefa", tarefa: TID, status: "revisao" }], fora)).toMatchObject({ erro: expect.stringContaining("a pedido da pessoa") });
     // O passo único com agente e status também é recusado.
-    expect(planejar([{ tipo: "mudar_tarefa", tarefa: TID, agente: ADA.nome, status: "revisao" }], fora)).toMatchObject({ erro: expect.stringContaining("turno limpo") });
+    expect(planejar([{ tipo: "mudar_tarefa", tarefa: TID, agente: ADA.nome, status: "revisao" }], fora)).toMatchObject({ erro: expect.stringContaining("a pedido da pessoa") });
   });
 
   it("em duas chamadas: a primeira (se tomar) já é recusada, e a segunda segue sem ser dela", () => {
-    expect(planejar([{ tipo: "mudar_tarefa", tarefa: TID, agente: ADA.nome }], fora)).toMatchObject({ erro: expect.stringContaining("turno limpo") });
+    expect(planejar([{ tipo: "mudar_tarefa", tarefa: TID, agente: ADA.nome }], fora)).toMatchObject({ erro: expect.stringContaining("a pedido da pessoa") });
     expect(planejar([{ tipo: "terminei", tarefa: TID }], fora)).toMatchObject({ erro: expect.stringContaining("responsável") });
     // Revisão 4: Em revisão passa para a própria Ada; a passagem seria ela se tomar a tarefa do Ze.
-    expect(planejar([{ tipo: "mudar_tarefa", tarefa: TID, status: "revisao" }], fora)).toMatchObject({ erro: expect.stringContaining("turno limpo") });
+    expect(planejar([{ tipo: "mudar_tarefa", tarefa: TID, status: "revisao" }], fora)).toMatchObject({ erro: expect.stringContaining("a pedido da pessoa") });
   });
 
   it("revisão 4: a passagem da coluna do próprio autor não o faz responsável num turno de fora (mudar e criar)", () => {
@@ -270,9 +270,9 @@ describe("revisão 3 do PR #622: se tomar a tarefa não destrava a trava", () =>
     const duas = comPassagem("fazendo", ADA.id).map((c) => (c.id === "revisao" ? { ...c, responsavel: ZE.id } : c));
     const livre = [tarefa({ status: "backlog", agenteId: null })];
     const deFora = { colunas: duas, autor: ADA.id, origemConfiavel: false, tarefas: livre } as const;
-    expect(planejar([{ tipo: "mudar_tarefa", tarefa: TID, status: "fazendo" }], deFora)).toMatchObject({ erro: expect.stringContaining("turno limpo") });
-    expect(planejar([{ tipo: "criar_tarefa", titulo: "x", status: "fazendo" }], deFora)).toMatchObject({ erro: expect.stringContaining("turno limpo") });
-    expect(planejar([{ tipo: "importar_linear", itens: [{ identificador: "NOD-1", titulo: "x", status: "fazendo" }] }], deFora)).toMatchObject({ erro: expect.stringContaining("turno limpo") });
+    expect(planejar([{ tipo: "mudar_tarefa", tarefa: TID, status: "fazendo" }], deFora)).toMatchObject({ erro: expect.stringContaining("a pedido da pessoa") });
+    expect(planejar([{ tipo: "criar_tarefa", titulo: "x", status: "fazendo" }], deFora)).toMatchObject({ erro: expect.stringContaining("a pedido da pessoa") });
+    expect(planejar([{ tipo: "importar_linear", itens: [{ identificador: "NOD-1", titulo: "x", status: "fazendo" }] }], deFora)).toMatchObject({ erro: expect.stringContaining("a pedido da pessoa") });
     // No turno limpo pode; a tarefa que já era dela segue andando pela coluna dela.
     expect(ok(planejar([{ tipo: "mudar_tarefa", tarefa: TID, status: "fazendo" }], { colunas: duas, autor: ADA.id, tarefas: livre })).tarefas[0]).toMatchObject({ agenteId: ADA.id });
     expect(ok(planejar([{ tipo: "mudar_tarefa", tarefa: TID, status: "fazendo" }], { ...deFora, tarefas: [tarefa({ status: "backlog", agenteId: ADA.id })] })).tarefas[0]).toMatchObject({ status: "fazendo", agenteId: ADA.id });
@@ -293,11 +293,22 @@ describe("revisão 3 do PR #622: se tomar a tarefa não destrava a trava", () =>
     expect(ok(planejar([{ tipo: "mudar_tarefa", tarefa: TID, agente: ZE.nome }], { autor: ADA.id, origemConfiavel: false, tarefas: daAda })).comecam).toEqual([TID]);
   });
 
+  // Revisão do PR #8 (médio): o caminho do pela_fala só onde ele existe; criar ou importar para si não tem pela_fala.
+  it("a recusa de se tomar aponta o pela_fala no mudar_tarefa, e não no criar_tarefa nem no importar_linear", () => {
+    const livre = [tarefa({ agenteId: null })];
+    expect(planejar([{ tipo: "mudar_tarefa", tarefa: TID, agente: ADA.nome }], { ...fora, tarefas: livre })).toMatchObject({ erro: expect.stringContaining("pela_fala: true") });
+    for (const op of [{ tipo: "criar_tarefa", titulo: "x", agente: ADA.nome }, { tipo: "importar_linear", itens: [{ identificador: "NOD-1", titulo: "x", agente: ADA.nome }] }] as const) {
+      const r = planejar([op], fora);
+      expect(r).toMatchObject({ erro: expect.stringContaining("a pedido da pessoa") });
+      expect((r as { erro: string }).erro).not.toContain("pela_fala");
+    }
+  });
+
   it("também não pega tarefa sem responsável nem cria uma para si; no turno limpo pode; a própria segue", () => {
     const livre = [tarefa({ agenteId: null })];
-    expect(planejar([{ tipo: "mudar_tarefa", tarefa: TID, agente: ADA.nome }], { ...fora, tarefas: livre })).toMatchObject({ erro: expect.stringContaining("turno limpo") });
-    expect(planejar([{ tipo: "criar_tarefa", titulo: "x", agente: ADA.nome }], fora)).toMatchObject({ erro: expect.stringContaining("turno limpo") });
-    expect(planejar([{ tipo: "importar_linear", itens: [{ identificador: "NOD-1", titulo: "x", agente: ADA.nome }] }], fora)).toMatchObject({ erro: expect.stringContaining("turno limpo") });
+    expect(planejar([{ tipo: "mudar_tarefa", tarefa: TID, agente: ADA.nome }], { ...fora, tarefas: livre })).toMatchObject({ erro: expect.stringContaining("a pedido da pessoa") });
+    expect(planejar([{ tipo: "criar_tarefa", titulo: "x", agente: ADA.nome }], fora)).toMatchObject({ erro: expect.stringContaining("a pedido da pessoa") });
+    expect(planejar([{ tipo: "importar_linear", itens: [{ identificador: "NOD-1", titulo: "x", agente: ADA.nome }] }], fora)).toMatchObject({ erro: expect.stringContaining("a pedido da pessoa") });
     expect(ok(planejar([{ tipo: "mudar_tarefa", tarefa: TID, agente: ADA.nome }, { tipo: "terminei", tarefa: TID }], { colunas, autor: ADA.id })).comecam).toEqual([TID]);
     expect(ok(planejar([{ tipo: "mudar_tarefa", tarefa: TID, agente: ADA.nome }], { ...fora, tarefas: [tarefa({ agenteId: ADA.id })] })).tarefas[0]).toMatchObject({ agenteId: ADA.id });
   });

@@ -28,7 +28,7 @@ export type ArgsGerirQuadro = {
 
 export type ResultadoGerirQuadro =
   | { ok: true; quadro: ResumoQuadroParaBot | null; lote_id: string | null; comecaram: { tarefa_id: string; agente: string }[]; instrucao: string; ajustada?: boolean; proposta_id?: string; /** NOD-430: o link de cada tarefa tocada. */ tarefas?: LinkDeTarefa[]; movida?: { tarefa_id: string; codigo: string; codigo_antigo: string }; aplicada?: boolean; /** NOD-418: o trabalho que ficou (repetir, cancelar, recado). */ trabalho?: { numero: number | null; estado: string | null }; /** ADA-14: o que as ops dos N quadros devolvem (listar_quadros, projetos). */ quadros_do_bot?: QuadrosDoBotDto; projeto?: Projeto; quadro_id?: string; todos?: { id: string; rotulo: string; projeto: string | null }[] }
-  | { ok: false; erro: "experimento_desligado" | "sem_quadro" | "entrada_invalida" | "nao_encontrado" | "nao_permitido" | "estado_invalido" | "conflito" | FalhaImportacao; instrucao: string };
+  | { ok: false; erro: "experimento_desligado" | "sem_quadro" | "entrada_invalida" | "nao_encontrado" | "nao_permitido" | "estado_invalido" | "conflito" | FalhaImportacao; instrucao: string; /** ADA-26: o que dizer à pessoa, numa frase, sem a regra interna. */ para_pessoa?: string };
 
 /** O quadro como o bot o lê e a proposta de colunas moram em arquivos próprios (merge da NOD-416); aqui só reexporta. */
 export type { ResumoQuadroParaBot } from "./quadro-resumo-bot.ts";

@@ -1,7 +1,7 @@
 import { TETO_ITENS_ATIVIDADE, type AtividadeDto, type ContagemDaAtividade, type ItemDeAtividade } from "../contracts/atividade.ts";
 import { ASSUNTOS_DA_ATIVIDADE } from "../domain/destino-no-chat.ts";
 import { ErroDeDominio } from "../domain/erro.ts";
-import { diaAnterior, diaNoFuso, diaValido, itemDaAcaoDoModo, itemDaMensagem, itemDaNegacaoDeConector, itemDaRecuperacaoDeConector, itensDoTrabalho, ordenarAtividade } from "../domain/item-de-atividade.ts";
+import { diaAnterior, diaNoFuso, diaValido, itemDaAcaoDoModo, itemDaMensagem, itemDaNegacaoDeConector, itemDaRecuperacaoDeConector, itemDaRecusaDoQuadro, itensDoTrabalho, ordenarAtividade } from "../domain/item-de-atividade.ts";
 import type { CasoDeUso, Deps } from "./tipos.ts";
 
 export type EntradaAtividade = { agenteId: string; dia: string; fuso: string };
@@ -33,14 +33,15 @@ async function recorte(deps: Deps, input: EntradaAtividade) {
 }
 
 async function contar(deps: Deps, r: Awaited<ReturnType<typeof recorte>>): Promise<number> {
-  const [mensagens, negacoes, recuperacoes, trabalhos, semAprovacao] = await Promise.all([
+  const [mensagens, negacoes, recuperacoes, trabalhos, semAprovacao, recusas] = await Promise.all([
     deps.repos.atividade.contarMensagens(r.conversa.id, r.faixa, ASSUNTOS_DA_ATIVIDADE),
     deps.repos.atividade.contarNegacoesDeConector(r.agente.id, r.faixa),
     deps.repos.atividade.contarRecuperacoesDeConector(r.agente.id, r.faixa),
     deps.repos.atividade.contarTrabalhos(r.conversa.id, r.faixa),
     deps.repos.acoesPeloModo.contarSemAprovacaoDoDia(r.agente.id, r.faixa),
+    deps.repos.atividade.contarRecusasDoQuadro(r.agente.id, r.faixa),
   ]);
-  return mensagens + negacoes + recuperacoes + trabalhos + semAprovacao;
+  return mensagens + negacoes + recuperacoes + trabalhos + semAprovacao + recusas;
 }
 
 /**
@@ -49,7 +50,7 @@ async function contar(deps: Deps, r: Awaited<ReturnType<typeof recorte>>): Promi
  */
 export const lerAtividade: CasoDeUso<EntradaAtividade, AtividadeDto> = async (deps, input) => {
   const r = await recorte(deps, input);
-  const [total, linhas, negacoes, recuperacoes, trabalhos, semAprovacao] = await Promise.all([
+  const [total, linhas, negacoes, recuperacoes, trabalhos, semAprovacao, recusas] = await Promise.all([
     contar(deps, r),
     deps.repos.atividade.mensagens(r.conversa.id, r.faixa, ASSUNTOS_DA_ATIVIDADE, TETO_ITENS_ATIVIDADE),
     deps.repos.atividade.negacoesDeConector(r.agente.id, r.faixa),
@@ -58,6 +59,8 @@ export const lerAtividade: CasoDeUso<EntradaAtividade, AtividadeDto> = async (de
     deps.repos.atividade.trabalhos(r.conversa.id, r.faixa, TETO_ITENS_ATIVIDADE),
     // PR 6 dos modos de aprovação: a quarta fonte — o que o modo rodou sem a pessoa (`acoes_pelo_modo`).
     deps.repos.acoesPeloModo.semAprovacaoDoDia(r.agente.id, r.faixa, TETO_ITENS_ATIVIDADE),
+    // ADA-26: as recusas do gerir_quadro (uma linha por dia).
+    deps.repos.atividade.recusasDoQuadro(r.agente.id, r.faixa),
   ]);
   const faixa = { ini: r.faixa.ini.getTime(), fim: r.faixa.fim.getTime() };
   const itens: ItemDeAtividade[] = [
@@ -65,6 +68,7 @@ export const lerAtividade: CasoDeUso<EntradaAtividade, AtividadeDto> = async (de
     ...negacoes.map((n) => itemDaNegacaoDeConector({ ...n, em: n.em.getTime() })),
     ...recuperacoes.map((n) => itemDaRecuperacaoDeConector({ ...n, em: n.em.getTime() })),
     ...trabalhos.flatMap((t) => itensDoTrabalho({ id: t.id, titulo: t.titulo, forma: t.forma, origem: t.origem, estado: t.estado, criadoEm: t.criado_em.getTime(), terminadoEm: t.terminado_em?.getTime() ?? null }, faixa)),
+    ...recusas.map((x) => itemDaRecusaDoQuadro({ vezes: x.vezes, em: x.em.getTime() })),
     ...semAprovacao.map((a) => itemDaAcaoDoModo({ id: a.id, modo: a.modo, tipo: a.tipo, gatilho: a.gatilho, resumo: a.resumo, risco: a.risco, veredito: a.veredito, motivo: a.motivo, contestadaEm: a.contestada_em?.getTime() ?? null, em: a.criado_em.getTime() })),
   ];
   const pagina = ordenarAtividade(itens).slice(0, TETO_ITENS_ATIVIDADE);

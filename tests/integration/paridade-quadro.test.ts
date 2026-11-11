@@ -771,7 +771,7 @@ describeIntegracao("paridade tela × chat do quadro.* (NOD-442, ADR-135)", () =>
       // NOD-430 × NOD-417: contaminado = limite normal (não atribui a outro) e não pega tarefa para si (ERRO_SE_TOMA).
       // Ele só escreve no Backlog; quando a pessoa passa a tarefa a ele, o turno que começa nasce contaminado.
       const tomar = await executar(m.d, gerirQuadro, { ...ctx, quadro: m.tela.agenteId, acoes: [{ tipo: "criar_tarefa", titulo: "Do bot", agente: m.nomeGil }] });
-      expect(JSON.stringify(tomar.data)).toContain("você só pega uma tarefa que não é sua num turno limpo");
+      expect(JSON.stringify(tomar.data)).toContain("você só pega uma tarefa que não é sua a pedido da pessoa");
       const r = await executar(m.d, gerirQuadro, { ...ctx, quadro: m.tela.agenteId, acoes: [{ tipo: "criar_tarefa", titulo: "Do bot" }] });
       if (!r.data.ok) throw new Error(JSON.stringify(r.data));
       // Revisão 4 do PR #622 (achado 2): o bot de fora que cria a tarefa não aciona ninguém; quando a pessoa a passa e a

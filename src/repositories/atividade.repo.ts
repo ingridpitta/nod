@@ -60,6 +60,10 @@ export function atividadeRepo(conn: Conn, escopo: Escopo) {
     t.tenant_id = ${escopo.tenantId} and t.agente_id = ${agenteId} and t.kind = 'negacao' and t.em >= ${f.ini} and t.em < ${f.fim}
       and t.motivo = any(${[...MOTIVOS_DE_CONECTOR]}::text[])`;
 
+  const filtroRecusaDoQuadro = (agenteId: string, f: Faixa) => conn`
+    t.tenant_id = ${escopo.tenantId} and t.agente_id = ${agenteId} and t.kind = 'negacao' and t.ferramenta = 'gerir_quadro'
+      and t.regra = 'regra:quadro_recusou' and t.em >= ${f.ini} and t.em < ${f.fim}`;
+
   const filtroRecuperacao = (agenteId: string, f: Faixa) => conn`
     t.tenant_id = ${escopo.tenantId} and t.agente_id = ${agenteId} and t.kind = 'conector_recuperado' and t.em >= ${f.ini} and t.em < ${f.fim}`;
 
@@ -106,6 +110,17 @@ export function atividadeRepo(conn: Conn, escopo: Escopo) {
     async contarNegacoesDeConector(agenteId: string, f: Faixa): Promise<number> {
       const [l] = await conn<{ n: number }[]>`
         select count(*)::int as n from (select 1 from trilha t where ${filtroTrilha(agenteId, f)} group by coalesce(t.conector_id::text, t.ferramenta), t.motivo) g`;
+      return l?.n ?? 0;
+    },
+
+    /** ADA-26: as recusas do gerir_quadro no dia (uma linha, com quantas vezes e a mais recente). */
+    async recusasDoQuadro(agenteId: string, f: Faixa): Promise<{ vezes: number; em: Date }[]> {
+      return conn<{ vezes: number; em: Date }[]>`
+        select count(*)::int as vezes, max(t.em) as em from trilha t where ${filtroRecusaDoQuadro(agenteId, f)} having count(*) > 0`;
+    },
+
+    async contarRecusasDoQuadro(agenteId: string, f: Faixa): Promise<number> {
+      const [l] = await conn<{ n: number }[]>`select (count(*) > 0)::int as n from trilha t where ${filtroRecusaDoQuadro(agenteId, f)}`;
       return l?.n ?? 0;
     },
 

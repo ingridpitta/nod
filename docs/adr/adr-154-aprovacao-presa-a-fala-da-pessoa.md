@@ -57,3 +57,22 @@ outro turno; fala anterior à pergunta; rotina reaproveitando fala velha.
 ## Gatilho de reversão
 
 Um caso de aprovação aplicada sem a pessoa ter falado, ou bots usando `pela_fala` fora de aprovação/resposta.
+
+## Emenda ADA-26 (2026-11-11): tarefa sem dono e recusas com caminho
+
+Em 03/11 nenhum bot cancelou as ADA-17 a 20 (sem responsável) a pedido do Marlon: a recusa dizia "peça à pessoa na
+conversa", e ela já estava pedindo.
+
+1. **§2, tarefa sem dono.** Na tarefa sem responsável no começo do lote, o passo `mudar_tarefa` com `pela_fala` aceita
+   também `agente` (qualquer bot do quadro, inclusive quem fala), e fica isento do "se tomar" só nela. Na tarefa com
+   dono, o responsável continua fora da fala. Sem fala, nada muda.
+2. **Recusa com caminho.** As recusas do limite e de pegar tarefa no `mudar_tarefa` e no `terminei` apontam o
+   `pela_fala` (`CAMINHO_DA_FALA`) e não falam em turno limpo; as de passos sem `pela_fala` (colunas, quadro, criar ou
+   trazer para si, excluir, devolver) apontam o quadro (`CAMINHO_SEM_FALA`). Toda recusa do `gerir_quadro` traz
+   `para_pessoa`: uma frase sem regra interna, que só cita a tarefa do passo recusado pelo código (o título pode ter
+   vindo de fora, ADR-047). Se a fala dela no turno já cita a tarefa, a frase não pede para citar de novo: aponta o quadro.
+3. **Atividade.** Toda recusa do `gerir_quadro` grava uma linha na trilha (`negacao`, `alcance_insuficiente`,
+   `regra:quadro_recusou`, só ids, ADR-004), que vira uma linha por dia em Bloqueios. Não passa pelo `registrarNegacao`:
+   não interrompe o turno nem entra nas decisões de autorização (o motivo já fica fora delas, 0128). Sem migração.
+
+Gatilho de reversão do item 1: um caso de atribuição indevida a partir de uma fala que citava a tarefa por acaso.

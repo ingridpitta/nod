@@ -122,9 +122,9 @@ describeIntegracao("pedir a qualquer agente para mexer num quadro (NOD-430)", ()
         const sujo = "sujo" in caso.o;
         await recusa([{ tipo: "criar_tarefa", titulo: "X", status: "afazer" }], recusaDoLimite("criar fora de Backlog"));
         await recusa([{ tipo: "criar_tarefa", titulo: "X", agente: m.nomeEng }], recusaDoLimite("atribuir tarefa"));
-        await recusa([{ tipo: "mudar_tarefa", tarefa: "Do Eng", status: "feito" }], recusaDoLimite("mexer em tarefa de outro (só na sua)"));
+        await recusa([{ tipo: "mudar_tarefa", tarefa: "Do Eng", status: "feito" }], recusaDoLimite("mexer em tarefa de outro (só na sua)", true));
         await recusa([{ tipo: "mudar_tarefa", tarefa: "Da Ada", excluir: true }], recusaDoLimite("excluir tarefa (para fechar uma duplicada, mude o status para cancelado, com o motivo)"));
-        await recusa([{ tipo: "mudar_tarefa", tarefa: "Da Ada", agente: m.nomeEng }], recusaDoLimite("atribuir tarefa"));
+        await recusa([{ tipo: "mudar_tarefa", tarefa: "Da Ada", agente: m.nomeEng }], recusaDoLimite("atribuir tarefa", true));
         await recusa([{ tipo: "editar_quadro", meta: "Outra" }], sujo ? "a meta só muda num turno limpo" : recusaDoLimite("criar ou editar o quadro (meta, prazo)"));
         await recusa([{ tipo: "criar_coluna", nome: "Nova", grupo: "iniciado" }], sujo ? "as colunas só mudam num turno limpo" : "as colunas só mudam a pedido da pessoa");
         // importar_linear: o item novo segue o limite da criação; o que já está no quadro é do responsável dele.
@@ -132,9 +132,9 @@ describeIntegracao("pedir a qualquer agente para mexer num quadro (NOD-430)", ()
         await recusa([{ tipo: "importar_linear", itens: [{ identificador: "ENG-8", titulo: "Y", agente: m.nomeEng }] }], recusaDoLimite("atribuir tarefa"));
         await recusa([{ tipo: "importar_linear", itens: [{ identificador: "ENG-7", titulo: "Do Linear (de novo)" }] }], recusaDoLimite("mexer em tarefa de outro (só na sua)"));
         // terminei: só na tarefa dela.
-        await recusa([{ tipo: "terminei", tarefa: "Do Eng" }], recusaDoLimite("mexer em tarefa de outro (só na sua)"));
+        await recusa([{ tipo: "terminei", tarefa: "Do Eng" }], recusaDoLimite("mexer em tarefa de outro (só na sua)", true));
         // Criar para si: no Backlog, num turno limpo; num turno contaminado ela não se toma tarefa (trava da NOD-417).
-        if (sujo) await recusa([{ tipo: "criar_tarefa", titulo: "Para mim", agente: m.nomeAda }], "você só pega uma tarefa que não é sua num turno limpo");
+        if (sujo) await recusa([{ tipo: "criar_tarefa", titulo: "Para mim", agente: m.nomeAda }], "você só pega uma tarefa que não é sua a pedido da pessoa");
         else ok(await m.pela([{ tipo: "criar_tarefa", titulo: "Para mim", agente: m.nomeAda }], caso.o));
         // O que pode: criar no Backlog (sem responsável ou com ela), importar no Backlog, terminar e mexer na própria tarefa.
         ok(await m.pela([{ tipo: "criar_tarefa", titulo: "Ideia" }], caso.o));
@@ -367,7 +367,7 @@ describeIntegracao("pedir a qualquer agente para mexer num quadro (NOD-430)", ()
       ok(await m.pessoa([{ tipo: "criar_quadro" }, { tipo: "criar_tarefa", titulo: "Do Eng", agente: m.nomeEng }]));
       const sob = { procuracao: true };
       expect(texto(await m.pela([{ tipo: "criar_tarefa", titulo: "X", status: "afazer" }], sob))).toContain(recusaDoLimite("criar fora de Backlog"));
-      expect(texto(await m.pela([{ tipo: "mudar_tarefa", tarefa: "Do Eng", status: "feito" }], sob))).toContain(recusaDoLimite("mexer em tarefa de outro (só na sua)"));
+      expect(texto(await m.pela([{ tipo: "mudar_tarefa", tarefa: "Do Eng", status: "feito" }], sob))).toContain(recusaDoLimite("mexer em tarefa de outro (só na sua)", true));
       expect(texto(await m.pela([{ tipo: "editar_quadro", meta: "Outra" }], sob))).toContain(recusaDoLimite("criar ou editar o quadro (meta, prazo)"));
       expect(texto(await m.pela([{ tipo: "renomear_coluna", coluna: "Backlog", nome: "Entrada" }], sob))).toContain("as colunas só mudam a pedido da pessoa");
       expect(texto(await m.pela([{ tipo: "remover_quadro", bot: m.nomeEng }], sob))).toContain("remover o quadro só a pedido da pessoa");
@@ -468,7 +468,7 @@ describeIntegracao("pedir a qualquer agente para mexer num quadro (NOD-430)", ()
       const r1 = await doBot([{ tipo: "criar_tarefa", titulo: "X", status: "afazer" }]);
       expect(r1.data).toMatchObject({ ok: false, detalhe: `ação 1: ${recusaDoLimite("criar fora de Backlog")}` });
       const r2 = await doBot([{ tipo: "mudar_tarefa", tarefa: "Do Eng", status: "feito" }]);
-      expect(r2.data).toMatchObject({ ok: false, detalhe: `ação 1: ${recusaDoLimite("mexer em tarefa de outro (só na sua)")}` });
+      expect(r2.data).toMatchObject({ ok: false, detalhe: `ação 1: ${recusaDoLimite("mexer em tarefa de outro (só na sua)", true)}` });
       // A pessoa, sem limite: total.
       ok(await m.pessoa([{ tipo: "criar_tarefa", titulo: "Y", status: "afazer" }]));
       // Na conversa, o gerir_quadro diz total de propósito (e o card de colunas continua saindo).

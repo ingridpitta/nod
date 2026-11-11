@@ -262,3 +262,18 @@ export function diaAnterior(dia: string): string {
 export function diaNoFuso(instante: number, fuso: string): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: fuso, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(instante));
 }
+
+/**
+ * ADA-26: as recusas do gerir_quadro no dia, numa linha só (a trilha guarda só ids: o texto da recusa foi ao bot, que
+ * disse à pessoa o que fazer na conversa).
+ */
+export function itemDaRecusaDoQuadro(l: { vezes: number; em: number }): ItemDeAtividade {
+  return {
+    id: "trilha:gerir_quadro:recusou",
+    em: l.em,
+    categoria: "bloqueios",
+    titulo: l.vezes > 1 ? "O quadro recusou pedidos do bot" : "O quadro recusou um pedido do bot",
+    detalhe: "Nada mudou no quadro; o bot disse na conversa o que você pode fazer.",
+    ...(l.vezes > 1 ? { vezes: l.vezes } : {}),
+  };
+}
