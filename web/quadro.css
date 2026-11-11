@@ -722,6 +722,9 @@ a.qd-chip:hover { background: var(--surface-raised); }
     background: var(--surface); box-shadow: var(--shadow-pop); animation: qd-sobe .22s cubic-bezier(.2, .8, .2, 1) both; }
 }
 
+/* ADA-302: a tarefa redesenhada na mesma vista (o desenho a recria) não sobe de novo; só a que abre. */
+.qd-tarefa[data-subiu] { animation: none; }
+
 @media (prefers-reduced-motion: reduce) {
   .qd-col-nova, .qd-menu, .qd-pop, .qd-folha, .qd-tarefa { animation: none; }
   /* ADA-4: o card do lote não pisca: só a borda, por um instante. */

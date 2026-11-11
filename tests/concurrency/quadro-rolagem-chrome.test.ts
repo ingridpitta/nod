@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { acharChrome } from "../../src/adapters/tela/capturador-cdp.ts";
 import { abrirChrome, avaliar, type Cdp } from "../../scripts/carga-tela/cdp.ts";
 import { ADIAR_ATE_MS, GESTO_MS, RESERVA_MS, TOQUE_PARADO_MS } from "../../web/lib/quadro.ts";
+import { PASSOS_A_VISTA } from "../../web/telas/passos-do-run.ts";
 
 /**
  * ADA-7 no Chrome de verdade, em 390×844 (toque) e 1440×900: a pessoa rola o quadro e a tarefa aberta até o fim, um
@@ -953,7 +954,7 @@ descrever("ADA-7: a atualização do quadro preserva a rolagem (Chrome real)", (
     await abrirT3(30);
     for (let i = 1; i <= 30; i++) await avaliar(cdp, `window.__passoVivo(${i})`);
     await esperar(400);
-    const botao = `[...document.querySelectorAll("#quadro [data-act='trab-passos']")].find((b) => b.offsetParent)`;
+    const botao = `[...document.querySelectorAll("#quadro .ta-run[data-turno='tv'] [data-act='run-abrir']")].find((b) => b.offsetParent)`;
     const noTopo = `(() => { const v = document.getElementById("quadro"); const b = ${botao}; return b ? b.getBoundingClientRect().top - v.getBoundingClientRect().top : null; })()`;
     await avaliar(cdp, `(() => { document.activeElement?.blur(); const v = document.getElementById("quadro"); v.scrollTop += ${noTopo} - 40; })()`);
     await esperar(GESTO_MS + 150);
@@ -963,11 +964,20 @@ descrever("ADA-7: a atualização do quadro preserva a rolagem (Chrome real)", (
       return JSON.stringify({ y, entre: ks.some((k) => k >= 0 && k <= y), abaixo: ks.some((k) => k > y && k < v.clientHeight) }); })()`)) as { y: number; entre: boolean; abaixo: boolean };
     expect(cena.entre, "nenhum bloco com chave começa entre o topo e o botão (o do botão cruza o topo)").toBe(false);
     expect(cena.abaixo, "um bloco com chave começa abaixo do botão, à vista (a âncora de antes)").toBe(true);
+    // #725: o bloco aberto mostra os PASSOS_A_VISTA últimos e "mostrar N anteriores" (o resto abre no segundo toque,
+    // também da pessoa, também abaixo do botão): os dois toques deixam o botão no lugar.
+    const passos = `document.querySelectorAll("#quadro .ta-run[data-turno='tv'] .ta-run-passos .ta-passo").length`;
+    const mais = `document.querySelector("#quadro .ta-run[data-turno='tv'] [data-act='run-passos-todos']")`;
     await avaliar(cdp, `(${botao}).click()`);
-    await ate(`document.querySelectorAll("#quadro .qd-trab-passo").length >= 30`);
+    await ate(`${passos} >= ${PASSOS_A_VISTA} && ${mais}?.textContent.includes("mostrar ${30 - PASSOS_A_VISTA} anteriores")`);
     await esperar(300);
     const y1 = await avaliar<number | null>(cdp, noTopo);
     expect(Math.abs((y1 ?? -9999) - cena.y), `o botão dos passos foi de ${cena.y} a ${y1}`).toBeLessThan(4);
+    await avaliar(cdp, `${mais}.click()`);
+    await ate(`${passos} >= 30`);
+    await esperar(300);
+    const y2 = await avaliar<number | null>(cdp, noTopo);
+    expect(Math.abs((y2 ?? -9999) - cena.y), `com todos os passos, o botão foi de ${cena.y} a ${y2}`).toBeLessThan(4);
     await avaliar(cdp, "window.__trabVivo = false");
   }, 90_000);
 
@@ -1671,17 +1681,17 @@ descrever("ADA-7: a atualização do quadro preserva a rolagem (Chrome real)", (
       await atualizar();
       await abrirT3(30);
       for (let i = 1; i <= 3; i++) await avaliar(cdp, `window.__passoVivo(${i})`);
-      const botao = `[...document.querySelectorAll("#quadro [data-act='trab-passos']")].find((b) => b.offsetParent)`;
+      const botao = `[...document.querySelectorAll("#quadro .ta-run[data-turno='tv'] [data-act='run-abrir']")].find((b) => b.offsetParent)`;
       await ate(botao);
       await avaliar(cdp, `(${botao}).click()`);
-      await ate(`document.querySelectorAll("#quadro .qd-trab-passo").length >= 3`);
+      await ate(`document.querySelectorAll("#quadro .ta-run[data-turno='tv'] .ta-run-passos .ta-passo").length >= 3`);
       await esperar(300);
       await lerEm(comentarioN(15), 120);
       const y0 = await yNaVista(comentarioN(15));
       expect(await avaliar<number>(cdp, `(${botao}).getBoundingClientRect().bottom - document.getElementById("quadro").getBoundingClientRect().top`), "o log está acima da vista").toBeLessThan(0);
       for (let i = 4; i <= 12; i++) {
         await avaliar(cdp, `window.__passoVivo(${i})`);
-        await ate(`document.querySelectorAll("#quadro .qd-trab-passo").length >= ${i}`);
+        await ate(`document.querySelectorAll("#quadro .ta-run[data-turno='tv'] .ta-run-passos .ta-passo").length >= ${i}`);
         await esperar(80);
         const y = await yNaVista(comentarioN(15));
         expect(Math.abs(y - y0), `passo ${i}: o comentário lido foi de ${y0} a ${y}`).toBeLessThanOrEqual(1);

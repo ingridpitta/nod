@@ -588,7 +588,8 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
     ...(dd?.juntarEm !== undefined ? { juntarEm: dd.juntarEm } : {}),
     // 2026-11-10: o bloco do run na linha do tempo: só o texto do último passo troca (o campo de comentário fica).
     aoPasso: (turno, ultimo) => {
-      for (const el of vista()?.querySelectorAll<HTMLElement>(`[data-run-vivo="${CSS.escape(turno)}"]`) ?? []) el.textContent = trecho(ultimo, 140) || el.textContent;
+      // ADA-302 (porte do PR 725 sobre a NOD-468): a escrita no lugar segura o texto lido abaixo (a mesma âncora do log).
+      segurarLeitura(() => { for (const el of vista()?.querySelectorAll<HTMLElement>(`[data-run-vivo="${CSS.escape(turno)}"]`) ?? []) el.textContent = trecho(ultimo, 140) || el.textContent; });
     },
     // Passo 2: a lista de passos de um run aberto (o bloco ou "Ver o trabalho") mudou: redesenha quando a tela estiver livre.
     // Com o bloco fechado, só a contagem do toggle "› N passos" troca, no lugar; o toggle que ainda não existe (o run que
@@ -602,7 +603,7 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
       if (!n) return;
       const tgs = vista()?.querySelectorAll<HTMLElement>(`[data-act="run-abrir"][data-turno="${CSS.escape(raiz)}"]`) ?? [];
       if (!tgs.length) { redesenharQuandoLivre(); return; }
-      for (const tg of tgs) tg.textContent = `› ${n} ${n === 1 ? "passo" : "passos"}`;
+      segurarLeitura(() => { for (const tg of tgs) tg.textContent = `› ${n} ${n === 1 ? "passo" : "passos"}`; });
     },
   });
 
@@ -861,6 +862,10 @@ export function criarQuadroNaTela(doc: Document, o: { busca?: BuscaDaPilula; men
     // ficava em branco).
     const movimentosAbertos = mesmaVista && conteudo.querySelector<HTMLDetailsElement>("details.qd-hist")?.open === true;
     conteudo.innerHTML = conteudoHtml();
+    // ADA-302: a folha da tarefa no celular sobe (qd-sobe, 24 px) só quando abre. O innerHTML recria o article e, sem isto,
+    // cada desenho da mesma vista (o passo novo do run aberto, o frame) subia de novo: o texto lido descia 24 px e voltava
+    // em 220 ms, por cima da âncora (medido a 390: 3 px aos 80 ms do passo).
+    if (mesmaVista) conteudo.querySelector<HTMLElement>(":scope > .qd-tarefa")?.setAttribute("data-subiu", "");
     if (movimentosAbertos) { const d = conteudo.querySelector<HTMLDetailsElement>("details.qd-hist"); if (d) d.open = true; }
     // NOD-445: o Lista | Quadro de Tarefas foi para as Opções do quadro (quadro minimalista, 2026-11-10).
     for (const [id, valor] of rascunhos) { const c = doc.getElementById(id); if (c instanceof HTMLTextAreaElement || c instanceof HTMLInputElement) c.value = valor; }
