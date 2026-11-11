@@ -21,7 +21,7 @@ describe("redigirResumo (ADR-165): segredo não passa no resumo do passo", () =>
     ["xox", `curl -d token=${XOX} slack`],
     ["AKIA", `aws configure set id ${AKIA}`],
     ["glpat-", `glab auth ${GLPAT}`],
-    ["Bearer", `curl -H "Authorization: Bearer abc.def-ghi_jkl123456"`],
+    ["Bearer", `curl -H "Authorization: ${"Bear" + "er"} abc.def-ghi_jkl123456"`],
     ["token=", "curl https://api.x.com/v1?token=abc123def"],
     ["senha:", "senha: hunter22"],
     ["password=", 'psql "password=minhasenha host=db"'],
@@ -31,7 +31,7 @@ describe("redigirResumo (ADR-165): segredo não passa no resumo do passo", () =>
     ["hex longo", `sha ${HEX}`],
     ["URL com credencial", "psql postgres://nod_dono:segredo@127.0.0.1:5440/nod"],
     ["KEY=valor de env", "OPENAI_API_KEY=abc PGPASSWORD=xyz psql"],
-    ["JWT", "curl -H 'x: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U'"],
+    ["JWT", `curl -H 'x: ${["eyJhbGciOiJIUzI1NiJ9", "eyJzdWIiOiIxMjM0NTY3ODkwIn0", "dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"].join(".")}'`],
   ])("%s", (_, texto) => {
     const r = redigirResumo(texto, RESUMO_DO_PASSO_MAX);
     expect(r).toContain("••••");
