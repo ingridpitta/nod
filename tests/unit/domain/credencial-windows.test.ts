@@ -327,3 +327,108 @@ describe("git credential-<helper> get", () => {
     expect(tocaCredencial(`git credential-cache exit`)).toBe(false);
   });
 });
+
+// NOD-470: as aspas ANSI-C (`$'…'`, com escapes) e o `$"…"` do bash não furam a guarda, no Linux e no win32 (Git Bash).
+describe("guarda de credencial: aspas ANSI-C e $\"…\" (NOD-470)", () => {
+  it.each([
+    "gh auth $'token'",
+    "cat ~/.a$'w's/credentials",
+    `cat ~/.a$"w"s/credentials`,
+    "cat ~/.$'\\x61'ws/credentials",
+    "cat ~/.$'\\141'ws/credentials",
+    "cat ~/.$'\\u0061'ws/credentials",
+    "cat ~/.$'\\U00000061'ws/credentials",
+    "gh auth $'tok\\145n'",
+    "gh auth $'tok\\x65n'",
+    "cat ~/$'\\x2e'ssh/id_ed25519",
+    "cat ~$'\\x2f'.aws/credentials",
+    "cat ~/.config/g$'h'/hosts.yml",
+    "cat ~/.config/nod-motor/con$'exao.json'",
+  ])("pega nas duas plataformas: %s", (comando) => {
+    expect(tocaCredencial(comando)).toBe(true);
+    expect(tocaCredencial(comando, { windows: true })).toBe(true);
+  });
+  it("diz o que é a credencial", () => {
+    expect(qualCredencial("gh auth $'token'")).toBe("o token do GitHub");
+    expect(qualCredencial("cat ~/.a$'w's/credentials")).toBe("as credenciais da AWS");
+    expect(qualCredencial(`cat ~/.a$"w"s/credentials`)).toBe("as credenciais da AWS");
+  });
+  it.each([`printf $'a\\tb\\n'`, `echo $'\\n'`, `rg "$'aws'" src`, `echo $'olá'`, `echo $"ok"`])("o que não toca credencial segue livre: %s", (comando) => {
+    expect(tocaCredencial(comando)).toBe(false);
+  });
+  it("comoOBashLe decodifica $'…' como o bash", () => {
+    expect(comoOBashLe("$'a\\tb'")).toBe("a\tb");
+    expect(comoOBashLe("$'\\a\\b\\e\\E\\f\\n\\r\\v'")).toBe("\x07\b\x1b\x1b\f\n\r\v");
+    expect(comoOBashLe("$'\\\\\\'\\\"\\?'")).toBe(`\\'"?`);
+    expect(comoOBashLe("$'\\141\\1411'")).toBe("aa1");
+    expect(comoOBashLe("$'\\x41\\x4142'")).toBe("AA42");
+    expect(comoOBashLe("$'\\u00e9\\U0001F600'")).toBe("é😀");
+    expect(comoOBashLe("$'\\cA\\c?'")).toBe("\x01\x7f");
+    expect(comoOBashLe("$'\\xzz'")).toBe("\\xzz");
+    expect(comoOBashLe("$'\\q'")).toBe("\\q");
+    expect(comoOBashLe("$'ab\\0cd'ef")).toBe("abef");
+    expect(comoOBashLe("$'ab\\x00cd'ef")).toBe("abef");
+    expect(comoOBashLe("$'sem fim")).toBe("sem fim");
+    expect(comoOBashLe(`$"a\\$b"`)).toBe("a$b");
+  });
+  it("dentro de aspas e depois de \\ o $ continua literal", () => {
+    expect(comoOBashLe(`"$'x'"`)).toBe("$'x'");
+    expect(comoOBashLe(`'$"x"'`)).toBe(`$"x"`);
+    expect(comoOBashLe("\\$'x'")).toBe("$x");
+    expect(comoOBashLe(`"a$"b`)).toBe("a$b");
+  });
+  // Revisão do PR #7 (alto 1): o bash decodifica o `$'…'` também dentro de `"${x:-…}"`, `"$(…)"` e da crase entre aspas.
+  it.each([
+    `cat "\${x:-$HOME/.a$'\\x77's/credentials}"`,
+    `cat "$(echo ~/.a$'w's/credentials)"`,
+    "cat \"`echo ~/.a$'w's/credentials`\"",
+    `cat "\${x:-~/.config/nod-motor/con$'exao.json'}"`,
+  ])("$'…' dentro das aspas duplas de ${…}, $(…) e crase: %s", (comando) => {
+    expect(tocaCredencial(comando)).toBe(true);
+    expect(tocaCredencial(comando, { windows: true })).toBe(true);
+  });
+  // Revisão do PR #7 (alto 2): a `'` que fecha é a do léxico do bash; `\c\'` não fecha o `$'…'`.
+  it("$'\\c\\'…' não fecha as aspas antes do bash", () => {
+    const comando = "echo $'\\c\\'x'; cat ~/.a\\ws/credentials #'";
+    expect(tocaCredencial(comando)).toBe(true);
+    expect(tocaCredencial(comando, { windows: true })).toBe(true);
+    expect(comoOBashLe("$'\\c\\'x'y")).toBe("\x1c'xy");
+    expect(comoOBashLe("$'\\c\\\\x'")).toBe("\x1cx");
+    expect(comoOBashLe("$'a\\\\'b")).toBe("a\\b");
+  });
+  // Revisão do PR #7 (alto 3): o `\x{HH…}` do bash (quantos dígitos vierem, o byte de baixo, `}` opcional).
+  it("$'\\x{…}' decodifica como o bash", () => {
+    expect(tocaCredencial("cat ~/$'\\x{2e}'aws/credentials")).toBe(true);
+    expect(tocaCredencial("gh auth $'\\x{74}oken'", { windows: true })).toBe(true);
+    expect(comoOBashLe("$'\\x{41}b'")).toBe("Ab");
+    expect(comoOBashLe("$'\\x{4142}'")).toBe("B");
+    expect(comoOBashLe("$'\\x{41zb'")).toBe("Azb");
+    expect(comoOBashLe("$'\\x{zz}ab'c")).toBe("c");
+  });
+  // Revisão do PR #7 (médio 1): no Git Bash a `\` entre aspas duplas fica e é pasta.
+  it("no win32, $'…' colado num caminho com \\ entre aspas duplas", () => {
+    expect(tocaCredencial(`cat "$USERPROFILE\\.a"$'w'"s\\credentials"`, { windows: true })).toBe(true);
+    expect(tocaCredencial(`cat "$USERPROFILE\\.ss"$'\\x68'"\\config"`, { windows: true })).toBe(true);
+  });
+  // QA do PR #7: no win32 o `$'…'` não pode perder o ponto final e o fluxo do NTFS que o Win32 apara — `"…\.a"w"s.\…"` já
+  // era pego, `"…\.a"$'w'"s.\…"` passava.
+  it.each([
+    `cat "C:\\Users\\bia\\.a"$'w'"s.\\credentials"`,
+    `cat "C:\\Users\\bia\\.a"$'w'"s::$DATA\\credentials"`,
+    `cat "\${x:-~/.a$'w's./credentials}"`,
+  ])("no win32, $'…' com o ponto ou o fluxo que o Win32 apara: %s", (comando) => {
+    expect(tocaCredencial(comando, { windows: true })).toBe(true);
+  });
+  // QA do PR #7: mutantes que sobreviviam.
+  it("octal acima de \\377 fica com o byte de baixo, como o bash ($'\\567' é w)", () => {
+    expect(tocaCredencial("cat ~/.a$'\\567's/credentials")).toBe(true);
+    expect(tocaCredencial("cat ~/.a$'\\567's/credentials", { windows: true })).toBe(true);
+    expect(comoOBashLe("$'\\c1\\c.'")).toBe("\x11\x0e");
+  });
+  it("o cofre como programa com $'…' dentro de \"$(…)\"", () => {
+    expect(tocaCredencial(`echo "$(git $'credential' fill)"`)).toBe(true);
+  });
+  it("no win32, a \\ de escape fora das aspas num caminho com \\ entre aspas e ponto final", () => {
+    expect(tocaCredencial(`cat "C:\\Users\\bia\\.a"\\w"s.\\credentials"`, { windows: true })).toBe(true);
+  });
+});
