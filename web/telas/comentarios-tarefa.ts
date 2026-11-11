@@ -50,7 +50,7 @@ export function comentariosDaTarefa(o: { tarefaId: string; lista: readonly Comen
   const itens = o.lista.map((c) => {
     const a = autorDe(c, o.agente);
     const acionou = c.acionados.length ? `<p class="qd-com-acao">acionou ${esc(c.acionados.join(", "))}</p>` : "";
-    return `<li class="qd-com"><span class="qd-com-av" aria-hidden="true">${a.avatar}</span><div class="qd-com-corpo">` +
+    return `<li class="qd-com" data-ancora="com-${esc(c.id)}"><span class="qd-com-av" aria-hidden="true">${a.avatar}</span><div class="qd-com-corpo">` +
       `<p class="qd-com-cab"><span class="qd-com-nome">${esc(a.nome)}</span><time datetime="${new Date(c.criadoEm).toISOString()}">${esc(o.hora(c.criadoEm))}</time></p>` +
       `<p class="qd-com-txt">${esc(c.texto)}</p>${acionou}</div></li>`;
   }).join("") + pendenteDe(o.pendente ?? null);

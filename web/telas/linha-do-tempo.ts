@@ -265,7 +265,7 @@ function blocoDoRun(r: RunDaTarefa, d: DadosDaLinha): string {
   const lista = aberto && ao?.lista.length ? `<ol class="ta-run-passos">${ao.lista.slice(-40).map((p) => `<li data-estado="${esc(p.estado)}">${esc(trecho(p.rotulo, 140))}</li>`).join("")}</ol>` : "";
   const tg = ao?.n ? `<button type="button" class="qd-link ta-run-tg" data-act="run-abrir" data-turno="${esc(r.turnoId)}" aria-expanded="${aberto}">${aberto ? "▾" : "›"} ${ao.n} ${ao.n === 1 ? "passo" : "passos"}</button>` : "";
   const g = gasto(r);
-  return `<li class="ta-run" data-estado="${r.estado}" data-turno="${esc(r.turnoId)}"><span class="ta-run-av" aria-hidden="true">${a.avatar}</span><div class="ta-run-corpo">` +
+  return `<li class="ta-run" data-ancora="run-${esc(r.turnoId)}" data-estado="${r.estado}" data-turno="${esc(r.turnoId)}"><span class="ta-run-av" aria-hidden="true">${a.avatar}</span><div class="ta-run-corpo">` +
     `<p class="ta-run-cab"${titulo}><b>${esc(a.nome)}</b> <span class="ta-run-est">${esc(estado)}</span>${g && !vivo(r) ? `<span class="ta-run-gasto"> · ${esc(g)}</span>` : ""}${horaEv(r.criadoEm, d.agora)}</p>` +
     (ultimo || vivo(r) ? linhaVivo : "") + tg + lista + `</div></li>`;
 }

@@ -291,7 +291,7 @@ export function composerDaTarefa(v: Pick<VistaDaTarefaCelular, "t" | "agente" | 
 export function tarefaAbertaCelular(v: VistaDaTarefaCelular): Html {
   const { t } = v;
   const codigo = codigoDaTarefa(t);
-  const desc = t.descricao.trim() ? `<div class="qd-t-desc">${esc(t.descricao)}</div>` : `<div class="qd-t-desc qd-t-desc-vazia">Sem descrição.</div>`;
+  const desc = t.descricao.trim() ? `<div class="qd-t-desc" data-ancora="desc">${esc(t.descricao)}</div>` : `<div class="qd-t-desc qd-t-desc-vazia" data-ancora="desc">Sem descrição.</div>`;
   const outro = esperandoOutro(t);
   const saiu = t.esperaPessoa && t.decide?.saiu ? `<p class="qd-t-saiu">Era de ${esc(t.decide.saiu)}, que saiu do quadro.</p>` : "";
   // ADR-162: a pergunta do bot ("Ada te perguntou"); responder aqui ou comentar dá no mesmo.

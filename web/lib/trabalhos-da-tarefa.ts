@@ -86,6 +86,11 @@ export function criarTrabalhosDaTarefa(o: {
    * ela, o log regrava na hora. O delta que chega na espera só atualiza o estado: escreve uma vez, com o último.
    */
   segura?: (desde: number) => boolean;
+  /**
+   * QA do NOD-468: a escrita do log no lugar (fora do redesenho) passa por aqui; quem mostra segura o texto lido abaixo
+   * dele (a âncora de leitura). Sem ela, escreve direto.
+   */
+  escreverNoLog?: (escrever: () => void) => void;
   /** 2026-11-10: o último passo de um run vivo mudou (a linha do tempo troca só o texto do bloco dele). */
   aoPasso?: (turno: string, ultimo: string | null) => void;
 }) {
@@ -118,7 +123,10 @@ export function criarTrabalhosDaTarefa(o: {
     const e = dados?.execucoes[0];
     const atividade = e ? atividades.get(e.turnoAtual) : undefined;
     const lugar = o.log();
-    if (e && atividade && lugar && lugar.dataset["trabalho"] === e.id) lugar.innerHTML = logDoTrabalho(e, atividade, passos);
+    if (!e || !atividade || !lugar || lugar.dataset["trabalho"] !== e.id) return;
+    const html = logDoTrabalho(e, atividade, passos);
+    if (o.escreverNoLog) o.escreverNoLog(() => { lugar.innerHTML = html; });
+    else lugar.innerHTML = html;
   };
   const atividades = new Map<string, AtividadeTurno>();
   /** 2026-11-10: os turnos dos runs vivos da linha do tempo que também se escutam. */

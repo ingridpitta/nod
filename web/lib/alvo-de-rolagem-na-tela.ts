@@ -72,6 +72,8 @@ export function criarAlvosDeRolagem(doc: Document, o: { caixa: () => HTMLElement
     depois(aoVivo: boolean): void { renovar(); if (aoVivo) aplicar(); },
     /** A vista mudou, ou a regravação é da pessoa (filtro, painel, edição): quem a fez decide a posição. */
     esquecer(): void { mem.esquecer(); renovar(); },
+    /** NOD-468: a posição que o desenho escreveu para segurar a âncora de leitura vira o alvo (não é o corte nem a pessoa). */
+    aceitar(): void { if (caixa && !escondida()) mem.aoRolar("caixa", caixa); },
     alvo: mem.alvo,
   };
 }

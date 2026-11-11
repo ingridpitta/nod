@@ -47,7 +47,7 @@ describe("ADA-17: a tarefa aberta no celular", () => {
     expect(h).toContain('class="qd-tarefa qd-tarefa-cel"');
     expect(h).toMatch(/<h1 class="qd-t-tit" id="qd-t-tit" tabindex="-1">Tarefa um<\/h1>/);
     expect(h).toContain('<span class="qd-id">VER-1</span>');
-    expect(h).toContain('<div class="qd-t-desc">Fazer X</div>');
+    expect(h).toContain('<div class="qd-t-desc" data-ancora="desc">Fazer X</div>');
     expect(h).not.toContain("<select");
     expect(h).not.toContain("qd-t-lado");
     expect(h).toContain('data-titulo="VER-1 · Tarefa um"');

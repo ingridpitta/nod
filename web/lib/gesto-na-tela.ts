@@ -41,10 +41,25 @@ export function criarGestoNaTela(doc: Document, naVista: (ev: Event) => boolean)
   }, { capture: true, passive: true });
   doc.addEventListener("touchmove", (ev) => { if (tocando && naVista(ev)) mexeuEm = Date.now(); }, { capture: true, passive: true });
   for (const fim of ["touchend", "touchcancel"] as const) doc.addEventListener(fim, fimDoToque, { capture: true, passive: true });
-  doc.addEventListener("scroll", (ev) => { if (naVista(ev)) rolouEm = Date.now(); }, { capture: true, passive: true });
+  doc.addEventListener("scroll", (ev) => { if (naVista(ev) && !ecoDoPrograma(ev.target)) rolouEm = Date.now(); }, { capture: true, passive: true });
   // O dedo parado mais de TOQUE_PARADO_MS sem mexer não segura (e um fim de toque perdido não prende).
   const dedoMexendo = (): boolean => tocando && Date.now() - mexeuEm < TOQUE_PARADO_MS;
   return { dedoMexendo, ativo: () => dedoMexendo() || Date.now() - rolouEm < GESTO_MS };
+}
+
+/** NOD-468: a rolagem que o próprio desenho escreveu (a âncora de leitura) e o valor escrito, até o evento dela chegar. */
+const escritasDoPrograma = new WeakMap<object, number>();
+
+/** NOD-468: a rolagem escrita pelo desenho não é gesto da pessoa: o evento dela não segura a próxima releitura. */
+export function rolagemDoPrograma(el: { scrollTop: number }): void { escritasDoPrograma.set(el, el.scrollTop); }
+
+/** O evento é o eco da escrita do desenho (a posição ainda é a escrita); a pessoa que rolou depois dela conta. */
+function ecoDoPrograma(alvo: EventTarget | null): boolean {
+  if (!alvo) return false;
+  const v = escritasDoPrograma.get(alvo);
+  if (v === undefined) return false;
+  escritasDoPrograma.delete(alvo);
+  return Math.abs((alvo as unknown as { scrollTop: number }).scrollTop - v) < 0.5;
 }
 
 const CAMPO_DE_TEXTO = "textarea, input:not([type='checkbox']):not([type='radio']):not([type='button']):not([type='submit']):not([type='range']):not([type='file'])";

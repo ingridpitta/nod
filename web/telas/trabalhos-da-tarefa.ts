@@ -127,7 +127,7 @@ export function fraseDaVolta(v: NonNullable<ExecucaoDto["volta"]>, hora: (em: nu
 
 export function secaoDoTrabalho(v: VistaDoTrabalho, hora: (em: number) => string): string {
   const titulo = `<h2 class="qd-t-sec" id="qd-trab-tit">Execuções</h2>`;
-  const abre = `<section class="qd-trab" aria-labelledby="qd-trab-tit" data-tarefa="${esc(v.tarefaId)}">${titulo}`;
+  const abre = `<section class="qd-trab" data-ancora="trab" aria-labelledby="qd-trab-tit" data-tarefa="${esc(v.tarefaId)}">${titulo}`;
   if (v.erro) return `${abre}<p class="qd-trab-nota">Não consegui ler os trabalhos · <button type="button" class="qd-link" data-act="trab-reler">Tentar de novo</button></p></section>`;
   if (!v.dados) return `${abre}<p class="qd-trab-nota">Lendo…</p></section>`;
   const d = v.dados;

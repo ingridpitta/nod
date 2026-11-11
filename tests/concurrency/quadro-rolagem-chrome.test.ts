@@ -76,7 +76,7 @@ const api = {
   // Os comentários mudam só com __comentou(): a tarefa aberta tem o que redesenhar sem o trabalho mudar.
   // Com __latComs, a primeira leitura dos comentários demora (a tarefa recém-aberta ainda carregando).
   comentariosDaTarefa: async () => (window.__latComs ? await new Promise((r) => setTimeout(r, window.__latComs)) : undefined, { comentarios: Array.from({ length: window.__coms ?? 0 }, (_, i) => ({ id: "k" + i, quadroId: "q1", tarefaId: "t3", autor: { tipo: "pessoa" },
-    texto: "comentário " + i, deFora: false, criadoEm: agora + i, autorNome: "Marlon", acionados: [] })), atividade: [], criadaPor: null }),
+    texto: "comentário " + i, deFora: false, criadoEm: agora + i, autorNome: "Marlon", acionados: [] })).concat(window.__comsExtras ?? []), atividade: [], criadaPor: null }),
   // O comentário da pessoa (POST rápido): a releitura traz um comentário a mais.
   comentarTarefa: async () => { await new Promise((r) => setTimeout(r, 50)); window.__coms = (window.__coms ?? 0) + 1; return { quadro: q() }; },
   // Com a passagem, os cards nascem arrastáveis (o arrasto entre colunas).
@@ -887,6 +887,64 @@ descrever("ADA-7: a atualização do quadro preserva a rolagem (Chrome real)", (
     }, 60_000);
   }
 
+  // NOD-468: lendo no meio da tarefa (um comentário no topo da vista), a descrição acima cresce ou encolhe 20–85 px.
+  // Antes da correção a rolagem guardava o scrollTop e o comentário lido deslizava pelo mesmo tanto (o innerHTML recria
+  // os nós, e o overflow-anchor do navegador não tem a que se segurar).
+  const topoDoLido = async (): Promise<{ y: number; folga: number }> => JSON.parse(await avaliar<string>(cdp, `(() => {
+    const v = document.getElementById("quadro");
+    const c = [...v.querySelectorAll(".qd-com, .ta-com")].find((e) => e.offsetParent && e.textContent.includes("comentário 15"));
+    return JSON.stringify({ y: c.getBoundingClientRect().top - v.getBoundingClientRect().top, folga: v.scrollHeight - v.clientHeight - v.scrollTop });
+  })()`)) as { y: number; folga: number };
+  for (const [w, h, toque] of [[390, 844, true], [1440, 900, false]] as const) {
+    for (const ancora of [false, true]) {
+      it(`${w}×${h}${toque ? " (toque)" : ""}${ancora ? " (com scroll anchoring)" : ""}: NOD-468 — o comentário lido fica parado quando a descrição acima muda de altura`, async () => {
+        await montar(w, h, toque);
+        if (!ancora) await semAncora();
+        await abrirT3(30);
+        await avaliar(cdp, `(() => { document.activeElement?.blur(); const v = document.getElementById("quadro");
+          const c = [...v.querySelectorAll(".qd-com, .ta-com")].find((e) => e.offsetParent && e.textContent.includes("comentário 15"));
+          v.scrollTop += c.getBoundingClientRect().top - v.getBoundingClientRect().top - 120; })()`);
+        await esperar(150);
+        const t0 = await topoDoLido();
+        expect(t0.folga, "no meio, longe do fim (senão é o caso colado)").toBeGreaterThan(200);
+        for (const linhas of [82, 76, 88, 80]) {
+          await atualizarCom(linhas, 30);
+          const t = await topoDoLido();
+          expect(Math.abs(t.y - t0.y), `descrição com ${linhas} linhas: o comentário lido foi de ${t0.y} a ${t.y}`).toBeLessThanOrEqual(1);
+        }
+      }, 90_000);
+    }
+  }
+
+  // Revisão 1 da NOD-468: a regravação da pessoa (abrir os passos do trabalho) não usa a âncora. No celular o bloco do
+  // trabalho não tem chave; com ele cruzando o topo, a âncora era o primeiro comentário abaixo do botão: os passos abriam
+  // entre os dois, a vista subia o tamanho da lista e o botão tocado saía da tela (medido: 40 → −594 px). Quem regrava
+  // decide a posição (ADA-12: `esquecer`). No computador o trabalho fica na coluna do lado e não empurra o meio.
+  it("390×844 (toque): NOD-468 revisão 1 — abrir os passos do trabalho que cruza o topo deixa o botão no lugar", async () => {
+    await montar(390, 844, true);
+    await avaliar(cdp, "window.__linhas = 30; window.__trabVivo = true");
+    await atualizar();
+    await abrirT3(30);
+    for (let i = 1; i <= 30; i++) await avaliar(cdp, `window.__passoVivo(${i})`);
+    await esperar(400);
+    const botao = `[...document.querySelectorAll("#quadro [data-act='trab-passos']")].find((b) => b.offsetParent)`;
+    const noTopo = `(() => { const v = document.getElementById("quadro"); const b = ${botao}; return b ? b.getBoundingClientRect().top - v.getBoundingClientRect().top : null; })()`;
+    await avaliar(cdp, `(() => { document.activeElement?.blur(); const v = document.getElementById("quadro"); v.scrollTop += ${noTopo} - 40; })()`);
+    await esperar(GESTO_MS + 150);
+    const cena = JSON.parse(await avaliar<string>(cdp, `(() => { const v = document.getElementById("quadro"); const vt = v.getBoundingClientRect().top; const b = ${botao};
+      const y = b.getBoundingClientRect().top - vt;
+      const ks = [...v.querySelectorAll("[data-ancora], [id]")].filter((e) => e.offsetParent && !e.contains(b)).map((e) => e.getBoundingClientRect().top - vt);
+      return JSON.stringify({ y, entre: ks.some((k) => k >= 0 && k <= y), abaixo: ks.some((k) => k > y && k < v.clientHeight) }); })()`)) as { y: number; entre: boolean; abaixo: boolean };
+    expect(cena.entre, "nenhum bloco com chave começa entre o topo e o botão (o do botão cruza o topo)").toBe(false);
+    expect(cena.abaixo, "um bloco com chave começa abaixo do botão, à vista (a âncora de antes)").toBe(true);
+    await avaliar(cdp, `(${botao}).click()`);
+    await ate(`document.querySelectorAll("#quadro .qd-trab-passo").length >= 30`);
+    await esperar(300);
+    const y1 = await avaliar<number | null>(cdp, noTopo);
+    expect(Math.abs((y1 ?? -9999) - cena.y), `o botão dos passos foi de ${cena.y} a ${y1}`).toBeLessThan(4);
+    await avaliar(cdp, "window.__trabVivo = false");
+  }, 90_000);
+
   // QA da ADA-12: o lado negativo de COLADO_PX (o mutante COLADO_PX = 200 passava em tudo) e os casos com o scroll
   // anchoring do navegador LIGADO, como o app real roda no Chrome e no Firefox (os de cima desligam, como o Safari).
   for (const ancora of [false, true]) {
@@ -1549,4 +1607,110 @@ descrever("ADA-7: a atualização do quadro preserva a rolagem (Chrome real)", (
     expect(Math.abs(a1.top - a0.top), `scrollTop do compartilhado ${a0.top} → ${a1.top}`).toBeLessThanOrEqual(1);
     await avaliar(cdp, "window.__linhas = 80");
   }, 90_000);
+
+  // QA do NOD-468 (2026-11-11): os casos que o teste da descrição não cobria, cada um com o texto lido no topo da vista.
+  const yNaVista = async (sel: string): Promise<number> => avaliar<number>(cdp, `(() => { const v = document.getElementById("quadro"); const e = ${sel};
+    return e ? e.getBoundingClientRect().top - v.getBoundingClientRect().top : -99999; })()`);
+  const comentarioN = (n: number): string => `[...document.querySelectorAll("#quadro .qd-com, #quadro .ta-com")].find((e) => e.offsetParent && e.querySelector(".qd-com-txt, .ta-com-txt")?.textContent === "comentário ${n}")`;
+  /** Rola até `sel` ficar a `px` do topo da vista e espera o gesto acabar (o desenho ao vivo não espera mais). */
+  const lerEm = async (sel: string, px: number): Promise<void> => {
+    await avaliar(cdp, `(() => { document.activeElement?.blur(); const v = document.getElementById("quadro"); const e = ${sel}; v.scrollTop += e.getBoundingClientRect().top - v.getBoundingClientRect().top - ${px}; })()`);
+    await esperar(GESTO_MS + 150);
+  };
+  const comentarioExtra = (id: string, texto: string, em: number, paiId?: string): string =>
+    JSON.stringify({ id, ...(paiId ? { paiId } : {}), quadroId: "q1", tarefaId: "t3", autor: { tipo: "pessoa" }, texto, deFora: false, criadoEm: 1_700_000_000_000 + em, autorNome: "Marlon", acionados: [] });
+
+  // Medido antes desta correção a 390 (toque): cada passo novo do log aberto, acima do comentário lido, o levava 21 px
+  // para baixo (sem o scroll anchoring, 359 px depois de 17 passos; com ele, 21 px). O log é escrito no lugar
+  // (escreverLog), fora do desenharVista, e a âncora não valia ali. No computador o log fica na coluna do lado.
+  for (const ancora of [false, true]) {
+    it(`390×844 (toque)${ancora ? " (com scroll anchoring)" : ""}: QA NOD-468 — o log do trabalho que cresce acima não leva o comentário lido`, async () => {
+      await montar(390, 844, true);
+      if (!ancora) await semAncora();
+      await avaliar(cdp, "window.__linhas = 10; window.__trabVivo = true; window.__trabN = 1");
+      await atualizar();
+      await abrirT3(30);
+      for (let i = 1; i <= 3; i++) await avaliar(cdp, `window.__passoVivo(${i})`);
+      const botao = `[...document.querySelectorAll("#quadro [data-act='trab-passos']")].find((b) => b.offsetParent)`;
+      await ate(botao);
+      await avaliar(cdp, `(${botao}).click()`);
+      await ate(`document.querySelectorAll("#quadro .qd-trab-passo").length >= 3`);
+      await esperar(300);
+      await lerEm(comentarioN(15), 120);
+      const y0 = await yNaVista(comentarioN(15));
+      expect(await avaliar<number>(cdp, `(${botao}).getBoundingClientRect().bottom - document.getElementById("quadro").getBoundingClientRect().top`), "o log está acima da vista").toBeLessThan(0);
+      for (let i = 4; i <= 12; i++) {
+        await avaliar(cdp, `window.__passoVivo(${i})`);
+        await ate(`document.querySelectorAll("#quadro .qd-trab-passo").length >= ${i}`);
+        await esperar(80);
+        const y = await yNaVista(comentarioN(15));
+        expect(Math.abs(y - y0), `passo ${i}: o comentário lido foi de ${y0} a ${y}`).toBeLessThanOrEqual(1);
+      }
+      await avaliar(cdp, "window.__trabVivo = false");
+    }, 90_000);
+  }
+
+  for (const [w, h, toque] of [[390, 844, true], [1440, 900, false]] as const) {
+    const nome = `${w}×${h}${toque ? " (toque)" : ""}`;
+    // Medido antes desta correção: lendo o fim da descrição longa (ela cruza o topo, o bloco seguinte começa no meio da
+    // tela), a descrição que cresce EMBAIXO do lido levava o texto lido para cima (390: −105 e −211 px; 1440: −93 e
+    // −186): a âncora era o bloco de baixo, e o desenho compensava o que cresceu entre o lido e ele. Na main: 0.
+    it(`${nome}: QA NOD-468 — lendo o fim da descrição, ela crescer embaixo do lido não mexe no texto lido`, async () => {
+      await montar(w, h, toque);
+      await semAncora();
+      await abrirT3(30);
+      const desc = `[...document.querySelectorAll("#quadro .qd-t-desc")].find((e) => e.offsetParent)`;
+      await avaliar(cdp, `(() => { document.activeElement?.blur(); const v = document.getElementById("quadro"); const e = ${desc};
+        v.scrollTop += e.getBoundingClientRect().bottom - v.getBoundingClientRect().top - v.clientHeight / 2; })()`);
+      await esperar(GESTO_MS + 150);
+      const y0 = await yNaVista(desc);
+      expect(y0, "a descrição cruza o topo").toBeLessThan(-200);
+      for (const linhas of [84, 88, 80]) {
+        await atualizarCom(linhas, 30);
+        const y = await yNaVista(desc);
+        expect(Math.abs(y - y0), `descrição com ${linhas} linhas: o texto lido foi de ${y0} a ${y}`).toBeLessThanOrEqual(1);
+      }
+    }, 90_000);
+
+    // Os outros casos do critério (passam desde a correção do PR; na main deslizavam): a resposta nova a um comentário
+    // antigo e um comentário mais velho entrando acima do lido (na main, 0/250 px a 390 e 127/250 a 1440), a descrição
+    // encolhendo muito (−1053 a −1580 px) e a pessoa lendo no meio de um comentário longo que cobre a vista (até 263 px).
+    it(`${nome}: QA NOD-468 — comentário inserido acima, descrição encolhendo muito e leitura no meio de um bloco longo`, async () => {
+      await montar(w, h, toque);
+      await semAncora();
+      await avaliar(cdp, `window.__linhas = 80; window.__comsExtras = [${comentarioExtra("klongo", "longo " + "palavra ".repeat(1500), 10.5)}]`);
+      await atualizar();
+      await abrirT3(30);
+      await lerEm(comentarioN(15), 120);
+      const y0 = await yNaVista(comentarioN(15));
+      const novos = [comentarioExtra("klongo", "longo " + "palavra ".repeat(1500), 10.5), comentarioExtra("kr", "resposta ao 3 " + "palavra ".repeat(30), 100, "k3")];
+      await avaliar(cdp, `(() => { window.__comsExtras = [${novos.join(",")}]; window.__comentou(); })()`);
+      await ate(`document.querySelector("#quadro .qd-conteudo").textContent.includes("resposta ao 3")`);
+      await esperar(300);
+      expect(Math.abs((await yNaVista(comentarioN(15))) - y0), "a resposta nova a um comentário acima").toBeLessThanOrEqual(1);
+      novos.push(comentarioExtra("kv", "mais velho " + "palavra ".repeat(30), -5));
+      await avaliar(cdp, `(() => { window.__comsExtras = [${novos.join(",")}]; window.__comentou(); })()`);
+      await ate(`document.querySelector("#quadro .qd-conteudo").textContent.includes("mais velho")`);
+      await esperar(300);
+      expect(Math.abs((await yNaVista(comentarioN(15))) - y0), "um comentário mais velho entra acima").toBeLessThanOrEqual(1);
+      for (const linhas of [40, 5, 1]) {
+        await atualizarCom(linhas, 30);
+        expect(Math.abs((await yNaVista(comentarioN(15))) - y0), `a descrição encolheu para ${linhas} linhas`).toBeLessThanOrEqual(1);
+      }
+      await esperar(RESERVA_TESTE + 300);
+      expect(Math.abs((await yNaVista(comentarioN(15))) - y0), "passada a reserva").toBeLessThanOrEqual(1);
+      // No meio do comentário longo, que cobre a vista inteira: a descrição acima muda e o texto lido fica.
+      const longo = `[...document.querySelectorAll("#quadro .qd-com, #quadro .ta-com")].find((e) => e.offsetParent && e.textContent.includes("longo palavra"))`;
+      await avaliar(cdp, `(() => { document.activeElement?.blur(); const v = document.getElementById("quadro"); const e = ${longo};
+        v.scrollTop += e.getBoundingClientRect().top - v.getBoundingClientRect().top + e.offsetHeight / 3; })()`);
+      await esperar(GESTO_MS + 150);
+      const l0 = await yNaVista(longo);
+      expect(await avaliar<number>(cdp, `(${longo}).getBoundingClientRect().bottom - document.getElementById("quadro").getBoundingClientRect().bottom`), "o comentário longo cobre a vista").toBeGreaterThan(0);
+      for (const linhas of [14, 6, 20]) {
+        await atualizarCom(linhas, 30);
+        expect(Math.abs((await yNaVista(longo)) - l0), `no meio do bloco longo, descrição com ${linhas} linhas`).toBeLessThanOrEqual(1);
+      }
+      await avaliar(cdp, "(() => { window.__comsExtras = []; window.__linhas = 80; })()");
+    }, 120_000);
+  }
 });

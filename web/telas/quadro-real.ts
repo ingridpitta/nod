@@ -512,7 +512,7 @@ export function tarefaAberta(o: { t: TarefaDto; q: QuadroDto; agente: AgenteDoQu
   const lin = linkSeguro(t.linearUrl);
   // 2026-11-10 (a issue do Multica): título e descrição se editam ali mesmo (cada mudança é um mudar_tarefa com Desfazer).
   const titulo = `<h1 class="qd-t-tit ta-tit" id="qd-t-tit" tabindex="-1" contenteditable="plaintext-only" spellcheck="false" data-texto="titulo" data-id="${esc(t.id)}" data-salvo="${esc(t.titulo)}" aria-label="Título da tarefa">${esc(t.titulo)}</h1>`;
-  const desc = `<div class="qd-t-desc ta-desc${t.descricao.trim() ? "" : " qd-t-desc-vazia"}" contenteditable="plaintext-only" data-texto="descricao" data-id="${esc(t.id)}" data-salvo="${esc(t.descricao)}" role="textbox" aria-multiline="true" aria-label="Descrição" data-vazio="Adicionar descrição…">${esc(t.descricao)}</div>`;
+  const desc = `<div class="qd-t-desc ta-desc${t.descricao.trim() ? "" : " qd-t-desc-vazia"}" data-ancora="desc" contenteditable="plaintext-only" data-texto="descricao" data-id="${esc(t.id)}" data-salvo="${esc(t.descricao)}" role="textbox" aria-multiline="true" aria-label="Descrição" data-vazio="Adicionar descrição…">${esc(t.descricao)}</div>`;
   // Revisão 3 do PR #629: Bloqueado com pergunta (o motivo do agente, do laço ou do freio) também pede resposta, como o
   // servidor aceita o `responder` ali (paridade, ADR-135).
   // NOD-443 (D5, D6): só quem decide responde; para os outros, quem decide e (se quem pediu saiu) de quem era.
