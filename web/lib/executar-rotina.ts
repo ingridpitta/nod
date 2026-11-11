@@ -48,3 +48,11 @@ export function htmlRodarMaisUma(pergunta: string): string {
     <p>${esc(pergunta)}</p>
     <div class="acoes"><button class="bt" data-nao type="button" autofocus>Cancelar</button> <button class="bt pri" data-sim type="button">Rodar mais uma</button></div>`;
 }
+
+/**
+ * definido em 2026-11-11 (NOD-413): o card "Rodar agora" do chat com execução aberta quando a proposta nasceu. A mesma
+ * frase do diálogo do Testar agora, para o clique em "Rodar agora" valer como "Rodar mais uma".
+ */
+export function avisoNaFila(naFila: { instanteAgendado: number; fusoIana: string }, agora = Date.now()): string {
+  return perguntaJaNaFila(String(naFila.instanteAgendado), naFila.fusoIana, agora);
+}

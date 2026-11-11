@@ -386,7 +386,7 @@ export const leituraDaDecisao: CasoDeUso<{ decisaoId: string; soDoBotDoOnboardin
         : { tipo: "app" as const, texto: i.textoFinal })),
     };
   } else if (d.tipo === "retomar_turno") pedido = { tipo: "retomar_turno", acao: d.frase, contaminado };
-  else if (d.tipo === "rotina" || d.tipo === "rotina_atualizacao" || d.tipo === "rotina_exclusao") pedido = { tipo: d.tipo, resumo: d.frase.split(" · ")[0]!.replace(/\s*\([A-Za-z_]+\/[A-Za-z_ ]+\)/, "").replace(/^Rotina proposta:\s*/i, ""), horario: "", contaminado };
+  else if (d.tipo === "rotina" || d.tipo === "rotina_atualizacao" || d.tipo === "rotina_exclusao" || d.tipo === "rotina_execucao") pedido = { tipo: d.tipo, resumo: d.frase.split(" · ")[0]!.replace(/\s*\([A-Za-z_]+\/[A-Za-z_ ]+\)/, "").replace(/^Rotina proposta:\s*/i, ""), horario: "", contaminado };
   else if (d.tipo === "perfil") pedido = { tipo: "perfil", nome: d.frase, titulo: "", contaminado };
   else if (d.tipo === "bot") {
     const p = await deps.repos.propostas.buscar(d.id);

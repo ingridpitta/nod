@@ -124,6 +124,14 @@ export const FERRAMENTAS_ROTINA = {
     required: ["rotina_id"],
     additionalProperties: false,
   },
+  // NOD-413: "roda agora a rotina das 9h". Só rotina DESTE bot; a de um colega fica para a NOD-393.
+  executar_rotina: {
+    type: "object",
+    description: "Propõe rodar agora, uma vez, uma rotina SUA (como o botão Testar agora). A pessoa confirma num card; nada roda antes do clique, e o horário da rotina não muda. Use o id exato do inventário ou de listar_rotinas.",
+    properties: { rotina_id: ROTINA_ID },
+    required: ["rotina_id"],
+    additionalProperties: false,
+  },
 } as const satisfies Record<string, JsonSchema>;
 
 export type ArgsCriarRotina = {
@@ -171,6 +179,7 @@ export type ArgsAtualizarRotina = {
   acessos?: ArgsPedirAcesso[];
 };
 export type ArgsExcluirRotina = { rotina_id: string };
+export type ArgsExecutarRotina = { rotina_id: string };
 
 /** Como criar_rotina: nasce PROPOSTA, nada é aplicado. O modelo não deve anunciar mudança feita. */
 /** `aplicada: true` (ADR-059): o modo do bot confirmou na hora — a mudança JÁ vale, sem card. */

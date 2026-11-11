@@ -151,7 +151,7 @@ export const confirmarProposta: CasoDeUso<{ propostaId: string; prazoMs?: number
     // Proposta de pasta se autoriza pelo botão Permitir da conversa (rota workspace), que concede a
     // pasta escolhida e retoma o turno. Não vira decisão de acesso: não há conector nem capacidades.
     throw new ErroDeDominio("estado_invalido", { cause: "proposta de pasta se autoriza pelo botão Permitir na conversa" });
-  } else if (proposta.payload.kind === "rotina_atualizacao" || proposta.payload.kind === "rotina_exclusao") {
+  } else if (proposta.payload.kind === "rotina_atualizacao" || proposta.payload.kind === "rotina_exclusao" || proposta.payload.kind === "rotina_execucao") {
     // definido em 2026-09-21: mudar/excluir rotina que já existe se confirma pela decisão em "Sua
     // vez" (POST decisoes/:id/decidir → aplicar-proposta-rotina.ts), não por este caminho, que é o
     // de propostas nascidas da conversa. Aqui seria aplicar sem a decisão correspondente.

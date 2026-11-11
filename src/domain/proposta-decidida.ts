@@ -18,6 +18,9 @@ export function tituloDaProposta(p: Pick<Proposta, "payload">): string {
       return com("Mudança de rotina", c.resumo);
     case "rotina_exclusao":
       return com("Excluir rotina", c.resumo);
+    // NOD-413: "Rodar agora · às 09:00".
+    case "rotina_execucao":
+      return com("Rodar agora", c.resumo);
     case "bot":
       return com("Novo bot", c.nome);
     case "acesso":

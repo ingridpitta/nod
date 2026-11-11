@@ -1,15 +1,17 @@
 import { createHash } from "node:crypto";
 import type { Proposta } from "../contracts/conversa.ts";
-import type { RuntimeEvent } from "../contracts/evento.ts";
+import type { Executor, RuntimeEvent } from "../contracts/evento.ts";
 import type { Rotina } from "../contracts/rotina.ts";
 import { ErroDeDominio } from "../domain/erro.ts";
 import { revisaoDaRotina } from "../domain/revisao-rotina.ts";
 import { quandoDaRotina, proximaDaRotina } from "../domain/rotina-texto.ts";
 import { log } from "../obs/log.ts";
-import { evento, eventoDeRotina, exigir, textoRotinaAtiva } from "./apoio-l7.ts";
+import { carimbo, evento, eventoDeRotina, exigir, textoRotinaAtiva } from "./apoio-l7.ts";
 import { concederAcessosDaRotina } from "./conceder-acessos-da-rotina.ts";
 import { autoriaDeQuemConfirma, fecharDecisaoDaProposta, type PorRegra } from "./confirmar-pelo-modo.ts";
 import { invalidarCardDeRitmo } from "./ritmo-card.ts";
+import { EXECUTORES_ROTINAS } from "./acoes/rotinas.ts";
+import type { SaidaExecutarAgora } from "./executar-rotina-agora.ts";
 import type { CasoDeUso, Deps } from "./tipos.ts";
 
 /** `obsoleta` (NOD-159): a rotina mudou depois da proposta; nada foi aplicado e a proposta saiu recusada. */
@@ -41,11 +43,11 @@ export function erroRotinaMudou(): ErroDeDominio {
  * desfaria a recusa, a decisão fechada e o aviso. Quem chama traduz `obsoleta` em erroRotinaMudou().
  * Não reusa recusarProposta: ela grava a frase genérica de recusa, e aqui o aviso é um só, o da revisão.
  */
-async function recusarObsoleta(deps: Deps, proposta: Proposta, atual: Rotina, porRegra: PorRegra | undefined): Promise<{ data: SaidaAplicarPropostaRotina; events: RuntimeEvent[] }> {
+async function recusarObsoleta(deps: Deps, proposta: Proposta, atual: Rotina, porRegra: PorRegra | undefined, texto = TEXTO_ROTINA_MUDOU): Promise<{ data: SaidaAplicarPropostaRotina; events: RuntimeEvent[] }> {
   const agora = deps.agora();
   await deps.repos.propostas.decidir(proposta.id, "recusada");
   const autoria = autoriaDeQuemConfirma(deps, proposta.agenteId, porRegra);
-  const mensagem = await deps.repos.mensagens.criar({ conversaId: atual.conversaId, autoria, kind: "sistema", texto: TEXTO_ROTINA_MUDOU, payload: eventoDeRotina(atual, "nao_aplicada"), confianca: "confiavel" });
+  const mensagem = await deps.repos.mensagens.criar({ conversaId: atual.conversaId, autoria, kind: "sistema", texto, payload: eventoDeRotina(atual, "nao_aplicada"), confianca: "confiavel" });
   log("aviso", "proposta_rotina_obsoleta", { proposta_id: proposta.id, rotina_id: atual.id });
   const events: RuntimeEvent[] = [];
   if (mensagem) events.push(evento(deps, "mensagem_criada", autoria, { mensagem_id: mensagem.id, kind: "sistema" }, { conversaId: atual.conversaId }));
@@ -203,4 +205,39 @@ export const aplicarExclusaoRotina: CasoDeUso<{ propostaId: string; porRegra?: P
   const { decisao, sincronizar } = await fecharDecisaoDaProposta(deps, proposta.id, agora, input.porRegra);
   if (decisao) events.push(evento(deps, "decisao_decidida", autoria, { decisaoId: decisao.id, tipo: "rotina_exclusao" }, { conversaId: rotina.conversaId }), ...sincronizar);
   return { data: { rotina, jaAplicada: false }, events };
+};
+
+/**
+ * NOD-413: o clique em "Rodar agora" do card do chat (decisão rotina_execucao). Roda pelo MESMO executor do Testar agora
+ * (EXECUTORES_ROTINAS["rotinas.executar"]), com `confirmar: true`: o card já mostrou a execução na fila, se havia, e o
+ * clique é o "Rodar mais uma". A rotina que mudou ou foi excluída depois do card não roda (recusarObsoleta, NOD-159).
+ * Só pela pessoa: o risco é pessoa_confirma e não há `porRegra` aqui.
+ * Revisão do PR #15: o card que nasceu SEM execução aberta não autoriza "rodar mais uma". Se uma abriu depois (o
+ * scheduler disparou a janela, ou a pessoa usou o Testar agora), o clique não roda: o card sai recusado com o aviso de
+ * fila e a rota responde 409 `ja_na_fila` (o Testar agora perguntaria "Rodar mais uma?" nesse ponto).
+ */
+export const TEXTO_EXECUCAO_ROTINA_MUDOU = "Não rodei a rotina: ela mudou depois do card. Peça de novo ao bot.";
+
+export const aplicarExecucaoRotina: CasoDeUso<{ propostaId: string; executor: Executor }, SaidaAplicarPropostaRotina & { execucao?: SaidaExecutarAgora; jaNaFila?: true }> = async (deps, input) => {
+  const lida = exigir(await deps.repos.propostas.buscar(input.propostaId), "nao_encontrado", "proposta");
+  if (lida.payload.kind !== "rotina_execucao") throw new ErroDeDominio("estado_invalido", { cause: "proposta não é de rodar rotina agora" });
+  if (lida.estado === "recusada") throw new ErroDeDominio("estado_invalido", { cause: "proposta recusada" });
+  const p = lida.payload;
+  const { proposta, atual } = await travarRotinaEReler(deps, input.propostaId, p.rotinaId);
+  if (jaDecidida(proposta.estado)) return { data: { rotina: atual, jaAplicada: true } };
+  if (atual.excluidoEm !== null || mudouDesdeAProposta(p.revisao, atual)) return recusarObsoleta(deps, proposta, atual, undefined, TEXTO_EXECUCAO_ROTINA_MUDOU);
+  if (!p.naFila) {
+    const aberto = await deps.repos.rotinaJanelas.turnoAberto(atual.id, deps.agora());
+    if (aberto) {
+      const texto = `Não rodei a rotina: já há uma execução na fila (agendada para ${carimbo(aberto.instanteAgendado, atual.fusoIana)}). Se quiser rodar mais uma, peça de novo.`;
+      const r = await recusarObsoleta(deps, proposta, atual, undefined, texto);
+      return { data: { ...r.data, jaNaFila: true }, events: r.events };
+    }
+  }
+  await confirmarOuAbortar(deps, proposta.id);
+  const r = await EXECUTORES_ROTINAS["rotinas.executar"](deps, { rotinaId: atual.id, executor: input.executor, confirmar: true, instanteExato: true });
+  const events: RuntimeEvent[] = [...(r.events ?? [])];
+  const { decisao, sincronizar } = await fecharDecisaoDaProposta(deps, proposta.id, deps.agora(), undefined);
+  if (decisao) events.push(evento(deps, "decisao_decidida", autoriaDeQuemConfirma(deps, proposta.agenteId, undefined), { decisaoId: decisao.id, tipo: "rotina_execucao" }, { conversaId: atual.conversaId }), ...sincronizar);
+  return { data: { rotina: atual, jaAplicada: false, execucao: r.data }, events };
 };

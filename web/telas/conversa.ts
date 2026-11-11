@@ -1,3 +1,4 @@
+import { avisoNaFila } from "../lib/executar-rotina.ts";
 import { renderCardColunas } from "./card-colunas.ts";
 import { renderCardImportacao } from "./card-importacao.ts";
 import { renderCardAssumir } from "./card-assumir-quadro.ts";
@@ -825,6 +826,16 @@ function cardDaProposta(p: Proposta, estado: Estado, a: FrotaDto["agentes"][numb
       detalhes: `${c.instrucao.length > CAMPO_NO_CARD ? `<dl><dt>Faz</dt><dd>${esc(c.instrucao)}</dd></dl>` : ""}<p>Depois de excluída, nada mais é disparado por ela. Para só interromper por um tempo, peça para pausar.</p>`,
     });
   }
+  // NOD-413: rodar agora uma rotina do bot, pedido pelo chat. Sutil como o de excluir: o que roda e um verbo; com
+  // execução já aberta, a mesma pergunta do Testar agora, antes do clique.
+  if (c.kind === "rotina_execucao") {
+    return cardProposta({
+      ...base,
+      titulo: `Rodar agora uma rotina ${doBot(bot)}`,
+      linhas: [rotulada("Quando", c.resumo), rotulada("Faz", cortar(c.instrucao, CAMPO_NO_CARD)), ...(c.naFila ? [esc(avisoNaFila(c.naFila, estado.agora))] : [])],
+      detalhes: faz(c.instrucao),
+    });
+  }
   if (c.kind === "acesso") {
     const decisao = decisaoAbertaDoCard(p, estado);
     // definido em 2026-09-24 (ADR-044): com a decisão de mesmo id aberta, o card é a frase do domínio e um botão; os nomes
@@ -859,6 +870,7 @@ function tituloDaVencida(p: Proposta, estado: Estado): string {
   const c = p.payload;
   if (c.kind === "rotina_atualizacao") return `Mudar uma rotina ${doBot(bot)}`;
   if (c.kind === "rotina_exclusao") return `Excluir uma rotina ${doBot(bot)}`;
+  if (c.kind === "rotina_execucao") return `Rodar agora uma rotina ${doBot(bot)}`;
   if (c.kind === "acesso") return tituloDoPedidoDeAcesso(estado, p, bot);
   if (c.kind === "credencial") return `Guardar a chave do ${c.app}`;
   return `Pedido ${doBot(bot)}`;
@@ -897,6 +909,7 @@ function acoesProposta(p: Proposta, estado: Estado): string {
   if (p.payload.kind === "bot") return `${sim("decidir-proposta", "Criar bot")}${nao("recusar-decisao")}`;
   if (p.payload.kind === "rotina_atualizacao") return `${sim("decidir-proposta", "Salvar")}${nao("recusar-decisao")}`;
   if (p.payload.kind === "rotina_exclusao") return `${sim("decidir-proposta", "Excluir", true)}${nao("recusar-decisao")}`;
+  if (p.payload.kind === "rotina_execucao") return `${sim("decidir-proposta", "Rodar agora")}${nao("recusar-decisao")}`;
   if (p.payload.kind === "acesso" && decisaoAbertaDoCard(p, estado)) {
     const r = rotulosAcesso(p);
     return `${sim("decidir-proposta", r.permitir)}${nao("recusar-decisao", r.recusar === "Não permitir" ? "Agora não" : r.recusar)}`;
@@ -922,7 +935,7 @@ function acoesDaRotinaComAcesso(p: Proposta, estado: Estado): { botoes: string; 
  *  Pedido de acesso idem desde 2026-09-24 (ADR-044): também nasce com a decisão de mesmo id. E o pedido de
  *  credencial (NOD-50): vencido, o campo da chave sai e fica o Reabrir. */
 function comDecisaoVencida(p: Proposta, estado: Estado): boolean {
-  if (p.payload.kind !== "rotina_atualizacao" && p.payload.kind !== "rotina_exclusao" && p.payload.kind !== "acesso" && p.payload.kind !== "credencial") return false;
+  if (p.payload.kind !== "rotina_atualizacao" && p.payload.kind !== "rotina_exclusao" && p.payload.kind !== "rotina_execucao" && p.payload.kind !== "acesso" && p.payload.kind !== "credencial") return false;
   return estado.suaVez?.itens.some((i) => i.decisao.id === p.id && i.estadoColuna === "vencido") ?? false;
 }
 

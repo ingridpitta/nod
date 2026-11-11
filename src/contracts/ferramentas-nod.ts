@@ -13,12 +13,12 @@ import { FERRAMENTAS_CREDENCIAL, type ContratoFerramentasCredencial } from "./fe
 import { FERRAMENTAS_AVISO, type ContratoFerramentasAviso } from "./ferramentas-aviso.ts"; import { FERRAMENTAS_BARRA, type ContratoFerramentasBarra } from "./ferramentas-barra.ts";
 import { FERRAMENTAS_CONTA, type ContratoFerramentasConta } from "./ferramentas-conta.ts"; import { FERRAMENTAS_QUADRO, type ContratoFerramentasQuadro } from "./ferramentas-quadro.ts"; import { FERRAMENTAS_APPS, type ContratoFerramentasApps } from "./ferramentas-apps.ts"; import { FERRAMENTAS_CONVERSAS, type ContratoFerramentasConversas } from "./ferramentas-conversas.ts"; import { FERRAMENTAS_NAO_LIDOS, type ContratoFerramentasNaoLidos } from "./ferramentas-nao-lidos.ts"; import { FERRAMENTAS_TIMES, type ContratoFerramentasTimes } from "./ferramentas-times.ts"; import { FERRAMENTAS_ACESSOS, type ContratoFerramentasAcessos } from "./ferramentas-acessos.ts"; import { FERRAMENTAS_CANVAS, type ContratoFerramentasCanvas } from "./ferramentas-canvas.ts"; import { FERRAMENTAS_MAQUINAS, type ContratoFerramentasMaquinas } from "./ferramentas-maquinas.ts"; import { FERRAMENTAS_COMPUTADORES, type ContratoFerramentasComputadores } from "./ferramentas-computadores.ts";
 import { SCHEMA_PEDIR_A_PESSOA, type ArgsPedirAPessoa } from "./pedido.ts";
-import type { ArgsAtualizarRotina, ArgsCriarRotina, ArgsExcluirRotina, ArgsListarRotinas, ArgsPausarRotina, ArgsReativarRotina, ArgsVerAgenda, ResultadoAlternarRotina, ResultadoCriarRotina, ResultadoListarRotinas, ResultadoPropostaRotina, ResultadoVerAgenda } from "./ferramentas-rotina.ts";
+import type { ArgsAtualizarRotina, ArgsCriarRotina, ArgsExcluirRotina, ArgsExecutarRotina, ArgsListarRotinas, ArgsPausarRotina, ArgsReativarRotina, ArgsVerAgenda, ResultadoAlternarRotina, ResultadoCriarRotina, ResultadoListarRotinas, ResultadoPropostaRotina, ResultadoVerAgenda } from "./ferramentas-rotina.ts";
 import type { JsonSchema } from "./json-schema.ts";
 export type { JsonSchema } from "./json-schema.ts";
 export type { ArgsPedirAPessoa } from "./pedido.ts";
 export type { ArgsAtualizarPerfil, ArgsVerColegas, AppDoColega, ColegaListado, ResultadoAtualizarPerfil, ResultadoVerColegas } from "./ferramentas-perfil.ts";
-export type { ArgsAtualizarRotina, ArgsCriarRotina, ArgsExcluirRotina, ArgsListarRotinas, ArgsPausarRotina, ArgsReativarRotina, ArgsVerAgenda, ResultadoAlternarRotina, ResultadoCriarRotina, ResultadoListarRotinas, ResultadoPropostaRotina, ResultadoVerAgenda, RotinaListada } from "./ferramentas-rotina.ts";
+export type { ArgsAtualizarRotina, ArgsCriarRotina, ArgsExcluirRotina, ArgsExecutarRotina, ArgsListarRotinas, ArgsPausarRotina, ArgsReativarRotina, ArgsVerAgenda, ResultadoAlternarRotina, ResultadoCriarRotina, ResultadoListarRotinas, ResultadoPropostaRotina, ResultadoVerAgenda, RotinaListada } from "./ferramentas-rotina.ts";
 
 /**
  * As ferramentas nod (cinquenta em 2026-11-08, com o gerir_maquinas da ADA-243 e o remover_computador da ADA-245; quarenta e oito em 2026-11-07, com o gerir_acessos da ADA-241; quarenta e sete em 2026-11-04, com o gerir_canvas da ADA-13; quarenta e seis em 2026-11-02, com o gerir_times da NOD-437 e o gerir_apps da NOD-445; quarenta e quatro em 2026-11-01, com o nao_lidos da NOD-449; quarenta e três em 2026-10-31, com o gerir_quadro da NOD-442; quarenta e duas em 2026-10-29: ajustar_barra_lateral da NOD-119, buscar_conversas e ler_conversa da NOD-61 e ver_agenda da NOD-85; contadas pelo teste; eram VINTE E UMA na contagem original) (EMENDA 16 acrescenta pedir_a_pessoa; sem_novidade entra em 2026-09-21
@@ -145,7 +145,7 @@ export type NomeFerramentaNod = keyof typeof FERRAMENTAS_NOD;
  */
 export const NOMES_FERRAMENTAS_NOD = [
   "lembrar", "atualizar_perfil", "pedir_acesso", "criar_rotina",
-  "listar_rotinas", "ver_agenda", "pausar_rotina", "reativar_rotina", "atualizar_rotina", "excluir_rotina", "pedir_aprovacao",
+  "listar_rotinas", "ver_agenda", "pausar_rotina", "reativar_rotina", "atualizar_rotina", "excluir_rotina", "executar_rotina", "pedir_aprovacao",
   "pedir_a_pessoa", "passar", "encaminhar", "sem_novidade", "pedir_a_bot", "ver_colegas", "publicar_artefato", "ler_artefato",
   "iniciar_tarefa", "desligar",
   "anotar_entrevista", "concluir_entrevista", "propor_bot", "abrir_task", "mandar_para_task",
@@ -187,6 +187,7 @@ export type ContratoFerramentaNod = ContratoFerramentasArtefato & ContratoFerram
   reativar_rotina: { args: ArgsReativarRotina; resultado: ResultadoAlternarRotina };
   atualizar_rotina: { args: ArgsAtualizarRotina; resultado: ResultadoPropostaRotina };
   excluir_rotina: { args: ArgsExcluirRotina; resultado: ResultadoPropostaRotina };
+  executar_rotina: { args: ArgsExecutarRotina; resultado: ResultadoPropostaRotina };
   pedir_aprovacao: { args: ArgsPedirAprovacao; resultado: ResultadoPedirAprovacao };
   pedir_a_pessoa: { args: ArgsPedirAPessoa; resultado: ResultadoPedirAPessoa };
   passar: { args: ArgsPassar; resultado: ResultadoOk };

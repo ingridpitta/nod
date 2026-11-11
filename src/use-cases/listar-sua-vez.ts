@@ -21,7 +21,7 @@ export type DepsSuaVez = Pick<Deps, "repos" | "escopo" | "agora" | "tx">;
  * rotinas-do-agente.ts, pedir-acesso.ts). definido em 2026-09-24 (ADR-044): o item leva a proposta
  * para a web rotular o botão ("Permitir e rodar agora" quando o pedido veio de uma rotina).
  */
-const TIPOS_COM_PROPOSTA: ReadonlySet<TipoDecisao> = new Set<TipoDecisao>(["acesso", "perfil", "rotina", "rotina_atualizacao", "rotina_exclusao", "lote_bots", "credencial", "colunas_quadro", "quadro_exclusao", "app", "importacao_linear", "assumir_quadro"]);
+const TIPOS_COM_PROPOSTA: ReadonlySet<TipoDecisao> = new Set<TipoDecisao>(["acesso", "perfil", "rotina", "rotina_atualizacao", "rotina_exclusao", "rotina_execucao", "lote_bots", "credencial", "colunas_quadro", "quadro_exclusao", "app", "importacao_linear", "assumir_quadro"]);
 
 export type EntradaSuaVez = {
   /**

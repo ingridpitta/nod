@@ -20,7 +20,7 @@ export async function recusarRotinasDoCard(deps: Deps, p: PayloadPropostaPerfil)
 }
 
 /** Os cards que nascem com uma decisão de mesmo id em "Sua vez" (criar-rotina.ts, rotinas-do-agente.ts, perfil). */
-const KINDS_COM_CARD_EM_SUA_VEZ: ReadonlySet<string> = new Set(["rotina", "rotina_atualizacao", "rotina_exclusao", "perfil"]);
+const KINDS_COM_CARD_EM_SUA_VEZ: ReadonlySet<string> = new Set(["rotina", "rotina_atualizacao", "rotina_exclusao", "rotina_execucao", "perfil"]);
 
 /** Recusar deixa a proposta de lado: nada agendado, nada concedido, agente inalterado (E1.1). */
 export const recusarProposta: CasoDeUso<{ propostaId: string }, { proposta: Proposta }> = async (deps, input) => {

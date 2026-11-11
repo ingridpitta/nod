@@ -10,7 +10,7 @@ import { pausarRotina } from "../../../use-cases/pausar-rotina.ts";
 import { decidirRitmoRotina } from "../../../use-cases/ritmo-rotina.ts";
 import type { CasoDeUso, Deps, Services, UseCasesNod } from "../../../use-cases/tipos.ts";
 import type { Rota } from "../roteador.ts";
-import { executarRotinaAgora } from "../../../use-cases/executar-rotina-agora.ts";
+import { EXECUTORES_ROTINAS } from "../../../use-cases/acoes/rotinas.ts";
 import { verAgenda } from "../../../use-cases/ver-agenda.ts";
 import type { Executor } from "../../../contracts/evento.ts";
 
@@ -76,7 +76,7 @@ export function criarRotasRotinas(deps: DepsRotasL7): Rota[] {
       async handler(ctx) {
         // NOD-272: sem `confirmar`, a execução já aberta volta como `jaNaFila` (nada criado) e a web pergunta.
         const corpo = (await ctx.corpo()) as { confirmar?: unknown } | null;
-        const r = await executar(deps, ctx.escopo, executarRotinaAgora, { rotinaId: uuid(ctx.params.id, "id"), executor: deps.executor?.() ?? "catcher", confirmar: corpo?.confirmar === true });
+        const r = await executar(deps, ctx.escopo, EXECUTORES_ROTINAS["rotinas.executar"], { rotinaId: uuid(ctx.params.id, "id"), executor: deps.executor?.() ?? "catcher", confirmar: corpo?.confirmar === true });
         // definido em 2026-09-24 (emenda da ADR-044): parada pelo pré-voo, sem turno — `bloqueada` leva o
         // motivo e `propostaId` o card que a destrava; a web abre a conversa onde o card está.
         const bloqueio = r.bloqueio ? { bloqueada: r.bloqueio.motivo, ...(r.bloqueio.propostaId ? { propostaId: r.bloqueio.propostaId } : {}) } : {};

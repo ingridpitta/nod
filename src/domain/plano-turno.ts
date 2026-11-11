@@ -123,7 +123,7 @@ const aPedidoDeOutroBot = (t: { sobProcuracaoDe?: string | null }) => !!t.sobPro
  */
 export const FORA_DO_PEDIDO_DE_OUTRA_PESSOA: readonly NomeFerramentaNod[] = [
   "pedir_a_bot", "encaminhar", "pedir_credencial", "pedir_acesso", "lembrar", "abrir_frentes", "mandar_para_frente", "me_chame_as", "publicar_artefato",
-  "criar_rotina", "atualizar_rotina", "excluir_rotina", "pausar_rotina", "reativar_rotina", "atualizar_perfil", "ajustar_barra_lateral",
+  "criar_rotina", "atualizar_rotina", "excluir_rotina", "executar_rotina", "pausar_rotina", "reativar_rotina", "atualizar_perfil", "ajustar_barra_lateral",
   // Revisão 6 do PR #628, achados 2 e 4: nem lê o que é da dona — os bots dela com rotinas e apps (ver_colegas), as rotinas
   // do bot (listar_rotinas) e os artefatos da conversa dela (ler_artefato).
   "ver_colegas", "listar_rotinas", "ler_artefato",
@@ -142,10 +142,10 @@ export function permitidaAPedidoDeOutraPessoa(f: Pick<FerramentaPlano, "nome" | 
 }
 
 export const FERRAMENTAS_NOD_POR_MODO: Record<ModoTurno, readonly NomeFerramentaNod[]> = {
-  criacao: ["atualizar_perfil", "lembrar", "pedir_aprovacao", "pedir_acesso", "pedir_credencial", "criar_rotina", "listar_rotinas", "ver_agenda", "pausar_rotina", "reativar_rotina", "atualizar_rotina", "excluir_rotina", "ver_colegas", "pedir_a_bot", "pedir_a_pessoa", "publicar_artefato", "ler_artefato", "abrir_frentes", "mandar_para_frente", "me_chame_as", "avisar_pessoa", "buscar_conversas", "ler_conversa", "ajustar_barra_lateral", "nao_lidos", "gerir_times", "gerir_acessos", "gerir_maquinas", "remover_computador"],
+  criacao: ["atualizar_perfil", "lembrar", "pedir_aprovacao", "pedir_acesso", "pedir_credencial", "criar_rotina", "listar_rotinas", "ver_agenda", "pausar_rotina", "reativar_rotina", "atualizar_rotina", "excluir_rotina", "executar_rotina", "ver_colegas", "pedir_a_bot", "pedir_a_pessoa", "publicar_artefato", "ler_artefato", "abrir_frentes", "mandar_para_frente", "me_chame_as", "avisar_pessoa", "buscar_conversas", "ler_conversa", "ajustar_barra_lateral", "nao_lidos", "gerir_times", "gerir_acessos", "gerir_maquinas", "remover_computador"],
   // NOD-119: o card da barra lateral só onde a pessoa olha o chat (conversa e criação). NOD-449: nao_lidos também (o card e o recibo). ADA-243: gerir_maquinas também (a máquina padrão é a pedido da pessoa).
-  conversa: ["lembrar", "pedir_aprovacao", "pedir_acesso", "pedir_credencial", "criar_rotina", "listar_rotinas", "ver_agenda", "pausar_rotina", "reativar_rotina", "atualizar_rotina", "excluir_rotina", "ver_colegas", "pedir_a_bot", "pedir_a_pessoa", "publicar_artefato", "ler_artefato", "abrir_frentes", "mandar_para_frente", "me_chame_as", "avisar_pessoa", "buscar_conversas", "ler_conversa", "ajustar_barra_lateral", "nao_lidos", "gerir_times", "gerir_acessos", "gerir_maquinas", "remover_computador"],
-  sala: ["lembrar", "pedir_aprovacao", "pedir_acesso", "pedir_credencial", "criar_rotina", "listar_rotinas", "pausar_rotina", "reativar_rotina", "atualizar_rotina", "excluir_rotina", "ver_colegas", "pedir_a_bot", "pedir_a_pessoa", "passar", "encaminhar", "buscar_conversas", "ler_conversa"],
+  conversa: ["lembrar", "pedir_aprovacao", "pedir_acesso", "pedir_credencial", "criar_rotina", "listar_rotinas", "ver_agenda", "pausar_rotina", "reativar_rotina", "atualizar_rotina", "excluir_rotina", "executar_rotina", "ver_colegas", "pedir_a_bot", "pedir_a_pessoa", "publicar_artefato", "ler_artefato", "abrir_frentes", "mandar_para_frente", "me_chame_as", "avisar_pessoa", "buscar_conversas", "ler_conversa", "ajustar_barra_lateral", "nao_lidos", "gerir_times", "gerir_acessos", "gerir_maquinas", "remover_computador"],
+  sala: ["lembrar", "pedir_aprovacao", "pedir_acesso", "pedir_credencial", "criar_rotina", "listar_rotinas", "pausar_rotina", "reativar_rotina", "atualizar_rotina", "excluir_rotina", "executar_rotina", "ver_colegas", "pedir_a_bot", "pedir_a_pessoa", "passar", "encaminhar", "buscar_conversas", "ler_conversa"],
   // NOD-50 (revisão 6 do PR #553): rotina sem pedir_credencial — o cartão não segura a execução seguinte, que abriria outro a cada
   // disparo; a rotina que precisa de chave pede pela pessoa (pedir_a_pessoa) ou pela conversa.
   rotina: ["lembrar", "pedir_aprovacao", "pedir_acesso", "ver_colegas", "pedir_a_pessoa", "pedir_a_bot", "sem_novidade", "publicar_artefato", "ler_artefato", "abrir_frentes", "mandar_para_frente", "me_chame_as", "avisar_pessoa", "buscar_conversas", "ler_conversa"],
@@ -154,7 +154,7 @@ export const FERRAMENTAS_NOD_POR_MODO: Record<ModoTurno, readonly NomeFerramenta
   delegacao: ["lembrar", "pedir_acesso", "pedir_credencial", "pedir_aprovacao", "ver_colegas", "pedir_a_pessoa", "pedir_a_bot", "publicar_artefato", "ler_artefato", "abrir_frentes", "mandar_para_frente", "me_chame_as", "avisar_pessoa"],
   // definido em 2026-10-04 (ADR-072): a ligação fala com a pessoa ao vivo. O kit da conversa sem pedir_a_pessoa (a
   // pergunta é a própria fala) e sem artefatos (não há tela para lê-los); trabalho demorado vai por iniciar_tarefa.
-  ligacao: ["lembrar", "pedir_aprovacao", "pedir_acesso", "criar_rotina", "listar_rotinas", "ver_agenda", "pausar_rotina", "reativar_rotina", "atualizar_rotina", "excluir_rotina", "ver_colegas", "pedir_a_bot", "iniciar_tarefa", "desligar", "buscar_conversas", "ler_conversa"],
+  ligacao: ["lembrar", "pedir_aprovacao", "pedir_acesso", "criar_rotina", "listar_rotinas", "ver_agenda", "pausar_rotina", "reativar_rotina", "atualizar_rotina", "excluir_rotina", "executar_rotina", "ver_colegas", "pedir_a_bot", "iniciar_tarefa", "desligar", "buscar_conversas", "ler_conversa"],
 };
 
 /**

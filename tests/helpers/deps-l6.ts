@@ -146,6 +146,7 @@ export function useCasesDeTeste(): UseCasesNod {
     reativarRotinaPeloAgente: naoImplementado("reativarRotinaPeloAgente (L7)"),
     atualizarRotinaPeloAgente: naoImplementado("atualizarRotinaPeloAgente (L7)"),
     excluirRotinaPeloAgente: naoImplementado("excluirRotinaPeloAgente (L7)"),
+    executarRotinaPeloAgente: naoImplementado("executarRotinaPeloAgente (L7)"),
     pedirAprovacao: naoImplementado("pedirAprovacao (L5)"),
     pedirAPessoa: naoImplementado("pedirAPessoa (L5)"),
     passar: naoImplementado("passar (L7)"),

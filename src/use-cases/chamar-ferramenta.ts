@@ -148,6 +148,7 @@ const DESPACHO: Despacho = {
   reativar_rotina: (deps, ctx, args) => deps.useCases[USE_CASE_POR_FERRAMENTA.reativar_rotina](deps, { ...ctx, ...args }),
   atualizar_rotina: (deps, ctx, args) => deps.useCases[USE_CASE_POR_FERRAMENTA.atualizar_rotina](deps, { ...ctx, ...args }),
   excluir_rotina: (deps, ctx, args) => deps.useCases[USE_CASE_POR_FERRAMENTA.excluir_rotina](deps, { ...ctx, ...args }),
+  executar_rotina: (deps, ctx, args) => deps.useCases[USE_CASE_POR_FERRAMENTA.executar_rotina](deps, { ...ctx, ...args }),
   pedir_aprovacao: (deps, ctx, args) => deps.useCases[USE_CASE_POR_FERRAMENTA.pedir_aprovacao](deps, { ...ctx, ...args }),
   pedir_a_pessoa: (deps, ctx, args) => deps.useCases[USE_CASE_POR_FERRAMENTA.pedir_a_pessoa](deps, { ...ctx, ...args }),
   passar: (deps, ctx, args) => deps.useCases[USE_CASE_POR_FERRAMENTA.passar](deps, { ...ctx, ...args }),

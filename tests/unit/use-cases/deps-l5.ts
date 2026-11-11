@@ -92,6 +92,7 @@ export function depsFalsos(opcoes: OpcoesDepsFalsos = {}): { deps: Deps; banco: 
     reativarRotinaPeloAgente: async () => ({ data: { rotina_id: "rotina-falsa", estado: "ativa" as const, ja_estava: false, proxima_execucao: agora() + 1000 } }),
     atualizarRotinaPeloAgente: async () => ({ data: { proposta_id: "proposta-atualizacao-falsa", resumo: "rotina falsa" } }),
     excluirRotinaPeloAgente: async () => ({ data: { proposta_id: "proposta-exclusao-falsa", resumo: "rotina falsa" } }),
+    executarRotinaPeloAgente: async () => ({ data: { proposta_id: "proposta-execucao-falsa", resumo: "rotina falsa" } }),
     pedirAprovacao,
     pedirAPessoa,
     passar: async () => ({ data: { ok: true } }),

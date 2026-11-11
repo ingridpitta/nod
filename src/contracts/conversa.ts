@@ -1,3 +1,4 @@
+import type { PayloadPropostaRotinaExecucao } from "./rotina-execucao.ts";
 import type { PayloadPropostaApp } from "./apps.ts";
 import type { PayloadPropostaDoQuadro } from "./quadro-exclusao.ts";
 import type { PayloadPropostaCredencial } from "./ferramentas-credencial.ts";
@@ -35,7 +36,7 @@ export type Conversa = {
   criadoEm: EpochMs;
 };
 
-export type KindProposta = "perfil" | "rotina" | "acesso" | "pasta" | "rotina_atualizacao" | "rotina_exclusao" | "bot" | "lote_bots" | "credencial" | "colunas_quadro" | "quadro_exclusao" | "app" | "importacao_linear" | "assumir_quadro";
+export type KindProposta = "perfil" | "rotina" | "acesso" | "pasta" | "rotina_atualizacao" | "rotina_exclusao" | "bot" | "lote_bots" | "credencial" | "colunas_quadro" | "quadro_exclusao" | "app" | "importacao_linear" | "assumir_quadro" | "rotina_execucao";
 export type EstadoProposta = "pendente" | "confirmada" | "recusada";
 
 /**
@@ -183,7 +184,7 @@ export type PayloadPropostaLoteBots = { kind: "lote_bots"; resumo: string; acoes
 /** Pelo teto de 200 linhas: a credencial (NOD-50) mora em ferramentas-credencial.ts e as colunas (NOD-448) em quadro.ts. */
 export type { AlvoCredencial, PayloadPropostaCredencial } from "./ferramentas-credencial.ts";
 export type { ColunaNaProposta, PayloadPropostaColunasQuadro } from "./quadro.ts";
-export type PayloadProposta = PayloadPropostaApp | PayloadPropostaDoQuadro | PayloadPropostaCredencial | PayloadPropostaLoteBots | PayloadPropostaBot | PayloadPropostaPerfil | PayloadPropostaRotina | PayloadPropostaAcesso | PayloadPropostaPasta | PayloadPropostaRotinaAtualizacao | PayloadPropostaRotinaExclusao;
+export type PayloadProposta = PayloadPropostaApp | PayloadPropostaDoQuadro | PayloadPropostaCredencial | PayloadPropostaLoteBots | PayloadPropostaBot | PayloadPropostaPerfil | PayloadPropostaRotina | PayloadPropostaAcesso | PayloadPropostaPasta | PayloadPropostaRotinaAtualizacao | PayloadPropostaRotinaExclusao | PayloadPropostaRotinaExecucao;
 
 /** Proposta do modelo (ferramenta tipada) — nada é aplicado antes da confirmação da pessoa (E1.1). */
 export type Proposta = {

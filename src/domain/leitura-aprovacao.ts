@@ -39,7 +39,7 @@ export type PedidoDeLeitura = Comum &
       }
     | { tipo: Extract<TipoDecisao, "retomar_turno">; acao?: string | null }
     | { tipo: Extract<TipoDecisao, "acesso">; app: string; nivel: "leitura" | "escrita"; para?: string | null }
-    | { tipo: Extract<TipoDecisao, "rotina" | "rotina_atualizacao" | "rotina_exclusao">; resumo: string; horario: string }
+    | { tipo: Extract<TipoDecisao, "rotina" | "rotina_atualizacao" | "rotina_exclusao" | "rotina_execucao">; resumo: string; horario: string }
     | { tipo: "perfil" | "bot"; nome: string; titulo: string }
   );
 
@@ -141,8 +141,9 @@ export function redigirLeituraDeAprovacao(p: PedidoDeLeitura): string {
     }
     case "rotina":
     case "rotina_atualizacao":
-    case "rotina_exclusao": {
-      const abertura = p.tipo === "rotina" ? "Proponho uma rotina" : p.tipo === "rotina_atualizacao" ? "Proponho mudar a rotina" : "Proponho excluir a rotina";
+    case "rotina_exclusao":
+    case "rotina_execucao": {
+      const abertura = p.tipo === "rotina" ? "Proponho uma rotina" : p.tipo === "rotina_atualizacao" ? "Proponho mudar a rotina" : p.tipo === "rotina_execucao" ? "Proponho rodar agora a rotina" : "Proponho excluir a rotina";
       partes.push(frase(`${abertura}: ${campo(p.resumo)}, ${campo(p.horario)}`));
       break;
     }

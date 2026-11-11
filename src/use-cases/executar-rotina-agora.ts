@@ -23,8 +23,15 @@ export type SaidaExecutarAgora = {
   jaNaFila?: { turnoId: string; instanteAgendado: number; fusoIana: string };
 };
 
-/** definido em 2026-09-17: testar não altera agenda nem pausa; a janela por minuto deduplica cliques e disputa com o scheduler. */
-export const executarRotinaAgora: CasoDeUso<{ rotinaId: string; executor: Executor; confirmar?: boolean }, SaidaExecutarAgora> = async (deps, input) => {
+/**
+ * definido em 2026-09-17: testar não altera agenda nem pausa; a janela por minuto deduplica cliques e disputa com o scheduler.
+ * `instanteExato` (NOD-413, revisão do PR #15): o "Rodar agora" do card do chat já chega serializado pela trava da
+ * proposta, então não precisa do minuto cheio para deduplicar cliques. Ele usa o instante em ms, como o "Permitir e rodar
+ * agora" (decidir-acesso.ts): o minuto cheio pode ser a janela que o scheduler reivindicou (aí voltaria janelaDeOutro, sem
+ * turno, com o card confirmado) e, com a rotina travada pelo card, esperar a inserção do scheduler na mesma chave fecha
+ * um ciclo (ele segura a janela e espera a rotina para reagendar).
+ */
+export const executarRotinaAgora: CasoDeUso<{ rotinaId: string; executor: Executor; confirmar?: boolean; instanteExato?: boolean }, SaidaExecutarAgora> = async (deps, input) => {
   const rotina = await deps.repos.rotinas.buscar(input.rotinaId);
   if (!rotina) throw new ErroDeDominio("nao_encontrado");
   if (rotina.ownerId !== deps.escopo.pessoaId) throw new ErroDeDominio("nao_permitido");
@@ -42,7 +49,7 @@ export const executarRotinaAgora: CasoDeUso<{ rotinaId: string; executor: Execut
     const linha = await deps.repos.mensagens.criar({ conversaId: rotina.conversaId, autoria, kind: "sistema", assunto: "parada", texto: "Parada encerrada: você usou Executar agora e a rotina voltou a rodar.", confianca: "confiavel" });
     if (linha) antes.push(evento(deps.escopo, { kind: "mensagem_criada", autoria, agora, conversaId: rotina.conversaId, dados: { mensagem_id: linha.id, kind: "sistema" } }));
   }
-  const r = await dispararRotina(deps, { rotina, instanteAgendado: Math.floor(deps.agora() / 60_000) * 60_000, machineId: randomUUID(), executor: input.executor, preservarAgenda: true });
+  const r = await dispararRotina(deps, { rotina, instanteAgendado: input.instanteExato === true ? deps.agora() : Math.floor(deps.agora() / 60_000) * 60_000, machineId: randomUUID(), executor: input.executor, preservarAgenda: true });
   const bloqueio = "bloqueada" in r.data ? { motivo: r.data.bloqueada, propostaId: r.data.propostaId } : null;
   return { data: { conversaId: rotina.conversaId, turnoId: "turno" in r.data ? r.data.turno.id : null, bloqueio }, events: [...antes, ...(r.events ?? [])] };
 };

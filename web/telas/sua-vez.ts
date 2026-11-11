@@ -18,6 +18,7 @@ import { listaDoLoteParaSuaVez } from "./card-lote.ts";
 import { ehCartaoCredencial, renderCardCredencial } from "./card-credencial.ts";
 import { ehCartaoDoRevisor, motivoDoCartao, perguntaDoCartao, renderCartaoRevisor, sempreNoCartao } from "./cartao-revisor.ts";
 import { noSeuMac, seuMac } from "../lib/plataforma-da-tela.ts";
+import { avisoNaFila } from "../lib/executar-rotina.ts";
 
 type Item = SuaVezDto["itens"][number];
 
@@ -30,6 +31,7 @@ const TIPO_HUMANO: Record<TipoDecisao, string> = {
   rotina: "rotina proposta",
   rotina_atualizacao: "mudança de rotina",
   rotina_exclusao: "exclusão de rotina",
+  rotina_execucao: "rodar rotina agora",
   bot: "bot proposto",
   lote_bots: "mudanças nos seus bots",
   pergunta: "pergunta",
@@ -68,6 +70,7 @@ const PRAZO_POR_TIPO: Record<TipoDecisao, (em: string, item: Item) => string> = 
   rotina: nadaMudaSemVoce,
   rotina_atualizacao: nadaMudaSemVoce,
   rotina_exclusao: nadaMudaSemVoce,
+  rotina_execucao: (em) => `vence ${em} · nada roda sem você`,
   bot: nadaMudaSemVoce,
   lote_bots: nadaMudaSemVoce,
   retomar_turno: vence,
@@ -521,6 +524,11 @@ function renderAcoes(item: Item, aberta: boolean, estado: Pick<Estado, "conector
     // Verbo próprio: "Confirmar" não diz que o que se confirma é uma exclusão.
     case "rotina_exclusao":
       return `<div class="acoes">${botao("decidir-proposta", "Excluir rotina", { classe: "pri", id: d.id })}${botao("recusar-decisao", "Manter rotina", { id: d.id })}</div>`;
+    // NOD-413: o mesmo verbo do card da conversa; com execução na fila, o card diz antes do clique.
+    case "rotina_execucao": {
+      const p = item.proposta?.payload.kind === "rotina_execucao" ? item.proposta.payload : null;
+      return `${p?.naFila ? `<p class="mini">${esc(avisoNaFila(p.naFila))}</p>` : ""}<div class="acoes">${botao("decidir-proposta", "Rodar agora", { classe: "pri", id: d.id })}${botao("recusar-decisao", "Agora não", { id: d.id })}</div>`;
+    }
     // NOD-50: o mesmo cartão da conversa — guardar daqui vai pelo mesmo POST, direto ao cofre.
     case "credencial":
       // Só a dona do pedido guarda ou recusa (a rota devolve nao_encontrado às outras): a quem só vê, nada de campo de chave.

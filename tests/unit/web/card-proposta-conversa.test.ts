@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { Proposta } from "../../../src/contracts/conversa.ts";
 import { estadoInicial, type ConversaEstado, type Estado } from "../../../web/estado/reducer.ts";
 import { renderTimeline } from "../../../web/telas/conversa.ts";
+import { renderSuaVez } from "../../../web/telas/sua-vez.ts";
+import type { SuaVezDto } from "../../../src/contracts/api.ts";
 import { MAX_LINHAS, paraBot } from "../../../web/lib/card-proposta.ts";
 
 /**
@@ -77,5 +79,44 @@ describe("card de proposta na conversa (NOD-399)", () => {
     expect(html).toContain("<span>Excluir uma rotina do bot</span>");
     expect(html).toContain("<span>Mudar o perfil do bot</span>");
     expect(html).not.toMatch(/ de o bot| a o bot/);
+  });
+  it("NOD-413: rodar agora uma rotina vira o card Rodar agora · Agora não, e a execução na fila aparece antes do clique", () => {
+    const base = { tenantId: "t", conversaId: "c", agenteId: "a", kind: "rotina_execucao" as const, estado: "pendente" as const, criadoEm: 0 };
+    const livre: Proposta = { ...base, id: "x1", payload: { kind: "rotina_execucao", rotinaId: "r", resumo: "todo dia às 09:00", instrucao: LONGA } };
+    const html = renderTimeline(conversa([livre]), estado);
+    expect(html).toContain("<span>Rodar agora uma rotina de Ada</span>");
+    expect(html).toMatch(/data-act="decidir-proposta"[^>]*>Rodar agora</);
+    expect(html).toMatch(/data-act="recusar-decisao"[^>]*>Agora não</);
+    expect(html).not.toContain("confirmar-proposta");
+    expect(linhasVisiveis(html).length).toBeLessThanOrEqual(MAX_LINHAS);
+    expect(html).not.toContain("ainda não terminou");
+    const naFila: Proposta = { ...base, id: "x2", payload: { kind: "rotina_execucao", rotinaId: "r", resumo: "todo dia às 09:00", instrucao: "y", naFila: { instanteAgendado: Date.UTC(2026, 10, 11, 12), fusoIana: "UTC" } } };
+    expect(renderTimeline(conversa([naFila]), estado)).toContain("ainda não terminou. Rodar mais uma agora, sem cancelar a outra?");
+  });
+
+  // QA do PR #15 (2026-11-11): cobertura que faltava — o card na Sua vez e o card vencido na conversa (mutantes vivos).
+  const NA_FILA = { instanteAgendado: Date.UTC(2026, 10, 11, 12), fusoIana: "UTC" };
+  const propostaExec = (naFila?: typeof NA_FILA): Proposta => ({ tenantId: "t", id: "x9", conversaId: "c", agenteId: "a", kind: "rotina_execucao", estado: "pendente", criadoEm: 0, payload: { kind: "rotina_execucao", rotinaId: "r", resumo: "todo dia às 09:00", instrucao: "y", ...(naFila ? { naFila } : {}) } });
+  const itemExec = (estadoColuna: "pendente" | "vencido", naFila?: typeof NA_FILA): SuaVezDto["itens"][number] => ({
+    decisao: { tenantId: "t", id: "x9", ownerId: "p", decisorId: "p", agenteId: "a", conversaId: "c", turnoId: null, tipo: "rotina_execucao", estado: estadoColuna === "vencido" ? "vencida" : "pendente", prazoDecisaoEm: "2026-11-12T00:00:00Z", prazoExecucaoEm: null, frase: "Rodar agora a rotina: todo dia às 09:00 — y", desfecho: null, vistaEm: null, criadoEm: "2026-11-11T00:00:00Z", fioId: null },
+    estadoColuna, agenteNome: "Ada", aguardandoHaMs: 0, recusaAutomaticaEmMs: 60_000, gemeas: [], itensAprovacao: [], fio: null, rotinaParada: null,
+    proposta: propostaExec(naFila),
+  });
+  const comSuaVez = (item: SuaVezDto["itens"][number]): Estado => ({ ...estado, suaVez: { itens: [item], incidentes: [], foraDoAr: [], vazio: false, ultimaDecisaoEm: null } });
+
+  it("NOD-413: na Sua vez o card é Rodar agora · Agora não, com a execução na fila dita antes do clique", () => {
+    const h = renderSuaVez(comSuaVez(itemExec("pendente", NA_FILA)));
+    expect(h).toMatch(/data-act="decidir-proposta"[^>]*>Rodar agora</);
+    expect(h).toMatch(/data-act="recusar-decisao"[^>]*>Agora não</);
+    expect(h).toContain("ainda não terminou. Rodar mais uma agora, sem cancelar a outra?");
+    expect(renderSuaVez(comSuaVez(itemExec("pendente")))).not.toContain("ainda não terminou");
+  });
+
+  it("NOD-413: vencida, a decisão encolhe numa linha com Reabrir, sem o botão Rodar agora", () => {
+    const html = renderTimeline(conversa([propostaExec()]), comSuaVez(itemExec("vencido")));
+    expect(html).toContain("Rodar agora uma rotina de Ada");
+    expect(html).toContain("expirou sem resposta, nada mudou");
+    expect(html).toMatch(/data-act="reabrir"/);
+    expect(html).not.toMatch(/data-act="decidir-proposta"/);
   });
 });
