@@ -1,10 +1,25 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// NOD-446: o caso da janela de redação mede trabalho (bytes que entram na redação), não tempo de máquina.
+// O espião só observa: o comportamento real de redigirSegredos continua valendo para os outros testes.
+const redigidos = vi.hoisted(() => [] as number[]);
+vi.mock("../../../src/domain/segredos.ts", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("../../../src/domain/segredos.ts")>();
+  return { ...orig, redigirSegredos: (t: string): string => { redigidos.push(Buffer.byteLength(t, "utf8")); return orig.redigirSegredos(t); } };
+});
 import { rotaDoLog } from "../../../src/adapters/http/erros.ts";
 import { criarLimites, entradaDoPayload, interpretarCorpo, GLOBAL, LIMITE_DE_CHAVES, PAYLOAD_NO_TURNO, POR_DONA, POR_IP, POR_IP_BEM_FORMADO, POR_TOKEN } from "../../../src/adapters/http/rotas/webhook.ts";
 import { CHAMADAS_POR_MINUTO } from "../../../src/domain/rotina-webhook.ts";
 import { textoDaLinhaCinza } from "../../../src/use-cases/receber-webhook.ts";
 import { TAG } from "../../../src/adapters/mcp-proxy/moldura.ts";
 import { moldesQueCasam } from "../../../src/domain/assunto-do-texto.ts";
+
+// Regression: ISSUE-001 — o corte em 16 KB não era medido: cortar em 18 KB ou 32 KB passava (achado no QA da NOD-446).
+/** Bytes do payload que ficam antes da marca de corte, dentro da moldura. */
+const bytesAntesDoCorte = (saida: string): number => {
+  const ini = saida.indexOf('origem="webhook">\n') + 'origem="webhook">\n'.length;
+  return Buffer.byteLength(saida.slice(ini, saida.indexOf("\n[… payload cortado em 16 KB]")), "utf8");
+};
 
 /** NOD-84 (ADR-139): as partes da rota pública que não precisam do banco. */
 describe("rota do webhook: limites, corpo, moldura e log", () => {
@@ -122,25 +137,35 @@ describe("rota do webhook: limites, corpo, moldura e log", () => {
     expect(l.passa("140.82.115.1", "gt_y.tenantB", "t:b")).toBe(true);
   });
 
-  it("revisão 5: a redação roda só na janela de 16 KB + margem; corpo adversarial de 256 KB sai rápido e cortado", () => {
-    // Tempo relativo, não absoluto: o limite fixo de 60 ms falhava no runner carregado (PRs #621, #625,
-    // #628, #631) sem regressão. Com a janela, 256 KB custam o mesmo que um corpo do tamanho da janela;
-    // sem ela, ~16× mais. O menor de 5 tira o ruído de um GC ou de uma pausa do runner.
+  it("revisão 5: a redação roda só na janela de 16 KB + margem; corpo adversarial de 256 KB sai cortado (NOD-446: sem tempo de máquina)", () => {
+    // Antes media ms (60 fixos, depois relativo) e falhava no runner carregado sem regressão. Agora mede o que a
+    // regressão muda de fato: quantos bytes entram na redação. Sem a janela seriam 256 KB; com ela, no máximo 18 KB.
+    const JANELA = PAYLOAD_NO_TURNO + 2 * 1024;
     const token = "gt_x.segredoSegredoSegredo123";
-    const menor = (c: string): number => {
-      let m = Infinity;
-      for (let i = 0; i < 5; i++) {
-        const ini = performance.now();
-        entradaDoPayload(c, token);
-        m = Math.min(m, performance.now() - ini);
-      }
-      return m;
-    };
     const corpo = "gt_".repeat(87_000);
-    const naJanela = "gt_".repeat(Math.floor(PAYLOAD_NO_TURNO / 3));
-    menor(naJanela);
-    expect(menor(corpo)).toBeLessThan(4 * menor(naJanela) + 10);
-    expect(entradaDoPayload(corpo, token)).toContain("[… payload cortado em 16 KB]");
+    redigidos.length = 0;
+    const saida = entradaDoPayload(corpo, token);
+    // A SOMA, não o maior: redigir o corpo inteiro em pedaços de 8 KB também custaria 256 KB e passaria num máximo.
+    const total = redigidos.reduce((a, b) => a + b, 0);
+    expect(total).toBeGreaterThan(PAYLOAD_NO_TURNO);
+    expect(total).toBeLessThanOrEqual(JANELA);
+    expect(saida).toContain("[… payload cortado em 16 KB]");
+    expect(bytesAntesDoCorte(saida)).toBe(PAYLOAD_NO_TURNO);
+  });
+
+  it("NOD-446: a janela vale em bytes num corpo multibyte e não parte o caractere", () => {
+    const JANELA = PAYLOAD_NO_TURNO + 2 * 1024;
+    // O "a" na frente desalinha: sem ele, 16 KB e 18 KB caem sempre entre dois "é" (2 bytes) e o corte nunca parte nada.
+    const corpo = "a" + "é".repeat(100_000); // ~200 KB em UTF-8
+    redigidos.length = 0;
+    const saida = entradaDoPayload(corpo);
+    const total = redigidos.reduce((a, b) => a + b, 0);
+    expect(total).toBeGreaterThan(PAYLOAD_NO_TURNO);
+    expect(total).toBeLessThanOrEqual(JANELA);
+    expect(saida).toContain("[… payload cortado em 16 KB]");
+    // O corte recua o "é" partido: 1 byte a menos que 16 KB, nunca mais.
+    expect(bytesAntesDoCorte(saida)).toBe(PAYLOAD_NO_TURNO - 1);
+    expect(saida).not.toContain("\uFFFD");
   });
 
   it("revisão 5: um segredo que cruza o corte de 16 KB não vaza o começo", () => {
